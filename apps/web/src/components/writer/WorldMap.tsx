@@ -37,6 +37,8 @@ import {
   TreePine,
   Trees,
   Waves,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
@@ -62,10 +64,13 @@ export interface LocationRecord {
 }
 
 // เพิ่มภายหลัง (audit fix) — องค์ประกอบอิสระบนแผนที่: เส้นวาดมือ ("line"), พื้นที่ระบายภูมิประเทศ
-// แบบปิดรูป ("fill"), และไอคอนปั๊มสิ่งกีดขวางแบบวางต่อเนื่อง ("stamp") — เดิมมีแค่เส้นวาดมือเฉย ๆ
+// แบบปิดรูป ("fill", เลิกสร้างใหม่แล้วแต่ยังต้องเรนเดอร์ข้อมูลเก่าได้), ไอคอนปั๊มสิ่งกีดขวางแบบวาง
+// ต่อเนื่อง ("stamp"), และ Land Tool แบบแปรงเพิ่ม/ลบพื้นที่ดิน ("land", ดู DrawingLayer สำหรับ
+// การ composite ผ่าน SVG mask — ต่างจาก "fill" ตรงที่ใช้ขนาดแปรงแทนการลากปิดรูปทรงตรง ๆ)
 export type MapElement =
   | { id: string; kind?: "line"; points: { x: number; y: number }[]; width: number; color?: string }
   | { id: string; kind: "fill"; points: { x: number; y: number }[]; color: string }
+  | { id: string; kind: "land"; points: { x: number; y: number }[]; brushSize: number; mode: "add" | "subtract"; color: string }
   | { id: string; kind: "stamp"; icon: string; x: number; y: number; rotation?: number; scale?: number };
 
 export type MapDrawing = MapElement;
@@ -157,14 +162,108 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-/** เลเยอร์แสดงองค์ประกอบอิสระบนแผนที่ (เส้น/พื้นที่ระบายสี/ไอคอนปั๊ม) ซิงก์ตำแหน่งตามการ pan/zoom
- *  ของแคนวาสผ่าน useViewport() — เรนเดอร์เป็น <svg> ซ้อนอยู่ใต้เลเยอร์ตัวโหนดสถานที่ */
-function DrawingLayer({ elements, activeStroke }: { elements: MapElement[]; activeStroke: { kind: "line" | "fill"; points: { x: number; y: number }[]; width?: number; color?: string } | null }) {
+// Land Tool — คำนวณครั้งเดียวตอนปล่อยเมาส์ (pointer up) ไม่ใช่ทุก frame ระหว่างลาก เพื่อไม่ให้หนักเว็บ
+function jitterPoints(points: { x: number; y: number }[], amount: number): { x: number; y: number }[] {
+  if (amount <= 0) return points;
+  return points.map((p) => ({
+    x: p.x + (Math.random() - 0.5) * amount,
+    y: p.y + (Math.random() - 0.5) * amount,
+  }));
+}
+
+// Chaikin's corner-cutting — ทำให้เส้นที่ลากด้วยเมาส์ (มีมุมหยักตามตำแหน่งจุดดิบ) ดูโค้งมนเป็นธรรมชาติ
+// โดยไม่ต้องพึ่งไลบรารีเรขาคณิตภายนอก
+function smoothPoints(points: { x: number; y: number }[], iterations = 2): { x: number; y: number }[] {
+  let pts = points;
+  for (let iter = 0; iter < iterations; iter++) {
+    if (pts.length < 3) break;
+    const next: { x: number; y: number }[] = [pts[0]];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i];
+      const p1 = pts[i + 1];
+      next.push({ x: p0.x * 0.75 + p1.x * 0.25, y: p0.y * 0.75 + p1.y * 0.25 });
+      next.push({ x: p0.x * 0.25 + p1.x * 0.75, y: p0.y * 0.25 + p1.y * 0.75 });
+    }
+    next.push(pts[pts.length - 1]);
+    pts = next;
+  }
+  return pts;
+}
+
+type ActiveStroke =
+  | { kind: "line"; points: { x: number; y: number }[]; width: number }
+  | { kind: "land"; points: { x: number; y: number }[]; color: string; brushSize: number; landMode: "add" | "subtract" };
+
+/** เลเยอร์แสดงองค์ประกอบอิสระบนแผนที่ (เส้น/พื้นที่ระบายสี/ไอคอนปั๊ม/Land Tool) ซิงก์ตำแหน่งตามการ
+ *  pan/zoom ของแคนวาสผ่าน useViewport() — เรนเดอร์เป็น <svg> ซ้อนอยู่ใต้เลเยอร์ตัวโหนดสถานที่
+ *  Land Tool ("land") composite ผ่าน SVG <mask>: stroke สีขาว = เพิ่มพื้นที่, สีดำ = ลบพื้นที่
+ *  เรียงตามลำดับที่วาด (stroke หลังทับ stroke ก่อนที่จุดเดียวกัน) — เลือกวิธีนี้เพราะเบากว่ามาก
+ *  เทียบกับ raster masking หรือไลบรารี polygon-boolean และ browser จัดการ stroke-to-fill ให้เอง */
+function DrawingLayer({ elements, activeStroke }: { elements: MapElement[]; activeStroke: ActiveStroke | null }) {
   const { x, y, zoom } = useViewport();
+  const maskId = "world-map-land-mask";
+  const landElements = elements.filter((el): el is Extract<MapElement, { kind: "land" }> => el.kind === "land");
+  const otherElements = elements.filter((el) => el.kind !== "land");
+  const activeLand = activeStroke?.kind === "land" ? activeStroke : null;
+
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ zIndex: 1 }}>
       <g transform={`translate(${x}, ${y}) scale(${zoom})`}>
-        {elements.map((el) => {
+        <defs>
+          <mask id={maskId} maskUnits="userSpaceOnUse" x={-100000} y={-100000} width={200000} height={200000}>
+            {landElements.map((el) => (
+              <path
+                key={el.id}
+                d={pointsToSvgPath(el.points)}
+                fill="none"
+                stroke={el.mode === "subtract" ? "black" : "white"}
+                strokeWidth={el.brushSize * 2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            ))}
+            {activeLand && (
+              <path
+                d={pointsToSvgPath(activeLand.points)}
+                fill="none"
+                stroke={activeLand.landMode === "subtract" ? "black" : "white"}
+                strokeWidth={activeLand.brushSize * 2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+          </mask>
+        </defs>
+
+        <g mask={`url(#${maskId})`}>
+          {landElements
+            .filter((el) => el.mode === "add")
+            .map((el) => (
+              <path
+                key={el.id}
+                d={pointsToSvgPath(el.points)}
+                fill="none"
+                stroke={el.color}
+                strokeWidth={el.brushSize * 2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.85}
+              />
+            ))}
+          {activeLand && activeLand.landMode === "add" && (
+            <path
+              d={pointsToSvgPath(activeLand.points)}
+              fill="none"
+              stroke={activeLand.color}
+              strokeWidth={activeLand.brushSize * 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.85}
+            />
+          )}
+        </g>
+
+        {otherElements.map((el) => {
           if (el.kind === "fill") {
             return <path key={el.id} d={pointsToSvgPath(el.points, true)} fill={el.color} fillOpacity={0.45} stroke={el.color} strokeWidth={1} />;
           }
@@ -196,14 +295,13 @@ function DrawingLayer({ elements, activeStroke }: { elements: MapElement[]; acti
             />
           );
         })}
-        {activeStroke && (
+        {activeStroke?.kind === "line" && (
           <path
-            d={pointsToSvgPath(activeStroke.points, activeStroke.kind === "fill")}
-            fill={activeStroke.kind === "fill" ? activeStroke.color : "none"}
-            fillOpacity={0.45}
-            stroke={activeStroke.color || "#b45309"}
-            strokeWidth={activeStroke.width ?? 2}
-            strokeDasharray={activeStroke.kind === "fill" ? undefined : "6 5"}
+            d={pointsToSvgPath(activeStroke.points)}
+            fill="none"
+            stroke="#b45309"
+            strokeWidth={activeStroke.width}
+            strokeDasharray="6 5"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -288,13 +386,29 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
   const [showAddModal, setShowAddModal] = useState(false);
   const [confirmDeleteEdgeId, setConfirmDeleteEdgeId] = useState<string | null>(null);
 
-  // โหมดเครื่องมือ: จัดการ / วาดเส้นอิสระ / ระบายภูมิประเทศ / ปั๊มสิ่งกีดขวาง
+  // โหมดเครื่องมือ: จัดการ / วาดเส้นอิสระ / ระบายภูมิประเทศ (Land Tool) / ปั๊มสิ่งกีดขวาง
   const [mode, setMode] = useState<"manage" | "line" | "fill" | "stamp">("manage");
   const [lineWidth, setLineWidth] = useState(3);
   const [terrainColor, setTerrainColor] = useState(TERRAIN_PRESETS[0].color);
   const [stampIcon, setStampIcon] = useState(STAMP_OPTIONS[0].key);
+  // Land Tool — เพิ่มภายหลัง (audit fix) ปรับโหมด "fill" เดิม (ลากปิดรูปทรงตรง ๆ) ให้เป็นแปรงเพิ่ม/
+  // ลบพื้นที่ดินแบบ Inkarnate แต่ตัดฟีเจอร์ freeform raster masking ออกเพื่อไม่ให้เว็บหนัก (ดูรายละเอียด
+  // ที่คุยกับผู้ใช้แล้ว) — ข้อมูลเก่า kind="fill" ยังเรนเดอร์ได้ปกติ แค่ stroke ใหม่ทั้งหมดเป็น kind="land"
+  const [landActionMode, setLandActionMode] = useState<"add" | "subtract">("add");
+  const [brushSize, setBrushSize] = useState(40);
+  const [roughness, setRoughness] = useState(0);
+  const [smoothLand, setSmoothLand] = useState(true);
   const [elements, setElements] = useState<MapElement[]>(initialDrawings);
-  const [activeStroke, setActiveStroke] = useState<{ kind: "line" | "fill"; points: { x: number; y: number }[]; width?: number; color?: string } | null>(null);
+  // เพิ่มภายหลัง (audit fix) — ปุ่มย้อนกลับ/ทำซ้ำ (Undo/Redo) แบบ Inkarnate ครอบคลุมเฉพาะองค์ประกอบ
+  // ที่วาดอิสระ (เส้น/Land Tool/สแตมป์/ล้างทั้งหมด) เก็บ history เป็น index-pointer เข้า snapshot
+  // ทั้งชุด ไม่รวมการย้าย/เปลี่ยนชื่อหมุดสถานที่ (ผูกกับ DB จริงแยกต่างหากอยู่แล้วผ่าน renameLocation/
+  // transformLocation) — ใช้ ref เก็บค่าล่าสุดกันปัญหา closure ค้างตอนวาดสแตมป์ต่อเนื่องเร็ว ๆ
+  const elementsRef = useRef(elements);
+  useEffect(() => {
+    elementsRef.current = elements;
+  }, [elements]);
+  const [history, setHistory] = useState<{ stack: MapElement[][]; index: number }>({ stack: [initialDrawings], index: 0 });
+  const [activeStroke, setActiveStroke] = useState<ActiveStroke | null>(null);
   const lastStampPosRef = useRef<{ x: number; y: number } | null>(null);
   const isStampingRef = useRef(false);
 
@@ -311,6 +425,62 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       body: JSON.stringify(next),
     }).catch(() => {});
   }
+
+  // บันทึก snapshot ลง history — เรียกครั้งเดียวต่อ "การกระทำ" หนึ่งครั้ง (ปล่อยเมาส์/ล้างทั้งหมด)
+  // ไม่ใช่ทุกจุดระหว่างลาก ไม่งั้นลากหนึ่งเส้นจะกลายเป็น undo step เป็นร้อย ๆ ครั้ง
+  function pushHistory(snapshot: MapElement[]) {
+    setHistory((h) => {
+      const truncated = h.stack.slice(0, h.index + 1);
+      return { stack: [...truncated, snapshot], index: truncated.length };
+    });
+  }
+
+  function commitElements(next: MapElement[]) {
+    setElements(next);
+    saveElements(next);
+    pushHistory(next);
+  }
+
+  function undo() {
+    setHistory((h) => {
+      if (h.index <= 0) return h;
+      const newIndex = h.index - 1;
+      const snapshot = h.stack[newIndex];
+      setElements(snapshot);
+      saveElements(snapshot);
+      return { ...h, index: newIndex };
+    });
+  }
+
+  function redo() {
+    setHistory((h) => {
+      if (h.index >= h.stack.length - 1) return h;
+      const newIndex = h.index + 1;
+      const snapshot = h.stack[newIndex];
+      setElements(snapshot);
+      saveElements(snapshot);
+      return { ...h, index: newIndex };
+    });
+  }
+
+  const canUndo = history.index > 0;
+  const canRedo = history.index < history.stack.length - 1;
+
+  // คีย์ลัด Ctrl/Cmd+Z (ย้อนกลับ) และ Ctrl/Cmd+Shift+Z หรือ Ctrl/Cmd+Y (ทำซ้ำ) — ข้ามถ้ากำลังพิมพ์
+  // อยู่ในช่องข้อความอื่นของหน้า (เช่น เปลี่ยนชื่อสถานที่/เนื้อหาเรื่องราวใน LoreModal)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable) return;
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z") return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node<LocationNodeData>>[]) => {
@@ -405,9 +575,13 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
   }
 
   function handlePointerDown(e: React.PointerEvent) {
-    if (mode === "line" || mode === "fill") {
+    if (mode === "line") {
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      setActiveStroke({ kind: mode, points: [pos], width: mode === "line" ? lineWidth : undefined, color: mode === "line" ? undefined : terrainColor });
+      setActiveStroke({ kind: "line", points: [pos], width: lineWidth });
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } else if (mode === "fill") {
+      const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      setActiveStroke({ kind: "land", points: [pos], color: terrainColor, brushSize, landMode: landActionMode });
       e.currentTarget.setPointerCapture(e.pointerId);
     } else if (mode === "stamp") {
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
@@ -421,6 +595,8 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       });
       e.currentTarget.setPointerCapture(e.pointerId);
     }
+    // หมายเหตุ: โหมดสแตมป์ไม่เรียก pushHistory ที่นี่ — รอไปรวมเป็น 1 undo step ตอนปล่อยเมาส์ใน
+    // handlePointerUp กันลากปั๊มต่อเนื่องยาว ๆ กลายเป็น undo step เป็นสิบ ๆ ครั้ง
   }
 
   function handlePointerMove(e: React.PointerEvent) {
@@ -443,27 +619,38 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
 
   function handlePointerUp(e: React.PointerEvent) {
     if ((mode === "line" || mode === "fill") && activeStroke) {
-      const el: MapElement =
-        activeStroke.kind === "fill"
-          ? { id: `fill-${Date.now()}`, kind: "fill", points: activeStroke.points, color: activeStroke.color as string }
-          : { id: `line-${Date.now()}`, kind: "line", points: activeStroke.points, width: activeStroke.width as number };
-      setElements((prev) => {
-        const next = [...prev, el];
-        saveElements(next);
-        return next;
-      });
+      let el: MapElement;
+      if (activeStroke.kind === "land") {
+        // ปรับความขรุขระ/ความเรียบครั้งเดียวตอนปล่อยเมาส์เท่านั้น (ไม่ใช่ทุก frame ตอนลาก) กันเว็บหนัก
+        let finalPoints = activeStroke.points;
+        if (roughness > 0) finalPoints = jitterPoints(finalPoints, roughness);
+        if (smoothLand) finalPoints = smoothPoints(finalPoints);
+        el = {
+          id: `land-${Date.now()}`,
+          kind: "land",
+          points: finalPoints,
+          brushSize: activeStroke.brushSize,
+          mode: activeStroke.landMode,
+          color: activeStroke.color,
+        };
+      } else {
+        el = { id: `line-${Date.now()}`, kind: "line", points: activeStroke.points, width: activeStroke.width };
+      }
+      commitElements([...elementsRef.current, el]);
       setActiveStroke(null);
       e.currentTarget.releasePointerCapture(e.pointerId);
     } else if (mode === "stamp") {
       isStampingRef.current = false;
       lastStampPosRef.current = null;
+      // ปั๊มระหว่างลากทั้งหมดรวมเป็น undo step เดียว ณ จุดนี้ (แต่ละไอคอนเซฟลง backend ไปแล้วทีละอัน
+      // ตอนวาง กันข้อมูลหายถ้าเบราว์เซอร์ปิดกลางคัน — pushHistory แค่บันทึก snapshot ไม่ยิง save ซ้ำ)
+      pushHistory(elementsRef.current);
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
   }
 
   function clearElements() {
-    setElements([]);
-    saveElements([]);
+    commitElements([]);
   }
 
   async function saveLore(input: { lore: string; chapterId: string | null }) {
@@ -528,7 +715,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
     manage:
       "ลากสถานที่เพื่อจัดตำแหน่ง หรือลากจากจุดกลมรอบไอคอน (บน/ขวา/ล่าง/ซ้าย) ไปยังอีกสถานที่เพื่อสร้างเส้นทาง — ดับเบิลคลิกชื่อเพื่อแก้ไข — เลือกไอคอนเพื่อย่อ/หมุน/พลิก/จัดเลเยอร์/เปิดเนื้อหาเรื่องราว — กดที่เส้นทางเพื่อลบ",
     line: 'ลากเมาส์บนแผนที่เพื่อวาดเส้นอิสระ เช่น ชายฝั่งหรือเขตแดน — กด "จัดการ" เพื่อกลับไปแก้ไขสถานที่',
-    fill: "ลากเมาส์วนรอบพื้นที่เพื่อระบายภูมิประเทศ (ระบบจะปิดรูปให้อัตโนมัติ) เลือกสีภูมิประเทศด้านบนก่อนวาด",
+    fill: 'เลือกโหมด "เพิ่ม" หรือ "ลบ" แล้วลากเมาส์เพื่อระบายพื้นที่ดินด้วยแปรง — ปรับขนาดแปรง/ความขรุขระ/ขอบเรียบ และเลือกสีภูมิประเทศได้ด้านบนก่อนวาด',
     stamp: "เลือกไอคอนสิ่งกีดขวางด้านบน แล้วคลิกหรือลากบนแผนที่เพื่อวางต่อเนื่อง เช่น แนวเทือกเขาหรือแนวต้นไม้",
   };
 
@@ -577,6 +764,28 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
         <p className="text-sm font-semibold text-neutral-800">แผนที่</p>
 
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={undo}
+              disabled={!canUndo}
+              title="ย้อนกลับ (Ctrl+Z)"
+              aria-label="ย้อนกลับ"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-neutral-300 text-neutral-600 hover:border-primary-400 hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Undo2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={redo}
+              disabled={!canRedo}
+              title="ทำซ้ำ (Ctrl+Shift+Z)"
+              aria-label="ทำซ้ำ"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-neutral-300 text-neutral-600 hover:border-primary-400 hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
           <button type="button" onClick={saveVersion} disabled={savingVersion} className="flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500 disabled:opacity-50">
             <Save className="h-3.5 w-3.5" /> บันทึกเวอร์ชัน
           </button>
@@ -616,17 +825,58 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
         )}
 
         {mode === "fill" && (
-          <div className="flex items-center gap-1.5">
-            {TERRAIN_PRESETS.map((t) => (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              {TERRAIN_PRESETS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  title={t.label}
+                  onClick={() => setTerrainColor(t.color)}
+                  className="h-6 w-6 rounded-full transition hover:scale-110"
+                  style={{ background: t.color, outline: terrainColor === t.color ? `2px solid ${t.color}` : "none", outlineOffset: "2px" }}
+                />
+              ))}
+            </div>
+
+            <div className="flex items-center rounded-full bg-neutral-100 p-0.5">
               <button
-                key={t.key}
                 type="button"
-                title={t.label}
-                onClick={() => setTerrainColor(t.color)}
-                className="h-6 w-6 rounded-full transition hover:scale-110"
-                style={{ background: t.color, outline: terrainColor === t.color ? `2px solid ${t.color}` : "none", outlineOffset: "2px" }}
+                onClick={() => setLandActionMode("add")}
+                className={cn("rounded-full px-3 py-1 text-xs font-medium transition", landActionMode === "add" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500")}
+              >
+                + เพิ่ม
+              </button>
+              <button
+                type="button"
+                onClick={() => setLandActionMode("subtract")}
+                className={cn("rounded-full px-3 py-1 text-xs font-medium transition", landActionMode === "subtract" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500")}
+              >
+                − ลบ
+              </button>
+            </div>
+
+            <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+              ขนาดแปรง
+              <input type="range" min={10} max={100} value={brushSize} onChange={(e) => setBrushSize(Number(e.target.value))} className="accent-primary-500" />
+              <span className="w-6 text-neutral-600">{brushSize}</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+              ความขรุขระ
+              <input type="range" min={0} max={20} value={roughness} onChange={(e) => setRoughness(Number(e.target.value))} className="accent-primary-500" />
+              <span className="w-6 text-neutral-600">{roughness}</span>
+            </label>
+
+            <label className="flex items-center gap-1.5 text-xs text-neutral-700">
+              <input
+                type="checkbox"
+                checked={smoothLand}
+                onChange={(e) => setSmoothLand(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-neutral-300 text-primary-500 focus:ring-primary-400"
               />
-            ))}
+              ขอบเรียบ
+            </label>
           </div>
         )}
 

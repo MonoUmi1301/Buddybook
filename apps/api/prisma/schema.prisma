@@ -131,6 +131,7 @@ enum NotificationType {
   reply
   donation
   system
+  new_chapter
 }
 
 // ---------------------------------------------------------------------------

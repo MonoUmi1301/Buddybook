@@ -382,6 +382,16 @@ export const mapDrawingsSchema = z.array(
       rotation: z.number().optional(),
       scale: z.number().min(0.3).max(3).optional(),
     }),
+    // เพิ่มภายหลัง (audit fix) — Land Tool: แปรงระบายพื้นที่ดินแบบเพิ่ม/ลบ (ต่างจาก "fill" เดิมที่
+    // เป็นการลากปิดรูปทรงตรง ๆ) ดู WorldMap.tsx DrawingLayer สำหรับการ composite ผ่าน SVG mask
+    z.object({
+      id: z.string().min(1).max(100),
+      kind: z.literal("land"),
+      points: z.array(mapPointSchema).min(1).max(2000),
+      brushSize: z.number().min(5).max(200),
+      mode: z.enum(["add", "subtract"]),
+      color: z.string().trim().max(20),
+    }),
   ])
 ).max(2000);
 

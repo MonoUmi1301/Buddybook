@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { syncReadEdge } from "@/lib/graphSync";
+import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 
 interface PendingQueueItem {
   target_type: "comment" | "review";
@@ -94,7 +95,7 @@ export async function purgeExpiredTrash() {
 export async function publishScheduledChapters() {
   const due = await prisma.chapter.findMany({
     where: { status: "scheduled", scheduled_publish_at: { lte: new Date() } },
-    select: { chapter_id: true },
+    select: { chapter_id: true, chapter_number: true, title: true, novel_id: true, novel: { select: { author_id: true } } },
   });
 
   if (due.length === 0) return { published_count: 0 };
@@ -103,6 +104,10 @@ export async function publishScheduledChapters() {
     where: { chapter_id: { in: due.map((c) => c.chapter_id) } },
     data: { status: "published", published_at: new Date(), scheduled_publish_at: null },
   });
+
+  await Promise.all(
+    due.map((c) => notifyLibraryOfNewChapter(c.novel_id, c.novel.author_id, c))
+  );
 
   return { published_count: due.length };
 }

@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, Gift, MessageCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, BookOpen, Gift, MessageCircle } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
 
 interface NotificationItem {
   notification_id: string;
-  type: "comment" | "reply" | "donation" | "system";
+  type: "comment" | "reply" | "donation" | "system" | "new_chapter";
   content: string;
   link_url: string | null;
   is_read: boolean;
@@ -16,7 +17,9 @@ interface NotificationItem {
 }
 
 const tabFilter: Record<"updates" | "comments" | "activity", NotificationItem["type"][]> = {
-  updates: ["system"],
+  // เพิ่มภายหลัง (audit fix) — new_chapter (นิยายที่เก็บไว้ในชั้นหนังสือมีตอนใหม่) เข้าแท็บ "อัปเดต"
+  // เช่นเดียวกับ system
+  updates: ["system", "new_chapter"],
   comments: ["comment", "reply"],
   activity: ["donation"],
 };
@@ -32,6 +35,7 @@ const tabIcon: Record<NotificationItem["type"], typeof Bell> = {
   reply: MessageCircle,
   donation: Gift,
   system: Bell,
+  new_chapter: BookOpen,
 };
 
 function timeAgo(iso: string): string {
@@ -46,6 +50,7 @@ function timeAgo(iso: string): string {
 
 /** แผงแจ้งเตือนแบบแท็บ อัปเดต/คอมเมนต์/กิจกรรม — ต่อกับ GET/PATCH /notifications จริง */
 export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light" }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<keyof typeof tabFilter>("updates");
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -70,6 +75,14 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
   async function markRead(id: string) {
     setNotifications((prev) => prev.map((n) => (n.notification_id === id ? { ...n, is_read: true } : n)));
     fetch(`/api/v1/notifications/${id}/read`, { method: "PATCH" }).catch(() => {});
+  }
+
+  // เพิ่มภายหลัง (audit fix) — คลิกแถบแจ้งเตือนแล้วต้องพาไปหน้าที่เกี่ยวข้องเลย (เช่นตอนใหม่ที่อัปเดต)
+  // ไม่ใช่แค่ทำเครื่องหมายอ่านแล้วเฉย ๆ เหมือนเดิม
+  function handleItemClick(n: NotificationItem) {
+    if (!n.is_read) markRead(n.notification_id);
+    setOpen(false);
+    if (n.link_url) router.push(n.link_url);
   }
 
   const items = notifications.filter((n) => tabFilter[activeTab].includes(n.type));
@@ -125,7 +138,7 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
             return (
               <li
                 key={n.notification_id}
-                onClick={() => !n.is_read && markRead(n.notification_id)}
+                onClick={() => handleItemClick(n)}
                 className={cn(
                   "flex cursor-pointer gap-3 px-4 py-3 text-sm transition-colors",
                   isDark ? "hover:bg-white/5" : "hover:bg-neutral-50"

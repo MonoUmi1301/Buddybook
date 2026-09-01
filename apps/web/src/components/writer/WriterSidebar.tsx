@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Home, Sparkles, Trash2, UserRound, ScrollText, type LucideIcon } from "lucide-react";
+import { BookOpen, Home, Sparkles, UserRound, ScrollText, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface Tab {
   key: string;
   label: string;
   icon: LucideIcon;
-  href?: (novelId: string) => string;
 }
 
 const tabs: Tab[] = [
@@ -18,10 +17,13 @@ const tabs: Tab[] = [
   { key: "environment", label: "Environment", icon: ScrollText },
   { key: "base", label: "Base", icon: Home },
   { key: "theme", label: "Theme", icon: Sparkles },
-  { key: "trash", label: "ถังขยะ", icon: Trash2, href: (novelId) => `/write/${novelId}/trash` },
 ];
 
-/** แถบด้านซ้ายของ World-building tool — Plot/Character/Environment/Base/Theme/ถังขยะ ดู wf_map_dm.png */
+// เพิ่มภายหลัง (audit fix) — ถังขยะเดิมอยู่ในแถบนี้ด้วย แต่ผู้ใช้ชี้ว่ามันไม่ใช่ "เครื่องมือช่วยแต่งนิยาย"
+// เหมือน Plot/Character/Environment/Base/Theme ที่เหลือ (มันคือฟีเจอร์กู้คืนข้อมูล ไม่ใช่เครื่องมือ
+// สร้างเนื้อหา) เอาออกจากที่นี่ เหลือทางเข้าเดียวคือปุ่ม "ถังขยะ" บนหน้าจัดการนิยาย
+// (NovelManagementPanel.tsx) ซึ่งมีอยู่แล้วคู่กับ "พรีวิวก่อนพิมพ์"
+/** แถบด้านซ้ายของ World-building tool — Plot/Character/Environment/Base/Theme ดู wf_map_dm.png */
 export function WriterSidebar({ novelId }: { novelId: string }) {
   const pathname = usePathname();
 
@@ -29,7 +31,7 @@ export function WriterSidebar({ novelId }: { novelId: string }) {
     <aside className="w-48 shrink-0 rounded-card bg-brand-tan/20 p-3 dark:bg-surface-muted">
       <nav className="space-y-1">
         {tabs.map((tab) => {
-          const href = tab.href ? tab.href(novelId) : `/write/${novelId}/${tab.key}`;
+          const href = `/write/${novelId}/${tab.key}`;
           const active = pathname === href;
           const Icon = tab.icon;
           return (

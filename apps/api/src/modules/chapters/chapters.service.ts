@@ -4,6 +4,7 @@ import { moveToTrash } from "@/lib/trash";
 import { ApiError } from "@/utils/ApiError";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
+import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 import type { ChapterStatus } from "@prisma/client";
 
 function stripHtml(html: string): string {
@@ -71,6 +72,10 @@ export async function createChapter(novel_id: string, author_id: string, input: 
         created_at: true,
       },
     });
+
+    if (chapter.status === "published") {
+      await notifyLibraryOfNewChapter(novel_id, author_id, chapter);
+    }
 
     return chapter;
   } catch (err) {
@@ -161,6 +166,7 @@ export async function updateChapter(chapter_id: string, user_id: string, input: 
     },
     select: {
       chapter_id: true,
+      chapter_number: true,
       title: true,
       content: true,
       status: true,
@@ -170,6 +176,10 @@ export async function updateChapter(chapter_id: string, user_id: string, input: 
       updated_at: true,
     },
   });
+
+  if (willPublishNow) {
+    await notifyLibraryOfNewChapter(chapter.novel_id, chapter.novel.author_id, updated);
+  }
 
   return updated;
 }
