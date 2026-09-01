@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* เพิ่มภายหลัง (audit fix — full-site dark mode) — ผูกสเกลสี neutral-* กับ bg-white เดิมทั้งหมด
+ * เข้ากับ CSS variable แทนค่าคงที่ ทำให้ทุกหน้าที่ใช้สเกล neutral หรือ white ตามปกติ (เกือบทั้งเว็บ) ตอบสนอง
+ * ธีมมืดอัตโนมัติทันทีที่ <html> มีคลาส .dark โดยไม่ต้องแก้ทีละไฟล์ — ค่า :root คือค่าเดิมของ
+ * Tailwind default neutral scale เป๊ะ ๆ (แปลงเป็น "R G B" ให้ opacity modifier ใช้ได้) จึงไม่กระทบ
+ * หน้าตาโหมด light เดิมเลยแม้แต่พิกเซลเดียว ส่วน .dark ไล่ค่ากลับด้าน (neutral-900 ที่เคยเป็นตัวหนัง
+ * สือเข้มสุด กลายเป็นเกือบขาวสำหรับพื้นมืด, neutral-50 ที่เคยเป็นพื้นหลังอ่อนสุด กลายเป็นเกือบดำ)
+ * ตั้งใจ "ไม่" override text-white (ปุ่ม/ตัวหนังสือบนพื้นสี) เพราะจะพังปุ่มสีส้ม — override เฉพาะ
+ * background-color: white (การ์ด/พื้นหลังหน้า) ผ่าน tailwind.config.ts theme.extend.backgroundColor */
+:root {
+  --color-neutral-50: 250 250 250;
+  --color-neutral-100: 245 245 245;
+  --color-neutral-200: 229 229 229;
+  --color-neutral-300: 212 212 212;
+  --color-neutral-400: 163 163 163;
+  --color-neutral-500: 115 115 115;
+  --color-neutral-600: 82 82 82;
+  --color-neutral-700: 64 64 64;
+  --color-neutral-800: 38 38 38;
+  --color-neutral-900: 23 23 23;
+  --color-surface-card: 255 255 255;
+}
+
+.dark {
+  --color-neutral-50: 20 20 20;
+  --color-neutral-100: 30 30 30;
+  --color-neutral-200: 42 42 42;
+  --color-neutral-300: 58 58 58;
+  --color-neutral-400: 115 115 115;
+  --color-neutral-500: 145 145 145;
+  --color-neutral-600: 175 175 175;
+  --color-neutral-700: 198 198 198;
+  --color-neutral-800: 222 222 222;
+  --color-neutral-900: 245 245 245;
+  --color-surface-card: 30 30 30;
+}
+
+/* เพิ่มภายหลัง (audit fix — full-site dark mode) — ปุ่ม zoom/fit-view ของ @xyflow/react (ใช้ใน
+ * WorldMap/CharacterGraph/TimelineBuilder) มาพร้อมพื้นหลังขาวแข็ง ๆ จาก CSS ของไลบรารีเอง ไม่ใช่
+ * Tailwind class ของเรา จึงไม่ตอบสนองต่อตัวแปรสี neutral ด้านบน ต้อง override ตรง ๆ ด้วย selector
+ * ของไลบรารี เฉพาะตอนอยู่ในโหมดมืดเท่านั้น (โหมดสว่างใช้ค่า default ของไลบรารีตามเดิม) */
+.dark .react-flow__controls-button {
+  background-color: rgb(30 30 30);
+  border-color: rgb(58 58 58);
+  fill: rgb(212 212 212);
+}
+.dark .react-flow__controls-button:hover {
+  background-color: rgb(42 42 42);
+}
+.dark .react-flow__attribution {
+  background-color: transparent;
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

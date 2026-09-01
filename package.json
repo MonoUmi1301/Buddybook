@@ -1,0 +1,29 @@
+{
+  "name": "buddybook",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BuddyBook — Thai web novel platform monorepo (Next.js 14 + Express + Prisma/PostgreSQL + Neo4j + Python NLP Worker)",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "build:api": "npm run build --workspace=apps/api",
+    "lint": "npm run lint --workspace=apps/web && npm run lint --workspace=apps/api",
+    "typecheck": "npm run typecheck --workspace=apps/api",
+    "prisma:generate": "npm run prisma:generate --workspace=apps/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=apps/api",
+    "prisma:studio": "npm run prisma:studio --workspace=apps/api"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "overrides": {
+    "typescript": "^5.5.4"
+  }
+}

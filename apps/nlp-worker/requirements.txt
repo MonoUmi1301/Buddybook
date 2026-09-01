@@ -1,0 +1,17 @@
+# BuddyBook NLP Worker dependencies (Python 3.11+)
+# Note: keep this file ASCII-only -- Thai comments here previously broke
+# "pip install -r requirements.txt" on Windows (pip auto-detects encoding via
+# the console's active codepage, e.g. cp1252, not UTF-8, and fails to parse
+# non-ASCII bytes). See apps/nlp-worker/src/*.py for Thai explanations instead.
+#
+# IMPORTANT (Windows): install torch from the dedicated CPU wheel index, not
+# plain PyPI. The default PyPI torch==2.4.0 Windows wheel fails to import with
+# "OSError: [WinError 126] ... Error loading fbgemm.dll or one of its
+# dependencies" on at least some machines (confirmed on an Intel Broadwell
+# CPU) -- this is a known upstream packaging issue, not a project bug. Fix:
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install -r requirements.txt   (installs the rest; torch already satisfied)
+transformers==4.44.0
+pythainlp==5.0.4
+python-dotenv==1.0.1
+requests==2.32.3

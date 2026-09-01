@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+
+# Production builds
+apps/api/dist/
+build/
+
+# Environment variables (never commit real secrets)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Prisma
+apps/api/prisma/generated/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+apps/nlp-worker/*.egg-info/
+
+# Claude Code local tool settings (not part of the project)
+.claude/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Testing
+coverage/
