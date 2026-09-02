@@ -30,6 +30,8 @@ export interface NovelDetailData {
   }[];
   like_count: number;
   is_liked: boolean;
+  // เพิ่มภายหลัง (audit fix) — ผู้เขียนซ่อนตัวเลขจำนวนหัวใจได้ ยังกดถูกใจได้ปกติ แค่ไม่โชว์ตัวเลข
+  hide_like_count: boolean;
 }
 
 const legalStatusLabel: Record<NovelDetailData["legal_status"], string> = {
@@ -141,7 +143,9 @@ export function NovelHero({ novel, initialInLibrary = false, isLoggedIn, firstCh
 
           <div className="mt-4 flex items-center gap-4">
             <StatPill icon={Eye} value={novel.view_count} className="text-sm" />
-            <StatPill icon={Heart} value={likeCount} className="text-sm" iconClassName="text-rose-400" />
+            {!novel.hide_like_count && (
+              <StatPill icon={Heart} value={likeCount} className="text-sm" iconClassName="text-rose-400" />
+            )}
           </div>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">

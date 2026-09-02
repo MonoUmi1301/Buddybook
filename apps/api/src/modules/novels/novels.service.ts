@@ -170,6 +170,7 @@ interface CreateNovelInput {
   allow_donations?: boolean;
   allow_screenshots?: boolean;
   allow_comments?: boolean;
+  hide_like_count?: boolean;
   primary_tag_id?: number;
   secondary_tag_id?: number;
   // เพิ่มภายหลัง (Phase H) — แท็กที่ผู้ใช้พิมพ์เอง ไม่ได้เลือกจากลิสต์ที่มีอยู่
@@ -264,6 +265,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
       allow_donations: input.allow_donations,
       allow_screenshots: input.allow_screenshots,
       allow_comments: input.allow_comments,
+      hide_like_count: input.hide_like_count,
       primary_tag_id: input.primary_tag_id,
       secondary_tag_id: input.secondary_tag_id,
       novel_tags: allTagIds.length ? { create: allTagIds.map((tag_id) => ({ tag_id })) } : undefined,
@@ -294,6 +296,7 @@ interface UpdateNovelInput {
   allow_donations?: boolean;
   allow_screenshots?: boolean;
   allow_comments?: boolean;
+  hide_like_count?: boolean;
   primary_tag_id?: number | null;
   secondary_tag_id?: number | null;
   // เพิ่มภายหลัง (Phase H) — แท็กที่ผู้ใช้พิมพ์เอง ไม่ได้เลือกจากลิสต์ที่มีอยู่
@@ -365,6 +368,7 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
         allow_donations: true,
         allow_screenshots: true,
         allow_comments: true,
+        hide_like_count: true,
         primary_tag_id: true,
         secondary_tag_id: true,
         updated_at: true,
@@ -758,6 +762,7 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
       allow_donations: true,
       allow_screenshots: true,
       allow_comments: true,
+      hide_like_count: true,
       primary_tag: { select: { tag_id: true, name: true } },
       secondary_tag: { select: { tag_id: true, name: true } },
       author: { select: { user_id: true, username: true, pen_name: true, avatar_url: true } },

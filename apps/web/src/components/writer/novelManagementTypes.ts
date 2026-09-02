@@ -3,6 +3,7 @@ export interface ManagedNovel {
   title: string;
   synopsis: string | null;
   cover_image_url: string | null;
+  status: "ongoing" | "completed" | "hiatus";
   visibility: "published" | "private" | "pending_review";
   legal_status: "original" | "fan-fiction" | "translation";
   format: "multi_chapter" | "one_shot";
@@ -11,6 +12,7 @@ export interface ManagedNovel {
   allow_donations: boolean;
   allow_screenshots: boolean;
   allow_comments: boolean;
+  hide_like_count: boolean;
   primary_tag: { tag_id: number; name: string } | null;
   secondary_tag: { tag_id: number; name: string } | null;
   tags: { tag_id: number; name: string; category: string | null }[];

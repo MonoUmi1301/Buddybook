@@ -25,6 +25,16 @@ const contentRatingOptions: { value: "all_ages" | "teen" | "mature"; label: stri
   { value: "mature", label: "18+" },
 ];
 
+// เพิ่มภายหลัง (audit fix) — status มีอยู่แล้วฝั่ง backend (updateNovelBodySchema/updateNovel
+// service รับตรง ๆ อยู่ก่อนแล้ว) แต่ไม่เคยมี UI ให้ตั้งค่าหลังสร้างนิยายเลยสักที่ — ผู้ใช้ขอปุ่ม
+// "จบแล้ว" ตามหน้าตั้งค่าเรื่องของเว็บอื่น ใช้ปุ่มเลือก 3 ทางแทน checkbox เดียว เพราะระบบมี hiatus
+// (พักการเขียน) อยู่แล้วด้วย ไม่ใช่แค่ ongoing/completed
+const statusOptions: { value: "ongoing" | "completed" | "hiatus"; label: string }[] = [
+  { value: "ongoing", label: "กำลังเขียน" },
+  { value: "completed", label: "จบแล้ว" },
+  { value: "hiatus", label: "พักการเขียน" },
+];
+
 /** แก้ไขข้อมูลนิยาย — ใช้ชุดฟิลด์เดียวกับขั้น 2 ของ CreateNovelForm แต่ PATCH แทน POST
  *  (Phase D ตามแพลน: "edit entry point reusing the step-2 wizard form in edit mode") */
 export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormProps) {
@@ -47,9 +57,11 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
     newNames: [],
   });
   const [contentRating, setContentRating] = useState(novel.content_rating);
+  const [status, setStatus] = useState(novel.status);
   const [allowDonations, setAllowDonations] = useState(novel.allow_donations);
   const [allowScreenshots, setAllowScreenshots] = useState(novel.allow_screenshots);
   const [allowComments, setAllowComments] = useState(novel.allow_comments);
+  const [hideLikeCount, setHideLikeCount] = useState(novel.hide_like_count);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,9 +114,11 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
           fandom_tag_ids: Array.from(fandomTagValue.selectedIds),
           fandom_tag_names: fandomTagValue.newNames,
           content_rating: contentRating,
+          status,
           allow_donations: allowDonations,
           allow_screenshots: allowScreenshots,
           allow_comments: allowComments,
+          hide_like_count: hideLikeCount,
           primary_tag_id: primaryTagId,
           secondary_tag_id: secondaryTagId,
         }),
@@ -123,9 +137,11 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         synopsis: synopsis.trim() || null,
         cover_image_url: coverImageUrl,
         content_rating: contentRating,
+        status,
         allow_donations: allowDonations,
         allow_screenshots: allowScreenshots,
         allow_comments: allowComments,
+        hide_like_count: hideLikeCount,
         primary_tag: mainGenreTags.find((t) => t.tag_id === primaryTagId) ?? null,
         secondary_tag: subGenreTags.find((t) => t.tag_id === secondaryTagId) ?? null,
         // ใช้ tags ที่ backend คืนมาจริง (resolve tag_names ใหม่เสร็จแล้ว มี tag_id จริง) แทนการเดา
@@ -232,6 +248,26 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         </div>
       </div>
 
+      <div>
+        <p className="mb-1.5 text-sm font-medium text-neutral-700">สถานะเรื่อง</p>
+        <div className="flex flex-wrap gap-2">
+          {statusOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setStatus(opt.value)}
+              className={
+                status === opt.value
+                  ? "rounded-pill bg-primary-500 px-4 py-2 text-sm font-medium text-white"
+                  : "rounded-pill border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-2">
         <label className="flex items-center gap-2 text-sm text-neutral-700">
           <input
@@ -259,6 +295,15 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
             className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-400"
           />
           เปิดให้แสดงความคิดเห็น
+        </label>
+        <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            checked={hideLikeCount}
+            onChange={(e) => setHideLikeCount(e.target.checked)}
+            className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-400"
+          />
+          ซ่อนจำนวนหัวใจ
         </label>
       </div>
 

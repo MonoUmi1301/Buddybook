@@ -120,6 +120,8 @@ const createNovelBodySchema = z
     allow_donations: z.boolean().optional(),
     allow_screenshots: z.boolean().optional(),
     allow_comments: z.boolean().optional(),
+    // เพิ่มภายหลัง (audit fix) — ซ่อนจำนวนหัวใจบนหน้ารายละเอียดนิยาย
+    hide_like_count: z.boolean().optional(),
     primary_tag_id: z.number().int().positive().optional(),
     secondary_tag_id: z.number().int().positive().optional(),
     // เพิ่มภายหลัง (Phase H) — แท็กที่ผู้ใช้พิมพ์เอง แทนที่จะเลือกจากลิสต์ที่ admin คุมอยู่เท่านั้น
@@ -167,6 +169,8 @@ const updateNovelBodySchema = z
     allow_donations: z.boolean().optional(),
     allow_screenshots: z.boolean().optional(),
     allow_comments: z.boolean().optional(),
+    // เพิ่มภายหลัง (audit fix) — ซ่อนจำนวนหัวใจบนหน้ารายละเอียดนิยาย
+    hide_like_count: z.boolean().optional(),
     primary_tag_id: z.number().int().positive().nullable().optional(),
     secondary_tag_id: z.number().int().positive().nullable().optional(),
     // เพิ่มภายหลัง (Phase H) — แท็กที่ผู้ใช้พิมพ์เอง แทนที่จะเลือกจากลิสต์ที่ admin คุมอยู่เท่านั้น

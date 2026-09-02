@@ -246,6 +246,9 @@ model Novel {
   allow_donations     Boolean       @default(true)
   allow_screenshots   Boolean       @default(true)
   allow_comments      Boolean       @default(true)
+  /// เพิ่มภายหลัง (audit fix) — ผู้เขียนซ่อนจำนวนหัวใจที่แสดงบนหน้ารายละเอียดนิยายได้ (ยังกดถูกใจได้
+  /// ปกติ แค่ไม่โชว์ตัวเลขให้ใครเห็น) ไม่กระทบ NovelLike จริงที่ยังนับอยู่เบื้องหลังเหมือนเดิม
+  hide_like_count     Boolean       @default(false)
   primary_tag_id      Int?
   secondary_tag_id    Int?
 

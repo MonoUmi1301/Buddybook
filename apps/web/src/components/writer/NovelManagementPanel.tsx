@@ -10,6 +10,7 @@ import { Tag } from "@/components/ui/Tag";
 import { EditNovelForm } from "@/components/writer/EditNovelForm";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
+import { estimatePageCount } from "@/lib/textStats";
 
 export type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 
@@ -253,7 +254,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
                       ตอนที่ {chapter.chapter_number}: {chapter.title}
                     </p>
                     <p className="text-xs text-neutral-500">
-                      {chapter.word_count.toLocaleString("th-TH")} ตัวอักษร
+                      {chapter.word_count.toLocaleString("th-TH")} ตัวอักษร (≈{estimatePageCount(chapter.word_count)} หน้า)
                       {chapter.status === "scheduled" && chapter.scheduled_publish_at && (
                         <> · เผยแพร่ {formatDateTime(chapter.scheduled_publish_at)}</>
                       )}

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PublishChoiceModal, type PublishChoice } from "@/components/writer/PublishChoiceModal";
 import { formatApiError } from "@/lib/formatApiError";
+import { countCharacters, estimatePageCount } from "@/lib/textStats";
 
 // Quill แตะ DOM ตรง ๆ ตอน construct — โหลดแบบ ssr:false (ทำได้เฉพาะใน Client Component)
 // ตาม pattern มาตรฐานของ Next.js App Router
@@ -171,6 +172,9 @@ export function ChapterEditorForm({
     return () => clearInterval(timer);
   }, [chapterId]);
 
+  const charCount = countCharacters(content);
+  const pageCount = estimatePageCount(charCount);
+
   return (
     <div className="min-h-screen bg-white">
       <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
@@ -232,6 +236,12 @@ export function ChapterEditorForm({
             }}
           />
         </div>
+
+        {/* เพิ่มภายหลัง (audit fix) — นับตัวอักษร/หน้าโดยประมาณสด ๆ ตอนพิมพ์ ตามที่ผู้ใช้ขอ (มุมซ้าย
+            ล่างของกล่องเขียน) คำนวณฝั่ง client ทันทีจาก content ที่มีอยู่แล้ว ไม่ต้องยิง API เพิ่ม */}
+        <p className="mt-1.5 text-left text-xs text-neutral-400">
+          {charCount.toLocaleString("th-TH")} ตัวอักษร (≈{pageCount} หน้า)
+        </p>
 
         {errorMessage && <p className="mt-3 text-sm text-red-500">{errorMessage}</p>}
 

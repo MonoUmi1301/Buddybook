@@ -67,6 +67,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
   const [allowDonations, setAllowDonations] = useState(true);
   const [allowScreenshots, setAllowScreenshots] = useState(true);
   const [allowComments, setAllowComments] = useState(true);
+  const [hideLikeCount, setHideLikeCount] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +134,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
           allow_donations: allowDonations,
           allow_screenshots: allowScreenshots,
           allow_comments: allowComments,
+          hide_like_count: hideLikeCount,
           primary_tag_id: primaryTagId ?? undefined,
           secondary_tag_id: secondaryTagId ?? undefined,
         }),
@@ -351,6 +353,15 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
             className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-400"
           />
           เปิดให้แสดงความคิดเห็น
+        </label>
+        <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <input
+            type="checkbox"
+            checked={hideLikeCount}
+            onChange={(e) => setHideLikeCount(e.target.checked)}
+            className="h-4 w-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-400"
+          />
+          ซ่อนจำนวนหัวใจ
         </label>
       </div>
 
