@@ -1,10 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/cn";
 
 export interface HeroSlide {
   id: string;
@@ -13,37 +10,37 @@ export interface HeroSlide {
   href: string;
 }
 
-// แบนเนอร์สไลด์ด้านบนสุดของ Home — ดู wf_home_dark.png (3 การ์ดโชว์พร้อมกัน, ป้าย READ&WRITE มุมล่างซ้าย)
+const SECONDS_PER_SLIDE = 5;
+
+// แบนเนอร์สไลด์ด้านบนสุดของ Home — ดู wf_home_dark.png (ป้าย READ&WRITE มุมล่างซ้าย)
+// เปลี่ยนจากปุ่มเลื่อนทีละใบ เป็นเลื่อนอัตโนมัติต่อเนื่องแบบ marquee (ไม่ต้องกด) ตามที่ขอ — สไตล์เดียว
+// กับแบนเนอร์ของ Dek-D/ReadAWrite ต่อ slides ให้วนซ้ำ 1 ชุด แล้วเลื่อน track ไปแค่ครึ่งทาง (translateX
+// -50%) ก็จะวนกลับมาจุดเดิมพอดีแบบไร้รอยต่อ (seamless loop) หยุดเลื่อนตอน hover ให้กดการ์ดได้สะดวก
 export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
-  const [startIndex, setStartIndex] = useState(0);
-  const visibleCount = 3;
-  const maxStart = Math.max(0, slides.length - visibleCount);
+  if (slides.length === 0) return null;
 
-  function prev() {
-    setStartIndex((i) => Math.max(0, i - 1));
-  }
-  function next() {
-    setStartIndex((i) => Math.min(maxStart, i + 1));
-  }
-
-  const visibleSlides = slides.slice(startIndex, startIndex + visibleCount);
+  const loopSlides = [...slides, ...slides];
+  const durationSeconds = Math.max(slides.length, 3) * SECONDS_PER_SLIDE;
 
   return (
-    <div className="relative">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {visibleSlides.map((slide) => (
+    <div className="group relative overflow-hidden">
+      <div
+        className="flex w-max animate-hero-marquee gap-3 group-hover:[animation-play-state:paused]"
+        style={{ animationDuration: `${durationSeconds}s` }}
+      >
+        {loopSlides.map((slide, i) => (
           <Link
-            key={slide.id}
+            key={`${slide.id}-${i}`}
             href={slide.href}
-            className="group relative aspect-[16/9] overflow-hidden rounded-card bg-surface-muted"
+            className="group/card relative aspect-[16/9] w-[240px] shrink-0 overflow-hidden rounded-card bg-surface-muted sm:w-[300px]"
           >
             <Image
               src={slide.coverImageUrl}
               alt={slide.title}
               fill
-              sizes="(min-width: 640px) 33vw, 100vw"
-              className="object-cover transition-transform duration-300 group-hover:scale-105"
-              priority
+              sizes="300px"
+              className="object-cover transition-transform duration-300 group-hover/card:scale-105"
+              priority={i < 3}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
             <span className="absolute bottom-3 left-3 rounded bg-black/60 px-2 py-1 text-xs font-semibold tracking-wide text-white">
@@ -52,31 +49,6 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
           </Link>
         ))}
       </div>
-
-      <button
-        type="button"
-        onClick={prev}
-        disabled={startIndex === 0}
-        aria-label="ก่อนหน้า"
-        className={cn(
-          "absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition-opacity hover:bg-black/70",
-          "disabled:pointer-events-none disabled:opacity-0"
-        )}
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-      <button
-        type="button"
-        onClick={next}
-        disabled={startIndex >= maxStart}
-        aria-label="ถัดไป"
-        className={cn(
-          "absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition-opacity hover:bg-black/70",
-          "disabled:pointer-events-none disabled:opacity-0"
-        )}
-      >
-        <ChevronRight className="h-5 w-5" />
-      </button>
     </div>
   );
 }
