@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { FacebookIcon, LineIcon, GoogleIcon } from "@/components/ui/SocialIcon";
 import { PasswordRequirementsHint } from "@/components/auth/PasswordRequirementsHint";
 import { formatApiError } from "@/lib/formatApiError";
@@ -37,6 +38,9 @@ export function AuthForm({ mode }: AuthFormProps) {
   // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — ต้อง track เป็น state (ไม่ใช่แค่ FormData ตอน
   // submit เหมือนเดิม) เพื่อโชว์ PasswordRequirementsHint แบบสด ๆ ตอนพิมพ์ (เฉพาะโหมด register)
   const [password, setPassword] = useState("");
+  // เพิ่มภายหลัง (audit fix) — ยืนยันรหัสผ่านซ้ำตอนสมัครสมาชิก กันพิมพ์ผิดโดยไม่รู้ตัว
+  // (login ไม่ต้องมี เพราะเป็นรหัสที่ตั้งไว้แล้ว ไม่ใช่ตอนสร้างใหม่)
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [step, setStep] = useState<"form" | "otp" | "2fa">("form");
   // เพิ่มภายหลัง (audit fix — 2FA) — ตอนล็อกอิน ถ้าบัญชีเปิด 2FA ไว้ backend จะตอบ challenge_token
@@ -65,6 +69,12 @@ export function AuthForm({ mode }: AuthFormProps) {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+
+    if (!isLogin && password !== confirmPassword) {
+      setError("รหัสผ่านทั้งสองช่องไม่ตรงกัน");
+      return;
+    }
+
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
@@ -340,9 +350,8 @@ export function AuthForm({ mode }: AuthFormProps) {
             )}
             <Input name="email" type="email" placeholder="Email" autoComplete="email" required />
             <div>
-              <Input
+              <PasswordInput
                 name="password"
-                type="password"
                 placeholder="Password"
                 autoComplete={isLogin ? "current-password" : "new-password"}
                 value={password}
@@ -359,6 +368,18 @@ export function AuthForm({ mode }: AuthFormProps) {
                 </div>
               )}
             </div>
+
+            {!isLogin && (
+              <PasswordInput
+                name="confirmPassword"
+                placeholder="ยืนยัน Password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={8}
+                required
+              />
+            )}
 
             {error && <p className="text-sm text-red-500">{error}</p>}
 
