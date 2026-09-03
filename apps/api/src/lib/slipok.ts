@@ -1,6 +1,6 @@
-import crypto from "node:crypto";
 import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
+import { stringToUuid } from "@/lib/idHash";
 
 /** ฟีเจอร์เติมเงินด้วยสลิปทั้งหมด gate ตัวเองด้วยอันนี้ (เช่นเดียวกับ Cloudinary) —
  *  ผู้ใช้ยังไม่ได้สมัคร SlipOK ตอนที่เขียนโค้ดนี้ (สมัครได้ที่ slipok.com) */
@@ -62,10 +62,6 @@ export async function verifySlip(imageUrl: string): Promise<SlipOkVerifyResult> 
   };
 }
 
-/** แปลง SlipOK transRef (สตริงอ้างอิงธุรกรรมธนาคาร ไม่ใช่ UUID) เป็น UUID-shape แบบ deterministic
- *  เพื่อเก็บใน wallet_transactions.reference_id (คอลัมน์เป็น @db.Uuid) — transRef เดิมจะได้ค่า
- *  เดิมเสมอ จึงใช้เช็คกันสลิปถูกใช้ซ้ำได้โดยไม่ต้องแก้ schema เพิ่มคอลัมน์ text แยก */
-export function transRefToUuid(transRef: string): string {
-  const hash = crypto.createHash("sha1").update(transRef).digest("hex");
-  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`;
-}
+/** เดิมเป็นฟังก์ชันในไฟล์นี้ ย้ายไป lib/idHash.ts แล้ว (ตอนเพิ่ม Stripe เข้ามา ใช้ hash แบบเดียวกัน
+ *  กับ session id ของ Stripe ด้วย ไม่ใช่แค่ transRef ของ SlipOK) — export ชื่อเดิมไว้กันของเก่าพัง */
+export const transRefToUuid = stringToUuid;

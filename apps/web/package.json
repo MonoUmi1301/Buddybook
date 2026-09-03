@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.8.2",
+    "@stripe/stripe-js": "^9.15.0",
     "@xyflow/react": "^12.3.0",
     "axios": "^1.7.4",
     "html-to-image": "^1.11.13",

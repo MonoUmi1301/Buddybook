@@ -1,8 +1,11 @@
 import { Prisma } from "@prisma/client";
+import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { env } from "@/config/env";
 import { verifySlip, transRefToUuid } from "@/lib/slipok";
+import { getStripeClient } from "@/lib/stripe";
+import { stringToUuid } from "@/lib/idHash";
 
 type QueryClient = typeof prisma | Prisma.TransactionClient;
 
@@ -93,6 +96,87 @@ export async function verifyTopupSlip(user_id: string, packageId: string, slipIm
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       throw ApiError.conflict("สลิปนี้ถูกใช้เติมเงินไปแล้ว");
+    }
+    throw err;
+  }
+}
+
+/** เพิ่มภายหลัง (audit fix — เปลี่ยนจาก SlipOK/อัปโหลดสลิปมาใช้ Stripe) — POST /wallet/topup/checkout-session
+ *  สร้าง Checkout Session แบบ ui_mode: "embedded_page" (ฝังฟอร์มจ่ายเงินในหน้าเว็บเราเอง ไม่เด้งออกไปเว็บ
+ *  Stripe) ไม่สร้าง Product/Price ล่วงหน้าใน Stripe Dashboard — ส่ง price_data inline ทุกครั้งแทน
+ *  เพื่อให้ COIN_PACKAGES ในไฟล์นี้ยังเป็นแหล่งความจริงราคาเดียว (ไม่ต้องซิงก์ราคากับ Stripe เองอีกที่)
+ *  ผูก user_id/package_id ไว้ใน metadata เพื่อให้ webhook (creditStripeTopup) รู้ว่าจะเติมให้ใคร/เท่าไหร่
+ *  ตอน checkout.session.completed ยิงกลับมา */
+export async function createStripeCheckoutSession(user_id: string, packageId: string) {
+  const pkg = COIN_PACKAGES[packageId];
+  if (!pkg) throw ApiError.badRequest("Invalid package_id");
+
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.create({
+    ui_mode: "embedded_page",
+    mode: "payment",
+    line_items: [
+      {
+        price_data: {
+          currency: "thb",
+          product_data: { name: `เติม ${pkg.coins} coin เข้า BuddyBook` },
+          // Stripe รับหน่วยเป็นสตางค์ (หน่วยย่อยสุดของสกุลเงิน) ไม่ใช่บาทตรง ๆ — THB ไม่ใช่สกุลเงิน
+          // zero-decimal ของ Stripe จึงต้องคูณ 100 เสมอ
+          unit_amount: Math.round(pkg.priceThb * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    metadata: { user_id, package_id: packageId },
+    return_url: `${env.APP_URL}/wallet?checkout_session_id={CHECKOUT_SESSION_ID}`,
+  });
+
+  return { client_secret: session.client_secret };
+}
+
+/** เรียกจาก webhook handler ตอน checkout.session.completed เท่านั้น (ไม่ใช่ endpoint ที่ frontend
+ *  เรียกตรง ๆ) — ต้อง idempotent เพราะ Stripe อาจส่ง webhook event ซ้ำได้ (retry ตอนเราตอบช้า/พลาด)
+ *  ใช้ pattern เดียวกับ verifyTopupSlip เป๊ะ ๆ: unique constraint (type, reference_id) ระดับ DB เป็น
+ *  เกราะป้องกันจริง ไม่ใช่แค่ findFirst — ต่างกันแค่ตรงนี้ไม่ throw ตอนเจอรายการซ้ำ (เพราะไม่มี client
+ *  รออยู่ปลายทางที่ต้องได้ error response กลับไป แค่ต้องไม่เติมเงินซ้ำเงียบ ๆ ก็พอ) */
+export async function creditStripeTopup(session: Stripe.Checkout.Session): Promise<void> {
+  const user_id = session.metadata?.user_id;
+  const packageId = session.metadata?.package_id;
+  if (!user_id || !packageId) {
+    console.error(`Stripe webhook: missing metadata on session ${session.id}`);
+    return;
+  }
+
+  const pkg = COIN_PACKAGES[packageId];
+  if (!pkg) {
+    console.error(`Stripe webhook: unknown package_id "${packageId}" on session ${session.id}`);
+    return;
+  }
+
+  const referenceId = stringToUuid(session.id);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.walletTransaction.findFirst({
+        where: { type: "topup", reference_id: referenceId },
+      });
+      if (existing) return;
+
+      const currentBalance = await getBalance(user_id, tx);
+
+      await tx.walletTransaction.create({
+        data: {
+          user_id,
+          type: "topup",
+          amount: pkg.coins,
+          balance_after: currentBalance + pkg.coins,
+          reference_id: referenceId,
+        },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      return;
     }
     throw err;
   }

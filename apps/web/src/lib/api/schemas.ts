@@ -465,3 +465,8 @@ export const verifySlipSchema = z.object({
   package_id: z.string().min(1),
   slip_image_url: z.string().url(),
 });
+
+// เพิ่มภายหลัง (audit fix — เปลี่ยนมาใช้ Stripe) — สร้าง Checkout Session สำหรับแพ็กที่เลือก
+export const createCheckoutSessionSchema = z.object({
+  package_id: z.string().min(1),
+});

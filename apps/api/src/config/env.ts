@@ -50,6 +50,12 @@ const envSchema = z.object({
   // ลองอันนี้ก่อนเสมอถ้าตั้งค่าไว้ ค่อย fallback ไป Resend)
   GMAIL_USER: z.string().default(""),
   GMAIL_APP_PASSWORD: z.string().default(""),
+  // Stripe (เติม coin — แทน SlipOK/อัปโหลดสลิปเดิม) — เช่นเดียวกับตัวอื่น ไม่บังคับตอน boot,
+  // gate ด้วย isStripeConfigured() แทน (ดู lib/stripe.ts)
+  STRIPE_SECRET_KEY: z.string().default(""),
+  // ได้ค่านี้จาก `stripe listen` (dev) หรือ Dashboard > Developers > Webhooks (prod) — ใช้ยืนยันว่า
+  // webhook ที่ยิงเข้ามาจริงมาจาก Stripe ไม่ใช่ปลอม (constructEvent ใน lib/stripe.ts)
+  STRIPE_WEBHOOK_SECRET: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

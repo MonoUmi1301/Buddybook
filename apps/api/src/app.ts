@@ -5,6 +5,8 @@ import morgan from "morgan";
 import { z } from "zod";
 import { env } from "@/config/env";
 import apiRoutes from "@/routes";
+import { asyncHandler } from "@/utils/asyncHandler";
+import { stripeWebhook } from "@/modules/wallet/wallet.controller";
 import { notFoundHandler } from "@/middleware/notFound.middleware";
 import { errorHandler } from "@/middleware/error.middleware";
 
@@ -13,6 +15,15 @@ export const app = express();
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
 app.use(morgan(env.NODE_ENV === "development" ? "dev" : "combined"));
+
+// เพิ่มภายหลัง (audit fix — Stripe) — ต้อง mount ก่อน express.json() ด้านล่างเสมอ และใช้
+// express.raw() เฉพาะ route นี้เท่านั้น เพราะ stripe.webhooks.constructEvent ต้องการ raw body
+// buffer ไปคำนวณลายเซ็นเทียบกับ Stripe-Signature header — ถ้า express.json() แปลงเป็น object
+// ไปก่อนแล้ว จะคำนวณลายเซ็นไม่ตรงกับที่ Stripe เซ็นมาให้เลย ต่อให้เนื้อหาหน้าตาเหมือนกันทุกตัวอักษร
+// ไม่ผ่าน requireAuth เหมือน route อื่นเพราะ Stripe เรียกตรงจาก server ของเขา ไม่มี JWT ผู้ใช้ —
+// ยืนยันตัวตนด้วยลายเซ็นแทน (ดู stripeWebhook ใน wallet.controller.ts)
+app.post("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }), asyncHandler(stripeWebhook));
+
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
