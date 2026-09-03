@@ -26,7 +26,40 @@ interface WalletContentProps {
 const BALANCE_POLL_INTERVAL_MS = 1000;
 const BALANCE_POLL_MAX_ATTEMPTS = 6;
 const PENDING_TOPUP_STORAGE_KEY = "bb_pending_topup";
-const PENDING_TOPUP_MAX_AGE_MS = 10 * 60 * 1000;
+// ไม่ตัดสิน "ไม่สำเร็จ" เองฝั่งเว็บ — ยึดตามสถานะจริงจาก Stripe เท่านั้น (session หมดอายุจริงที่ 30 นาที
+// ตามที่ตั้งไว้ใน wallet.service.ts) ค่านี้ใช้แค่ล้าง localStorage entry เก่าค้างทิ้งไว้ (garbage
+// collection เฉย ๆ ไม่ใช่การตัดสินว่ารายการล้มเหลว) ให้กว้างกว่า 30 นาทีของ Stripe พอสมควร
+const STALE_PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+interface PendingTopup {
+  sessionId: string;
+  startedAt: number;
+}
+
+function readPendingTopup(): PendingTopup | null {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(PENDING_TOPUP_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PendingTopup>;
+    if (!parsed.sessionId || !parsed.startedAt) return null;
+    return { sessionId: parsed.sessionId, startedAt: parsed.startedAt };
+  } catch {
+    return null;
+  }
+}
+
+function clearPendingTopup() {
+  try {
+    localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 /** หน้าเติม coin — ต่อกับ GET /wallet/transactions + POST /wallet/topup/checkout-session จริงแล้ว
  *  (Stripe Embedded Checkout — ดู StripeCheckoutPanel.tsx และ wallet.service.ts ฝั่ง apps/api)
@@ -46,7 +79,10 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   const searchParams = useSearchParams();
   const balanceRef = useRef(initialBalance);
   const isPollingRef = useRef(false);
-  const pendingSessionIdRef = useRef<string | null>(null);
+  const pendingRef = useRef<{ sessionId: string | null; startedAt: number }>({
+    sessionId: null,
+    startedAt: Date.now(),
+  });
 
   useEffect(() => {
     balanceRef.current = balance;
@@ -57,9 +93,9 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   // กันเป๊ะ ๆ) จึง poll ยอด balance สั้น ๆ (ทุก 1 วิ สูงสุด 6 ครั้ง) แทนที่จะเชื่อ initialBalance ตรง ๆ
   // ให้ผู้ใช้เห็นยอดอัปเดตไวภายในไม่กี่วินาทีโดยไม่ต้องกด refresh เอง ตามที่ขอไว้
   async function checkSessionStatusAndFinish(startBalance: number, sessionId: string | null) {
-    // ครบรอบ poll ยอด balance แล้วยังไม่เจอเงินเข้า — ถ้ามี session id ให้ถาม Stripe ตรง ๆ ว่า
-    // session นี้จบสถานะเป็นอะไรกันแน่ แยก "ยังไม่จ่าย/รออยู่" ออกจาก "หมดอายุ/ไม่สำเร็จจริง" เพราะ
-    // สองเคสนี้ควรบอกผู้ใช้ต่างกัน (จะได้ไม่บอกว่า "ไม่สำเร็จ" ทั้งที่จริงแค่ยังรออยู่)
+    // ครบรอบ poll ยอด balance สั้น ๆ แล้วยังไม่เจอเงินเข้า — ถ้ามี session id ให้ถาม Stripe ตรง ๆ ว่า
+    // session นี้จบสถานะเป็นอะไรกันแน่ แยก "ยังไม่จ่าย/รออยู่" (status: open — ยังไม่ถึง 30 นาที) ออกจาก
+    // "หมดอายุ/ไม่สำเร็จจริง" (status: expired) ยึดตามสถานะจริงจาก Stripe เท่านั้น ไม่ตัดสินเองฝั่งเว็บ
     if (!sessionId) {
       setPaymentPending(true);
       return;
@@ -70,11 +106,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         const json = (await res.json()) as { status: string; payment_status: string };
         if (json.status === "expired") {
           setPaymentFailed(true);
-          try {
-            localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
-          } catch {
-            // ignore
-          }
+          clearPendingTopup();
           return;
         }
         if (json.status === "complete") {
@@ -85,11 +117,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
             if (balJson.balance !== startBalance) {
               setBalance(balJson.balance);
               setCreditedCoins(balJson.balance - startBalance);
-              try {
-                localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
-              } catch {
-                // ignore
-              }
+              clearPendingTopup();
               return;
             }
           }
@@ -101,10 +129,14 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     setPaymentPending(true);
   }
 
-  function startPolling(startBalance: number, sessionId: string | null = pendingSessionIdRef.current) {
+  function startPolling(
+    startBalance: number,
+    sessionId: string | null = pendingRef.current.sessionId,
+    startedAt: number = pendingRef.current.startedAt
+  ) {
     if (isPollingRef.current) return;
     isPollingRef.current = true;
-    pendingSessionIdRef.current = sessionId;
+    pendingRef.current = { sessionId, startedAt };
     setConfirmingPayment(true);
     setPaymentPending(false);
     setPaymentFailed(false);
@@ -122,11 +154,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
             clearInterval(poll);
             isPollingRef.current = false;
             setConfirmingPayment(false);
-            try {
-              localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
-            } catch {
-              // ignore
-            }
+            clearPendingTopup();
             return;
           }
         }
@@ -149,7 +177,11 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     const sessionId = searchParams.get("checkout_session_id");
     if (!sessionId) return;
     router.replace("/wallet");
-    startPolling(balanceRef.current, sessionId);
+    // ปกติ localStorage จะมี startedAt จริงอยู่แล้ว (StripeCheckoutPanel เขียนไว้ตอนสร้าง session) —
+    // ใช้ค่านั้นถ้ามีตรงกับ session นี้ ถ้าไม่มีค่อย fallback เป็นตอนนี้เลย
+    const pending = readPendingTopup();
+    const startedAt = pending?.sessionId === sessionId ? pending.startedAt : Date.now();
+    startPolling(balanceRef.current, sessionId, startedAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -160,28 +192,15 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   useEffect(() => {
     function checkPendingTopup() {
       if (isPollingRef.current) return;
-      let raw: string | null = null;
-      try {
-        raw = localStorage.getItem(PENDING_TOPUP_STORAGE_KEY);
-      } catch {
+      const pending = readPendingTopup();
+      if (!pending) return;
+      if (Date.now() - pending.startedAt > STALE_PENDING_MAX_AGE_MS) {
+        // ค้างมานานเกินไป (เกินกว่าที่ Stripe session จะยังมีอยู่จริงแน่ ๆ) — ล้างทิ้งเงียบ ๆ ไม่ต้องโชว์
+        // popup อะไร ไม่ใช่การตัดสินว่ารายการล้มเหลว แค่ garbage collection
+        clearPendingTopup();
         return;
       }
-      if (!raw) return;
-      let parsed: { sessionId: string; startedAt: number } | null = null;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        parsed = null;
-      }
-      if (!parsed?.startedAt || Date.now() - parsed.startedAt > PENDING_TOPUP_MAX_AGE_MS) {
-        try {
-          localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
-        } catch {
-          // ignore
-        }
-        return;
-      }
-      startPolling(balanceRef.current, parsed.sessionId);
+      startPolling(balanceRef.current, pending.sessionId, pending.startedAt);
     }
 
     document.addEventListener("visibilitychange", checkPendingTopup);
