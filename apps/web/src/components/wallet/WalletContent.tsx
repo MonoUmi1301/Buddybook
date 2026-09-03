@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Coins, Loader2, Sparkles, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Coins, Loader2, Sparkles, X } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CoinPackageRow, type CoinPackage } from "@/components/wallet/CoinPackageRow";
@@ -36,6 +36,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [creditedCoins, setCreditedCoins] = useState<number | null>(null);
+  const [confirmTimedOut, setConfirmTimedOut] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const balanceRef = useRef(initialBalance);
@@ -53,6 +54,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     if (isPollingRef.current) return;
     isPollingRef.current = true;
     setConfirmingPayment(true);
+    setConfirmTimedOut(false);
     let attempts = 0;
 
     const poll = setInterval(async () => {
@@ -82,8 +84,10 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         clearInterval(poll);
         isPollingRef.current = false;
         setConfirmingPayment(false);
+        setConfirmTimedOut(true);
         // ไม่ลบ pending flag ตอนหมดรอบ — เผื่อผู้ใช้ยังไม่ได้จ่ายจริง (เช่น กำลังกรอก PromptPay
         // อยู่ในแท็บ/popup อื่น) พอสลับกลับมาแท็บนี้อีกครั้ง (focus/visibilitychange) จะเช็คซ้ำได้อีก
+        // หรือกดปุ่ม "เช็คอีกครั้ง" ในป็อบอัพนี้เอง
       }
     }, BALANCE_POLL_INTERVAL_MS);
   }
@@ -199,6 +203,52 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
             <Loader2 className="mx-auto h-14 w-14 animate-spin text-primary-500" />
             <h2 className="mt-4 text-h3 text-neutral-900">กำลังตรวจสอบการชำระเงิน...</h2>
             <p className="mt-2 text-neutral-600">กรุณารอสักครู่ ระบบกำลังยืนยันการชำระเงินของคุณ</p>
+          </div>
+        </div>
+      )}
+
+      {confirmTimedOut && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setConfirmTimedOut(false)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setConfirmTimedOut(false)}
+              aria-label="ปิด"
+              className="absolute right-4 top-4 text-neutral-400 hover:text-neutral-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <AlertCircle className="mx-auto h-14 w-14 text-amber-500" />
+            <h2 className="mt-4 text-h3 text-neutral-900">ยังไม่ได้รับการยืนยัน</h2>
+            <p className="mt-2 text-neutral-600">
+              ระบบยังตรวจไม่พบการชำระเงิน ถ้าคุณจ่ายเงินสำเร็จแล้ว coin จะเข้าให้อัตโนมัติภายในไม่กี่นาที
+              (ระบบจะเช็คให้อีกครั้งเมื่อคุณกลับมาที่หน้านี้) หรือกดเช็คซ้ำได้เลย
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmTimedOut(false)}
+                className="flex-1 rounded-button border border-neutral-300 py-2.5 font-bold text-neutral-700 hover:bg-neutral-50"
+              >
+                ปิด
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmTimedOut(false);
+                  startPolling(balanceRef.current);
+                }}
+                className="flex-1 rounded-button bg-primary-500 py-2.5 font-bold text-white hover:bg-primary-600"
+              >
+                เช็คอีกครั้ง
+              </button>
+            </div>
           </div>
         </div>
       )}
