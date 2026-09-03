@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Coins, Loader2, Sparkles, X } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
@@ -25,6 +25,8 @@ interface WalletContentProps {
 
 const BALANCE_POLL_INTERVAL_MS = 1000;
 const BALANCE_POLL_MAX_ATTEMPTS = 6;
+const PENDING_TOPUP_STORAGE_KEY = "bb_pending_topup";
+const PENDING_TOPUP_MAX_AGE_MS = 10 * 60 * 1000;
 
 /** หน้าเติม coin — ต่อกับ GET /wallet/transactions + POST /wallet/topup/checkout-session จริงแล้ว
  *  (Stripe Embedded Checkout — ดู StripeCheckoutPanel.tsx และ wallet.service.ts ฝั่ง apps/api)
@@ -36,18 +38,22 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   const [creditedCoins, setCreditedCoins] = useState<number | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const balanceRef = useRef(initialBalance);
+  const isPollingRef = useRef(false);
+
+  useEffect(() => {
+    balanceRef.current = balance;
+  }, [balance]);
 
   // เพิ่มภายหลัง (audit fix) — Stripe redirect กลับมาที่นี่พร้อม checkout_session_id หลังจ่ายเงินเสร็จ
   // การเติมคอยน์จริงเกิดจาก webhook ฝั่ง server (อาจมาถึงก่อน/หลัง redirect นี้เล็กน้อย ไม่ได้เรียงลำดับ
   // กันเป๊ะ ๆ) จึง poll ยอด balance สั้น ๆ (ทุก 1 วิ สูงสุด 6 ครั้ง) แทนที่จะเชื่อ initialBalance ตรง ๆ
   // ให้ผู้ใช้เห็นยอดอัปเดตไวภายในไม่กี่วินาทีโดยไม่ต้องกด refresh เอง ตามที่ขอไว้
-  useEffect(() => {
-    const sessionId = searchParams.get("checkout_session_id");
-    if (!sessionId) return;
-
+  function startPolling(startBalance: number) {
+    if (isPollingRef.current) return;
+    isPollingRef.current = true;
     setConfirmingPayment(true);
     let attempts = 0;
-    const startBalance = initialBalance;
 
     const poll = setInterval(async () => {
       attempts += 1;
@@ -58,9 +64,14 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
           if (json.balance !== startBalance) {
             setBalance(json.balance);
             setCreditedCoins(json.balance - startBalance);
-            setConfirmingPayment(false);
             clearInterval(poll);
-            router.replace("/wallet");
+            isPollingRef.current = false;
+            setConfirmingPayment(false);
+            try {
+              localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
+            } catch {
+              // ignore
+            }
             return;
           }
         }
@@ -69,11 +80,56 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
       }
       if (attempts >= BALANCE_POLL_MAX_ATTEMPTS) {
         clearInterval(poll);
+        isPollingRef.current = false;
         setConfirmingPayment(false);
+        // ไม่ลบ pending flag ตอนหมดรอบ — เผื่อผู้ใช้ยังไม่ได้จ่ายจริง (เช่น กำลังกรอก PromptPay
+        // อยู่ในแท็บ/popup อื่น) พอสลับกลับมาแท็บนี้อีกครั้ง (focus/visibilitychange) จะเช็คซ้ำได้อีก
       }
     }, BALANCE_POLL_INTERVAL_MS);
+  }
 
-    return () => clearInterval(poll);
+  // Stripe redirect กลับมาที่แท็บนี้ตรง ๆ พร้อม checkout_session_id (เคสจ่ายด้วยบัตร)
+  useEffect(() => {
+    const sessionId = searchParams.get("checkout_session_id");
+    if (!sessionId) return;
+    router.replace("/wallet");
+    startPolling(balanceRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // เพิ่มภายหลัง — วิธีจ่ายบางแบบ (เช่น PromptPay) เปิดเป็นแท็บ/popup แยกไปจ่ายที่ payments.stripe.com
+  // เอง ไม่ redirect กลับมาที่แท็บ BuddyBook เดิมผ่าน return_url ตรง ๆ เคสนี้จับด้วย checkout_session_id
+  // ไม่ได้ จึงใช้ localStorage flag (ตั้งไว้ตอนเปิด StripeCheckoutPanel) เช็คแทนตอนแท็บนี้กลับมา
+  // active อีกครั้ง (สลับแท็บ/ปิด popup แล้วโฟกัสกลับมา)
+  useEffect(() => {
+    function checkPendingTopup() {
+      if (isPollingRef.current) return;
+      let raw: string | null = null;
+      try {
+        raw = localStorage.getItem(PENDING_TOPUP_STORAGE_KEY);
+      } catch {
+        return;
+      }
+      if (!raw) return;
+      const startedAt = Number(raw);
+      if (!startedAt || Date.now() - startedAt > PENDING_TOPUP_MAX_AGE_MS) {
+        try {
+          localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+        return;
+      }
+      startPolling(balanceRef.current);
+    }
+
+    document.addEventListener("visibilitychange", checkPendingTopup);
+    window.addEventListener("focus", checkPendingTopup);
+    checkPendingTopup();
+    return () => {
+      document.removeEventListener("visibilitychange", checkPendingTopup);
+      window.removeEventListener("focus", checkPendingTopup);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -101,10 +157,8 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
             <div className="text-right">
               <p className="text-sm text-neutral-500">coin ของฉัน</p>
               <p className="flex items-center justify-end gap-1 text-xl font-bold text-neutral-900">
-                {confirmingPayment && <Loader2 className="h-4 w-4 animate-spin text-primary-500" />}
                 🪙 {balance.toLocaleString()}
               </p>
-              {confirmingPayment && <p className="text-xs text-primary-500">กำลังยืนยันการชำระเงิน...</p>}
             </div>
           </div>
 
@@ -124,6 +178,30 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
       </main>
 
       {selectedPkg && <StripeCheckoutPanel pkg={selectedPkg} onClose={() => setSelectedPkg(null)} />}
+
+      {confirmingPayment && creditedCoins === null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setConfirmingPayment(false)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setConfirmingPayment(false)}
+              aria-label="ปิด"
+              className="absolute right-4 top-4 text-neutral-400 hover:text-neutral-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <Loader2 className="mx-auto h-14 w-14 animate-spin text-primary-500" />
+            <h2 className="mt-4 text-h3 text-neutral-900">กำลังตรวจสอบการชำระเงิน...</h2>
+            <p className="mt-2 text-neutral-600">กรุณารอสักครู่ ระบบกำลังยืนยันการชำระเงินของคุณ</p>
+          </div>
+        </div>
+      )}
 
       {creditedCoins !== null && (
         <div

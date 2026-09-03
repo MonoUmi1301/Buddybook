@@ -35,7 +35,18 @@ export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) 
       .then(async (res) => {
         const json = await res.json().catch(() => null);
         if (!res.ok) throw new Error(json?.error ?? "สร้างรายการชำระเงินไม่สำเร็จ");
-        if (!cancelled) setClientSecret(json.client_secret as string);
+        if (!cancelled) {
+          setClientSecret(json.client_secret as string);
+          // บันทึกไว้ว่ามีการเริ่มจ่ายเงินจริงแล้ว — เผื่อวิธีจ่ายที่เปิดแท็บ/popup แยกออกไป (เช่น
+          // PromptPay) แล้วไม่ redirect กลับมาที่แท็บนี้ตรง ๆ ผ่าน return_url ตัว WalletContent.tsx
+          // จะใช้ค่านี้เช็คตอนแท็บกลับมา active อีกครั้ง (focus/visibilitychange) แทน
+          try {
+            localStorage.setItem("bb_pending_topup", String(Date.now()));
+          } catch {
+            // localStorage ใช้ไม่ได้ (private mode ฯลฯ) — ไม่ต้องทำอะไร ยัง fallback ไปทาง
+            // return_url ปกติได้อยู่
+          }
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
