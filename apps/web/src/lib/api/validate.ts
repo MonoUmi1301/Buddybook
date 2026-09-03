@@ -26,6 +26,17 @@ export function requireIntParam(
   return { value };
 }
 
+const stripeSessionIdSchema = z.string().regex(/^cs_[a-zA-Z0-9_]+$/);
+
+/** ตรวจ dynamic route param ที่ต้องเป็น Stripe Checkout Session id (ขึ้นต้น cs_ เสมอ) — ไม่ใช่ UUID
+ *  จึงใช้ requireUuidParam ไม่ได้ */
+export function requireStripeSessionIdParam(value: string): { value: string } | { error: NextResponse } {
+  if (!stripeSessionIdSchema.safeParse(value).success) {
+    return { error: jsonError("Invalid session id", 400) };
+  }
+  return { value };
+}
+
 /** Parse + validate JSON body ก่อนส่งต่อไป Express เสมอ (ข้อ 2 ของงาน: Validation ฝั่ง Server) */
 export async function parseJsonBody<T>(
   request: Request,

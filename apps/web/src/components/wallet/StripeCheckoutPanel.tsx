@@ -37,11 +37,15 @@ export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) 
         if (!res.ok) throw new Error(json?.error ?? "สร้างรายการชำระเงินไม่สำเร็จ");
         if (!cancelled) {
           setClientSecret(json.client_secret as string);
-          // บันทึกไว้ว่ามีการเริ่มจ่ายเงินจริงแล้ว — เผื่อวิธีจ่ายที่เปิดแท็บ/popup แยกออกไป (เช่น
-          // PromptPay) แล้วไม่ redirect กลับมาที่แท็บนี้ตรง ๆ ผ่าน return_url ตัว WalletContent.tsx
-          // จะใช้ค่านี้เช็คตอนแท็บกลับมา active อีกครั้ง (focus/visibilitychange) แทน
+          // บันทึกไว้ว่ามีการเริ่มจ่ายเงินจริงแล้ว (พร้อม session id) — เผื่อวิธีจ่ายที่เปิดแท็บ/popup
+          // แยกออกไป (เช่น PromptPay) แล้วไม่ redirect กลับมาที่แท็บนี้ตรง ๆ ผ่าน return_url ตัว
+          // WalletContent.tsx จะใช้ค่านี้เช็คตอนแท็บกลับมา active อีกครั้ง (focus/visibilitychange)
+          // แทน — เก็บ session id ไว้ด้วยเพื่อเช็คสถานะ session นี้เจาะจงได้ตอน poll ยอดหมดรอบ
           try {
-            localStorage.setItem("bb_pending_topup", String(Date.now()));
+            localStorage.setItem(
+              "bb_pending_topup",
+              JSON.stringify({ sessionId: json.session_id as string, startedAt: Date.now() })
+            );
           } catch {
             // localStorage ใช้ไม่ได้ (private mode ฯลฯ) — ไม่ต้องทำอะไร ยัง fallback ไปทาง
             // return_url ปกติได้อยู่

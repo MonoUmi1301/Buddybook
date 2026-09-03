@@ -129,9 +129,29 @@ export async function createStripeCheckoutSession(user_id: string, packageId: st
     ],
     metadata: { user_id, package_id: packageId },
     return_url: `${env.APP_URL}/wallet?checkout_session_id={CHECKOUT_SESSION_ID}`,
+    // 30 นาที (ค่าต่ำสุดที่ Stripe อนุญาต) แทนค่า default 24 ชม. — ให้ session ที่ผู้ใช้ทิ้งไว้ไม่จ่าย
+    // (เช่น เปิด PromptPay QR ค้างไว้แล้วไม่จ่าย) กลายเป็นสถานะ "expired" ได้ไวพอจะบอกผู้ใช้ได้จริง
+    // ว่ารายการนี้ไม่สำเร็จ ไม่ใช่ปล่อยค้างเป็นวันเหมือน default
+    expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
   });
 
-  return { client_secret: session.client_secret };
+  return { client_secret: session.client_secret, session_id: session.id };
+}
+
+/** GET /wallet/topup/checkout-session/:id/status (requireAuth) — เอาไว้ให้ frontend เช็คสถานะ
+ *  session เจาะจงตัวเองได้ ตอนที่ poll ยอด balance สั้น ๆ ครบรอบแล้วยังไม่เจอเงินเข้า (ดู
+ *  WalletContent.tsx) เพื่อแยกให้ออกว่า "ยังไม่จ่าย/กำลังรอ" (status: open) กับ "รายการหมดอายุ/
+ *  ไม่สำเร็จจริง ๆ" (status: expired) เพราะสองเคสนี้ความหมายกับผู้ใช้ต่างกันมาก เช็ค metadata.user_id
+ *  เทียบกับ user ที่ล็อกอินอยู่ก่อนเสมอ กัน user คนอื่นเดา session id คนอื่นมาเช็คสถานะได้ */
+export async function getStripeCheckoutSessionStatus(user_id: string, sessionId: string) {
+  const stripe = getStripeClient();
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+  if (session.metadata?.user_id !== user_id) {
+    throw ApiError.notFound("Checkout session not found");
+  }
+
+  return { status: session.status, payment_status: session.payment_status };
 }
 
 /** เรียกจาก webhook handler ตอน checkout.session.completed เท่านั้น (ไม่ใช่ endpoint ที่ frontend

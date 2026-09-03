@@ -33,6 +33,12 @@ export async function createCheckoutSession(req: Request, res: Response) {
   res.status(201).json(result);
 }
 
+/** GET /wallet/topup/checkout-session/:id/status (requireAuth) */
+export async function getCheckoutSessionStatus(req: Request, res: Response) {
+  const result = await walletService.getStripeCheckoutSessionStatus(req.user!.user_id, req.params.id);
+  res.status(200).json(result);
+}
+
 /** POST /webhooks/stripe — Public แต่ยืนยันตัวตนด้วยลายเซ็น Stripe แทน JWT (Stripe เรียกตรงจาก
  *  server ของเขา ไม่มี user session) route นี้ต้อง mount ด้วย express.raw() ก่อนถึง express.json()
  *  ตัวหลักใน app.ts เพราะ constructEvent ต้องการ raw body buffer ไปคำนวณลายเซ็นเทียบกันเป๊ะ ๆ

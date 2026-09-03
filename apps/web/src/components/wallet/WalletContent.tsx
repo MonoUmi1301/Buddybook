@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, CheckCircle2, Coins, Loader2, Sparkles, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Coins, Loader2, Sparkles, X, XCircle } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CoinPackageRow, type CoinPackage } from "@/components/wallet/CoinPackageRow";
@@ -36,11 +36,17 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [creditedCoins, setCreditedCoins] = useState<number | null>(null);
-  const [confirmTimedOut, setConfirmTimedOut] = useState(false);
+  // ครบรอบ poll แล้วยังไม่เจอเงินเข้า แต่ session ยัง "open" อยู่จริง (เช็คกับ Stripe แล้ว) — แค่ยังไม่
+  // จ่าย/รออยู่ ไม่ใช่ล้มเหลว จึงยังลองเช็คซ้ำเองได้
+  const [paymentPending, setPaymentPending] = useState(false);
+  // เช็คกับ Stripe แล้วพบว่า session หมดอายุจริง (status: expired) — รายการนี้ไม่มีทางสำเร็จได้อีก
+  // ต้องกดซื้อใหม่เท่านั้น ต่างจาก paymentPending ตรงที่นี่คือ "ทำรายการไม่สำเร็จ" จริง ๆ
+  const [paymentFailed, setPaymentFailed] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const balanceRef = useRef(initialBalance);
   const isPollingRef = useRef(false);
+  const pendingSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     balanceRef.current = balance;
@@ -50,11 +56,58 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   // การเติมคอยน์จริงเกิดจาก webhook ฝั่ง server (อาจมาถึงก่อน/หลัง redirect นี้เล็กน้อย ไม่ได้เรียงลำดับ
   // กันเป๊ะ ๆ) จึง poll ยอด balance สั้น ๆ (ทุก 1 วิ สูงสุด 6 ครั้ง) แทนที่จะเชื่อ initialBalance ตรง ๆ
   // ให้ผู้ใช้เห็นยอดอัปเดตไวภายในไม่กี่วินาทีโดยไม่ต้องกด refresh เอง ตามที่ขอไว้
-  function startPolling(startBalance: number) {
+  async function checkSessionStatusAndFinish(startBalance: number, sessionId: string | null) {
+    // ครบรอบ poll ยอด balance แล้วยังไม่เจอเงินเข้า — ถ้ามี session id ให้ถาม Stripe ตรง ๆ ว่า
+    // session นี้จบสถานะเป็นอะไรกันแน่ แยก "ยังไม่จ่าย/รออยู่" ออกจาก "หมดอายุ/ไม่สำเร็จจริง" เพราะ
+    // สองเคสนี้ควรบอกผู้ใช้ต่างกัน (จะได้ไม่บอกว่า "ไม่สำเร็จ" ทั้งที่จริงแค่ยังรออยู่)
+    if (!sessionId) {
+      setPaymentPending(true);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/v1/wallet/topup/checkout-session/${sessionId}/status`);
+      if (res.ok) {
+        const json = (await res.json()) as { status: string; payment_status: string };
+        if (json.status === "expired") {
+          setPaymentFailed(true);
+          try {
+            localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        if (json.status === "complete") {
+          // Stripe บอกว่าจ่ายเสร็จแล้วจริง แต่ webhook อาจยังมาไม่ถึง (ช้ากว่าปกติ) — เช็คยอดอีกทีสุดท้าย
+          const balRes = await fetch("/api/v1/wallet/transactions");
+          if (balRes.ok) {
+            const balJson = (await balRes.json()) as { balance: number };
+            if (balJson.balance !== startBalance) {
+              setBalance(balJson.balance);
+              setCreditedCoins(balJson.balance - startBalance);
+              try {
+                localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
+              } catch {
+                // ignore
+              }
+              return;
+            }
+          }
+        }
+      }
+    } catch {
+      // เช็คสถานะไม่สำเร็จ (network ฯลฯ) — fallback ไปโชว์แบบ "ยังไม่ยืนยัน รอ/ลองใหม่" ปลอดภัยไว้ก่อน
+    }
+    setPaymentPending(true);
+  }
+
+  function startPolling(startBalance: number, sessionId: string | null = pendingSessionIdRef.current) {
     if (isPollingRef.current) return;
     isPollingRef.current = true;
+    pendingSessionIdRef.current = sessionId;
     setConfirmingPayment(true);
-    setConfirmTimedOut(false);
+    setPaymentPending(false);
+    setPaymentFailed(false);
     let attempts = 0;
 
     const poll = setInterval(async () => {
@@ -84,10 +137,9 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         clearInterval(poll);
         isPollingRef.current = false;
         setConfirmingPayment(false);
-        setConfirmTimedOut(true);
-        // ไม่ลบ pending flag ตอนหมดรอบ — เผื่อผู้ใช้ยังไม่ได้จ่ายจริง (เช่น กำลังกรอก PromptPay
-        // อยู่ในแท็บ/popup อื่น) พอสลับกลับมาแท็บนี้อีกครั้ง (focus/visibilitychange) จะเช็คซ้ำได้อีก
-        // หรือกดปุ่ม "เช็คอีกครั้ง" ในป็อบอัพนี้เอง
+        void checkSessionStatusAndFinish(startBalance, sessionId);
+        // หมายเหตุ pending flag: ไม่ลบตอนหมดรอบ (นอกจาก checkSessionStatusAndFinish จะลบเพราะเจอ
+        // expired/สำเร็จ) เผื่อผู้ใช้ยังไม่ได้จ่ายจริง พอสลับกลับมาแท็บนี้อีกครั้งจะเช็คซ้ำได้อีก
       }
     }, BALANCE_POLL_INTERVAL_MS);
   }
@@ -97,14 +149,14 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     const sessionId = searchParams.get("checkout_session_id");
     if (!sessionId) return;
     router.replace("/wallet");
-    startPolling(balanceRef.current);
+    startPolling(balanceRef.current, sessionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // เพิ่มภายหลัง — วิธีจ่ายบางแบบ (เช่น PromptPay) เปิดเป็นแท็บ/popup แยกไปจ่ายที่ payments.stripe.com
   // เอง ไม่ redirect กลับมาที่แท็บ BuddyBook เดิมผ่าน return_url ตรง ๆ เคสนี้จับด้วย checkout_session_id
-  // ไม่ได้ จึงใช้ localStorage flag (ตั้งไว้ตอนเปิด StripeCheckoutPanel) เช็คแทนตอนแท็บนี้กลับมา
-  // active อีกครั้ง (สลับแท็บ/ปิด popup แล้วโฟกัสกลับมา)
+  // ไม่ได้ จึงใช้ localStorage flag (ตั้งไว้ตอนเปิด StripeCheckoutPanel พร้อม session id) เช็คแทนตอน
+  // แท็บนี้กลับมา active อีกครั้ง (สลับแท็บ/ปิด popup แล้วโฟกัสกลับมา)
   useEffect(() => {
     function checkPendingTopup() {
       if (isPollingRef.current) return;
@@ -115,8 +167,13 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         return;
       }
       if (!raw) return;
-      const startedAt = Number(raw);
-      if (!startedAt || Date.now() - startedAt > PENDING_TOPUP_MAX_AGE_MS) {
+      let parsed: { sessionId: string; startedAt: number } | null = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = null;
+      }
+      if (!parsed?.startedAt || Date.now() - parsed.startedAt > PENDING_TOPUP_MAX_AGE_MS) {
         try {
           localStorage.removeItem(PENDING_TOPUP_STORAGE_KEY);
         } catch {
@@ -124,7 +181,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         }
         return;
       }
-      startPolling(balanceRef.current);
+      startPolling(balanceRef.current, parsed.sessionId);
     }
 
     document.addEventListener("visibilitychange", checkPendingTopup);
@@ -207,10 +264,10 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         </div>
       )}
 
-      {confirmTimedOut && (
+      {paymentPending && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={() => setConfirmTimedOut(false)}
+          onClick={() => setPaymentPending(false)}
         >
           <div
             className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
@@ -218,22 +275,22 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
           >
             <button
               type="button"
-              onClick={() => setConfirmTimedOut(false)}
+              onClick={() => setPaymentPending(false)}
               aria-label="ปิด"
               className="absolute right-4 top-4 text-neutral-400 hover:text-neutral-600"
             >
               <X className="h-5 w-5" />
             </button>
             <AlertCircle className="mx-auto h-14 w-14 text-amber-500" />
-            <h2 className="mt-4 text-h3 text-neutral-900">ยังไม่ได้รับการยืนยัน</h2>
+            <h2 className="mt-4 text-h3 text-neutral-900">ยังไม่ได้ชำระเงิน</h2>
             <p className="mt-2 text-neutral-600">
-              ระบบยังตรวจไม่พบการชำระเงิน ถ้าคุณจ่ายเงินสำเร็จแล้ว coin จะเข้าให้อัตโนมัติภายในไม่กี่นาที
-              (ระบบจะเช็คให้อีกครั้งเมื่อคุณกลับมาที่หน้านี้) หรือกดเช็คซ้ำได้เลย
+              รายการนี้ยังรอการชำระเงินอยู่ ยังไม่ถือว่าล้มเหลว — ถ้าคุณกำลังจ่ายอยู่ในอีกแท็บ ระบบจะเช็คให้
+              อีกครั้งเมื่อคุณกลับมาที่หน้านี้ หรือกดเช็คซ้ำได้เลย
             </p>
             <div className="mt-6 flex gap-3">
               <button
                 type="button"
-                onClick={() => setConfirmTimedOut(false)}
+                onClick={() => setPaymentPending(false)}
                 className="flex-1 rounded-button border border-neutral-300 py-2.5 font-bold text-neutral-700 hover:bg-neutral-50"
               >
                 ปิด
@@ -241,7 +298,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
               <button
                 type="button"
                 onClick={() => {
-                  setConfirmTimedOut(false);
+                  setPaymentPending(false);
                   startPolling(balanceRef.current);
                 }}
                 className="flex-1 rounded-button bg-primary-500 py-2.5 font-bold text-white hover:bg-primary-600"
@@ -249,6 +306,39 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
                 เช็คอีกครั้ง
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {paymentFailed && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setPaymentFailed(false)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPaymentFailed(false)}
+              aria-label="ปิด"
+              className="absolute right-4 top-4 text-neutral-400 hover:text-neutral-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <XCircle className="mx-auto h-14 w-14 text-red-500" />
+            <h2 className="mt-4 text-h3 text-neutral-900">ทำรายการไม่สำเร็จ</h2>
+            <p className="mt-2 text-neutral-600">
+              รายการนี้หมดอายุหรือไม่ได้ชำระเงิน จึงยังไม่มี coin เข้าบัญชี กรุณาลองทำรายการใหม่อีกครั้ง
+            </p>
+            <button
+              type="button"
+              onClick={() => setPaymentFailed(false)}
+              className="mt-6 w-full rounded-button bg-primary-500 py-2.5 font-bold text-white hover:bg-primary-600"
+            >
+              ตกลง
+            </button>
           </div>
         </div>
       )}

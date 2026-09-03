@@ -12,5 +12,6 @@ router.get("/transactions", asyncHandler(walletController.listTransactions));
 router.post("/topup/verify-slip", asyncHandler(walletController.verifyTopupSlip));
 // เพิ่มภายหลัง (audit fix) — เติมเงินผ่าน Stripe Checkout (embedded) แทนการอัปโหลดสลิปเป็นทางหลัก
 router.post("/topup/checkout-session", asyncHandler(walletController.createCheckoutSession));
+router.get("/topup/checkout-session/:id/status", asyncHandler(walletController.getCheckoutSessionStatus));
 
 export default router;
