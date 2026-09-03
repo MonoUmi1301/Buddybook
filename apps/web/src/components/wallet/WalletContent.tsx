@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Coins, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, Coins, Loader2, Sparkles, X } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CoinPackageRow, type CoinPackage } from "@/components/wallet/CoinPackageRow";
@@ -33,6 +33,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
   const [balance, setBalance] = useState(initialBalance);
   const [selectedPkg, setSelectedPkg] = useState<CoinPackage | null>(null);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+  const [creditedCoins, setCreditedCoins] = useState<number | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -56,6 +57,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
           const json = (await res.json()) as { balance: number };
           if (json.balance !== startBalance) {
             setBalance(json.balance);
+            setCreditedCoins(json.balance - startBalance);
             setConfirmingPayment(false);
             clearInterval(poll);
             router.replace("/wallet");
@@ -74,6 +76,13 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ปิด popup "ชำระเงินสำเร็จ" เองหลัง 5 วิ เผื่อผู้ใช้ไม่กดปิด
+  useEffect(() => {
+    if (creditedCoins === null) return;
+    const timer = setTimeout(() => setCreditedCoins(null), 5000);
+    return () => clearTimeout(timer);
+  }, [creditedCoins]);
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -115,6 +124,39 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
       </main>
 
       {selectedPkg && <StripeCheckoutPanel pkg={selectedPkg} onClose={() => setSelectedPkg(null)} />}
+
+      {creditedCoins !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setCreditedCoins(null)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setCreditedCoins(null)}
+              aria-label="ปิด"
+              className="absolute right-4 top-4 text-neutral-400 hover:text-neutral-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <CheckCircle2 className="mx-auto h-14 w-14 text-green-500" />
+            <h2 className="mt-4 text-h3 text-neutral-900">ชำระเงินสำเร็จ!</h2>
+            <p className="mt-2 text-neutral-600">
+              ได้รับ <span className="font-bold text-primary-500">{creditedCoins.toLocaleString()} coin</span> เข้าบัญชีแล้ว
+            </p>
+            <button
+              type="button"
+              onClick={() => setCreditedCoins(null)}
+              className="mt-6 w-full rounded-button bg-primary-500 py-2.5 font-bold text-white hover:bg-primary-600"
+            >
+              ตกลง
+            </button>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>
