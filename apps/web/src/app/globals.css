@@ -63,27 +63,3 @@
     scrollbar-width: none;
   }
 }
-
-/* เพิ่มภายหลัง — HeroCarousel เลื่อนต่อเนื่องแบบ marquee: track มี slides ต่อกัน 2 ชุด เลื่อนแค่ครึ่ง
- * ทาง (-50%) ก็วนกลับจุดเริ่มพอดีแบบไร้รอยต่อ ปิดให้ผู้ใช้ที่ตั้ง prefers-reduced-motion ไว้ (มึนหัวง่าย
- * กับการเคลื่อนไหวต่อเนื่อง) */
-@keyframes hero-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-.animate-hero-marquee {
-  animation-name: hero-marquee;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-hero-marquee {
-    animation: none;
-  }
-}

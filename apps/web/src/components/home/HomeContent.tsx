@@ -64,6 +64,24 @@ export function HomeContent({
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
         {heroSlides.length > 0 && <HeroCarousel slides={heroSlides} />}
 
+        {/* ย้ายขึ้นมาไว้บนสุด (เดิมอยู่ล่างสุดก่อน CategoryPills) ตามที่ขอ — ต้องการชูโรงส่วนนี้ */}
+        {recommended === null ? (
+          <section className="mt-10 rounded-2xl bg-brand-tan/90 px-4 py-8 text-center shadow-md sm:px-6 lg:px-8">
+            <p className="text-lg font-bold text-brand-brown">เข้าสู่ระบบเพื่อดูคำแนะนำที่เหมาะกับคุณ</p>
+            <p className="mt-1 text-sm text-brand-brown/80">
+              เราจะแนะนำนิยายจากความสนใจและสิ่งที่คุณเคยอ่าน ไม่ใช่แค่เรื่องที่กำลังฮิต
+            </p>
+          </section>
+        ) : recommended.length === 0 ? (
+          <section className="mt-10 rounded-2xl bg-brand-tan/20 px-4 py-8 text-center shadow-sm sm:px-6 lg:px-8">
+            <p className="text-sm text-brand-brown/80">
+              ยังไม่มีคำแนะนำสำหรับคุณตอนนี้ — ลองเลือกความสนใจเพิ่ม หรืออ่าน/รีวิวนิยายสักเรื่องก่อน
+            </p>
+          </section>
+        ) : (
+          <RecommendedBand novels={recommended} />
+        )}
+
         {top.length > 0 && (
           <NovelSection
             title="ติดท็อป"
@@ -100,23 +118,6 @@ export function HomeContent({
             description="กลับมาดูใหม่อีกครั้งเมื่อมีผลงานเผยแพร่แล้ว"
             className="mt-10"
           />
-        )}
-
-        {recommended === null ? (
-          <section className="-mx-4 mt-10 bg-brand-tan/90 px-4 py-8 text-center sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-            <p className="text-lg font-bold text-brand-brown">เข้าสู่ระบบเพื่อดูคำแนะนำที่เหมาะกับคุณ</p>
-            <p className="mt-1 text-sm text-brand-brown/80">
-              เราจะแนะนำนิยายจากความสนใจและสิ่งที่คุณเคยอ่าน ไม่ใช่แค่เรื่องที่กำลังฮิต
-            </p>
-          </section>
-        ) : recommended.length === 0 ? (
-          <section className="-mx-4 mt-10 bg-brand-tan/20 px-4 py-8 text-center sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-            <p className="text-sm text-brand-brown/80">
-              ยังไม่มีคำแนะนำสำหรับคุณตอนนี้ — ลองเลือกความสนใจเพิ่ม หรืออ่าน/รีวิวนิยายสักเรื่องก่อน
-            </p>
-          </section>
-        ) : (
-          <RecommendedBand novels={recommended} />
         )}
 
         {categoryTags.length > 0 && <CategoryPills theme={theme} tags={categoryTags} />}

@@ -6,7 +6,7 @@ import type { NovelSummary } from "@/lib/types";
 /** แถบสีน้ำตาลอมส้ม "เรื่องที่คุณอาจสนใจ" คั่นกลางหน้า Home — ดู wf_home_dark.png */
 export function RecommendedBand({ novels }: { novels: NovelSummary[] }) {
   return (
-    <section className="-mx-4 mt-10 bg-brand-tan/90 px-4 py-8 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <section className="mt-10 rounded-2xl bg-brand-tan/90 px-4 py-8 shadow-md sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <h2 className="mb-4 text-h3 text-brand-brown">เรื่องที่คุณอาจสนใจ</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
