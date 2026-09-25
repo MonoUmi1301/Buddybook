@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireAdmin } from "@/middleware/auth.middleware";
 import { asyncHandler } from "@/utils/asyncHandler";
 import * as adminController from "@/modules/admin/admin.controller";
+import * as giftsController from "@/modules/gifts/gifts.controller";
 
 // GET /admin/tags เป็น (Public) ตาม API_Endpoints.md — แยก router นี้ไว้ mount
 // ก่อน adminRoutes ใน routes/index.ts เพื่อไม่ให้โดน requireAuth/requireAdmin บังคับ
@@ -25,5 +26,13 @@ router.patch("/tags/:tag_id", asyncHandler(adminController.updateTag));
 router.delete("/tags/:tag_id", asyncHandler(adminController.deleteTag));
 
 router.get("/reports/stats", asyncHandler(adminController.stats));
+
+// เพิ่มภายหลัง (Gift donations) — แคตตาล็อกของขวัญ + การ์ดที่นักเขียนรายงาน
+router.get("/gifts", asyncHandler(giftsController.adminList));
+router.post("/gifts", asyncHandler(giftsController.adminCreate));
+router.patch("/gifts/:gift_id", asyncHandler(giftsController.adminUpdate));
+router.delete("/gifts/:gift_id", asyncHandler(giftsController.adminDelete));
+router.get("/gift-reports", asyncHandler(giftsController.adminReports));
+router.patch("/gift-reports/:donation_id", asyncHandler(giftsController.adminResolveReport));
 
 export default router;

@@ -4,6 +4,7 @@ import * as walletService from "@/modules/wallet/wallet.service";
 import { getStripeClient } from "@/lib/stripe";
 import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
+import { resolveStripeSession } from "@/lib/payments/resolveStatus";
 
 export async function listTransactions(req: Request, res: Response) {
   const result = await walletService.listTransactions(req.user!.user_id);
@@ -33,9 +34,10 @@ export async function createCheckoutSession(req: Request, res: Response) {
   res.status(201).json(result);
 }
 
-/** GET /wallet/topup/checkout-session/:id/status (requireAuth) */
-export async function getCheckoutSessionStatus(req: Request, res: Response) {
-  const result = await walletService.getStripeCheckoutSessionStatus(req.user!.user_id, req.params.id);
+/** GET /wallet/topup/orders/:order_id/status (requireAuth) — สถานะจาก DB (PENDING | PAID | FAILED) */
+export async function getTopupOrderStatus(req: Request, res: Response) {
+  const { order_id } = z.object({ order_id: z.string().uuid() }).parse(req.params);
+  const result = await walletService.getTopupOrderStatus(req.user!.user_id, order_id);
   res.status(200).json(result);
 }
 
@@ -56,8 +58,21 @@ export async function stripeWebhook(req: Request, res: Response) {
     throw ApiError.badRequest(`Invalid Stripe webhook signature: ${err instanceof Error ? err.message : "unknown"}`);
   }
 
-  if (event.type === "checkout.session.completed") {
-    await walletService.creditStripeTopup(event.data.object);
+  // ที่เดียวในระบบที่เปลี่ยนสถานะ order และเติม coin — กฎสถานะอยู่ใน lib/payments/resolveStatus.ts
+  switch (event.type) {
+    case "checkout.session.completed":
+      // PromptPay ฯลฯ อาจ complete ทั้งที่ยัง unpaid → PENDING ต่อ รอ async_payment_succeeded/failed
+      if (resolveStripeSession(event.data.object) === "PAID") await walletService.fulfillStripeTopup(event.data.object);
+      break;
+    case "checkout.session.async_payment_succeeded":
+      await walletService.fulfillStripeTopup(event.data.object);
+      break;
+    case "checkout.session.async_payment_failed":
+    case "checkout.session.expired":
+      await walletService.failStripeTopup(event.data.object);
+      break;
+    default:
+      break;
   }
 
   // ตอบ 200 เร็วที่สุดเสมอ (แม้ event type ที่เราไม่ได้ใช้) — Stripe จะ retry ซ้ำถ้าไม่ได้ 2xx กลับไป

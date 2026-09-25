@@ -7,6 +7,10 @@ import { getAccessToken } from "@/lib/api/auth";
 import { WORK_TYPE_COOKIE, asWorkType } from "@/lib/workType";
 import type { NovelSummary } from "@/lib/types";
 import { getPenName } from "@/lib/displayName";
+import type { ImageAccordionItem } from "@/components/ui/image-accordion";
+import type { TrendingSlide } from "@/components/home/TrendingCoverflow";
+import { buildTrendingMeta } from "@/lib/novelMeta";
+import type { ContinueReadingItem } from "@/lib/library";
 
 interface ApiNovel {
   novel_id: string;
@@ -16,6 +20,7 @@ interface ApiNovel {
   rating?: number;
   review_count?: number;
   like_count?: number;
+  chapter_count?: number;
   author: { username: string; pen_name: string | null };
 }
 
@@ -39,6 +44,12 @@ interface HomeTag {
   name: string;
   category: "genre" | "mood" | "theme" | "pairing" | "fandom" | null;
   parent_tag_id?: number | null;
+}
+
+async function fetchRawNovels(searchParams: URLSearchParams): Promise<ApiNovel[]> {
+  const result = await callApi({ method: "GET", path: "/novels/search", searchParams, token: getAccessToken() });
+  if ("error" in result || result.status !== 200) return [];
+  return (result.json as { novels: ApiNovel[] }).novels;
 }
 
 async function fetchNovels(searchParams: URLSearchParams): Promise<NovelSummary[]> {
@@ -115,14 +126,37 @@ export default async function HomePage() {
   );
   const genreSections = genreSectionsRaw.filter((s) => s.novels.length > 0);
 
-  // Hero carousel — ใช้นิยาย top-viewed จริงแทน mock heroSlides เดิม (ลิงก์ไป /novels/hero-1
-  // ที่ไม่มีจริงใน DB มาก่อน กดแล้ว 404 ทุกครั้ง)
-  const heroSlides = top.slice(0, 4).map((n) => ({
+  // เพิ่มภายหลัง — hero "แนะนำประจำสัปดาห์" (ImageAccordion) แทน HeroCarousel เดิม: 5 เรื่องยอดวิวสูงสุด
+  // (ระบบยังไม่มีแนวคิด "featured" ที่ทีมงานคัดเอง จึงใช้ยอดอ่านจริงแทน)
+  const featured: ImageAccordionItem[] = top.slice(0, 5).map((n, i) => ({
     id: n.id,
     title: n.title,
-    coverImageUrl: n.coverImageUrl,
+    subtitle: n.penName,
+    imageUrl: n.coverImageUrl,
     href: n.href,
+    badge: i === 0 ? "#1 ยอดอ่าน" : undefined,
   }));
+
+  // coverflow "มาแรงตอนนี้" — ต้องใช้ข้อมูลดิบ (rating/chapter_count) ไม่ใช่ NovelSummary ที่แปลงเป็นสตริงแล้ว
+  const [trendingRaw, continueResult] = await Promise.all([
+    fetchRawNovels(new URLSearchParams({ sort: "views", pageSize: "12", ...(workType ? { legal_status: workType } : {}) })),
+    user
+      ? callApi({ method: "GET", path: "/library/continue-reading", searchParams: new URLSearchParams({ limit: "10" }), token: getAccessToken() })
+      : Promise.resolve(null),
+  ]);
+  const trendingSlides: TrendingSlide[] = trendingRaw.map((n, i) => ({
+    src: n.cover_image_url ?? `https://picsum.photos/seed/${n.novel_id}/400/600`,
+    alt: `ปก ${n.title}`,
+    title: n.title,
+    subtitle: getPenName(n.author),
+    meta: buildTrendingMeta(n),
+    href: `/novels/${n.novel_id}`,
+    rank: i + 1,
+  }));
+  const continueReading: ContinueReadingItem[] =
+    continueResult && !("error" in continueResult) && continueResult.status === 200
+      ? (continueResult.json as { items: ContinueReadingItem[] }).items
+      : [];
 
   return (
     <HomeContent
@@ -131,7 +165,9 @@ export default async function HomePage() {
       top={top}
       trending={trending}
       genreSections={genreSections}
-      heroSlides={heroSlides}
+      featured={featured}
+      trendingSlides={trendingSlides}
+      continueReading={continueReading}
       categoryTags={allGenreTags.map((t) => ({ tag_id: t.tag_id, name: t.name }))}
       workType={workType}
     />

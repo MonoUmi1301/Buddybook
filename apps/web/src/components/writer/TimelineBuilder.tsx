@@ -471,7 +471,6 @@ export function TimelineBuilder({ novelId, initialEvents }: TimelineBuilderProps
 
       {visibleEvents.length === 0 && !draft && (
         <div className="rounded-card border-[1.5px] border-dashed border-neutral-200 py-16 text-center">
-          <p className="mb-2 text-2xl">📖</p>
           <p className="mb-3 text-sm text-neutral-500">ยังไม่มีเหตุการณ์ในเส้นเวลานี้</p>
           <button type="button" onClick={openNewForm} className="text-sm font-semibold text-primary-500">
             เริ่มปักหมุดเหตุการณ์แรก →

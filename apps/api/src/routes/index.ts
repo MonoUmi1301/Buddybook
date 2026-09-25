@@ -13,10 +13,12 @@ import mapVersionsRoutes from "@/modules/novels/map-versions.routes";
 import timelineRoutes from "@/modules/timeline/timeline.routes";
 import recommendationsRoutes from "@/modules/recommendations/recommendations.routes";
 import donationsRoutes from "@/modules/donations/donations.routes";
+import giftsRoutes, { authorsGiftsRouter, meGiftsRouter } from "@/modules/gifts/gifts.routes";
 import walletRoutes from "@/modules/wallet/wallet.routes";
 import notificationsRoutes from "@/modules/notifications/notifications.routes";
 import adminRoutes, { publicAdminRouter } from "@/modules/admin/admin.routes";
 import internalRoutes from "@/modules/internal/internal.routes";
+import collectionsRoutes from "@/modules/collections/collections.routes";
 
 /**
  * Router รวมทุกโมดูล mount ใต้ /api/v1 (ดู app.ts)
@@ -34,8 +36,13 @@ router.use("/uploads", uploadsRoutes);
 router.use("/novels", novelsRoutes);
 router.use("/chapters", chaptersRoutes);
 router.use("/library", libraryRoutes);
+router.use("/collections", collectionsRoutes);
 router.use("/recommendations", recommendationsRoutes);
 router.use("/donations", donationsRoutes);
+// เพิ่มภายหลัง (Gift donations) — ของขวัญ + การ์ดจดหมาย (ต่อยอด donations เดิม ดู modules/gifts)
+router.use("/gifts", giftsRoutes);
+router.use("/authors", authorsGiftsRouter);
+router.use("/me", meGiftsRouter);
 router.use("/wallet", walletRoutes);
 router.use("/notifications", notificationsRoutes);
 

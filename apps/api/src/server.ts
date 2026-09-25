@@ -5,7 +5,7 @@ import { neo4jDriver } from "@/lib/neo4j";
 
 const server = app.listen(env.PORT, () => {
   // eslint-disable-next-line no-console
-  console.log(`🚀 BuddyBook API listening on http://localhost:${env.PORT} [${env.NODE_ENV}]`);
+  console.log(`BuddyBook API listening on http://localhost:${env.PORT} [${env.NODE_ENV}]`);
 });
 
 async function shutdown(signal: string) {

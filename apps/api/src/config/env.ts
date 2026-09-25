@@ -56,13 +56,20 @@ const envSchema = z.object({
   // ได้ค่านี้จาก `stripe listen` (dev) หรือ Dashboard > Developers > Webhooks (prod) — ใช้ยืนยันว่า
   // webhook ที่ยิงเข้ามาจริงมาจาก Stripe ไม่ใช่ปลอม (constructEvent ใน lib/stripe.ts)
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  // Gift donations — ค่าธรรมเนียมแพลตฟอร์ม (%) หักจากของขวัญก่อนเข้ากระเป๋านักเขียน (ปัดเศษลงให้ฝั่ง
+  // นักเขียนได้มากกว่า) ไม่หักจาก "Custom coins" เพื่อให้โดเนท coin แบบเดิมได้เต็มจำนวนเหมือนก่อนมีระบบนี้
+  GIFT_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(10),
+  // เพดานยอดรวมต่อการส่งหนึ่งครั้ง (coin) — กันกดพลาดใส่จำนวนผิด
+  GIFT_MAX_COINS_PER_SEND: z.coerce.number().int().positive().default(100000),
+  // จำนวนครั้งที่ส่งของขวัญ/โดเนทได้ต่อผู้ใช้ต่อนาที (in-memory ต่อ process — ดู middleware/rateLimit.middleware.ts)
+  GIFT_SEND_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
   // eslint-disable-next-line no-console
-  console.error("❌ Invalid environment variables:", parsed.error.flatten().fieldErrors);
+  console.error("Invalid environment variables:", parsed.error.flatten().fieldErrors);
   throw new Error("Invalid environment variables — ดู apps/api/.env.example");
 }
 

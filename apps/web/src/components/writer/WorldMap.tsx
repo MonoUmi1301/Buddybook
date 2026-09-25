@@ -45,6 +45,7 @@ import { Button } from "@/components/ui/Button";
 import { LocationNode, LOCATION_ICONS, type LocationNodeData, type LocationIconKey } from "@/components/writer/LocationNode";
 import { AddLocationModal } from "@/components/writer/AddLocationModal";
 import { LoreModal, type ChapterOption } from "@/components/writer/LoreModal";
+import { THAI_TIME_ZONE } from "@/lib/format";
 
 const nodeTypes = { locationNode: LocationNode };
 
@@ -994,7 +995,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
               <ul className="max-h-72 space-y-1.5 overflow-y-auto">
                 {versions.map((v) => (
                   <li key={v.version_id} className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm">
-                    <span className="text-neutral-600">{new Date(v.created_at).toLocaleString("th-TH")}</span>
+                    <span className="text-neutral-600">{new Date(v.created_at).toLocaleString("th-TH", { timeZone: THAI_TIME_ZONE })}</span>
                     <button type="button" onClick={() => restoreVersion(v.version_id)} className="text-xs font-semibold text-primary-500 hover:underline">
                       กู้คืน
                     </button>

@@ -21,7 +21,7 @@ const choiceOptions: { value: PublishChoice; label: string; hint: string }[] = [
 ];
 
 /** ป๊อปอัพเลือกวิธี "จบงาน" ตอนกดปุ่มเผยแพร่ในตัวแก้ไขตอน (Phase E) — แทนที่การเผยแพร่ทันที
- *  แบบเดิมที่ไม่มีทางเลือก ใช้ดีไซน์ modal เดียวกับ DonateModal.tsx */
+ *  แบบเดิมที่ไม่มีทางเลือก ใช้ดีไซน์ modal แบบเดียวกับป๊อปอัพอื่นในเว็บ */
 export function PublishChoiceModal({ onClose, onConfirm, submitting, errorMessage }: PublishChoiceModalProps) {
   const [choice, setChoice] = useState<PublishChoice>("published");
   const [scheduledAt, setScheduledAt] = useState("");

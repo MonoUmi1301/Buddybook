@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +7,7 @@ import { env } from "@/config/env";
 import { verifySlip, transRefToUuid } from "@/lib/slipok";
 import { getStripeClient } from "@/lib/stripe";
 import { stringToUuid } from "@/lib/idHash";
+import { resolveOrderStatus } from "@/lib/payments/resolveStatus";
 
 type QueryClient = typeof prisma | Prisma.TransactionClient;
 
@@ -18,6 +20,32 @@ export async function getBalance(user_id: string, client: QueryClient = prisma):
     select: { balance_after: true },
   });
   return latest ? latest.balance_after.toNumber() : 0;
+}
+
+/** namespace ของ advisory lock กระเป๋าเงิน (key แรกของ pg_advisory_xact_lock(int, int)) กันชนกับ
+ *  advisory lock อื่นที่อาจเพิ่มในอนาคต */
+const WALLET_LOCK_NAMESPACE = 7310;
+
+/** เพิ่มภายหลัง (Gift donations, audit fix) — ต้องเรียกเป็นอย่างแรกในทุก transaction ที่จะเขียน
+ *  wallet_transactions ก่อน getBalance เสมอ
+ *
+ *  บั๊กเดิม: อ่าน balance แล้วค่อย insert โดยไม่มี lock → สอง request พร้อมกัน (กดส่งซ้ำ, สองแท็บ,
+ *  โดเนทชนกับ webhook เติมเงิน) อ่านยอดเดิมได้ทั้งคู่ → ใช้เงินเกินยอดหรือยอดเติมหาย ส่วน unique
+ *  (type, reference_id) ช่วยไม่ได้เพราะ reference_id ของแต่ละรายการต่างกัน
+ *
+ *  advisory lock ระดับ transaction (ปลดเองตอน commit/rollback) ต่อ user_id — เรียงก่อนล็อกเสมอ
+ *  เพื่อให้สองรายการที่โอนสวนทางกัน (A→B กับ B→A) ล็อกลำดับเดียวกัน ไม่ deadlock */
+export async function lockWallets(tx: Prisma.TransactionClient, user_ids: string[]): Promise<void> {
+  for (const id of [...new Set(user_ids)].sort()) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${WALLET_LOCK_NAMESPACE}::int, hashtext(${id}))`;
+  }
+}
+
+/** created_at ของแถว ledger ที่เขียนหลัง lockWallets — ห้ามพึ่ง DEFAULT now() ของ Postgres เพราะเป็น
+ *  เวลา "เริ่ม" transaction: รายการที่เริ่มก่อนแต่ได้ lock ทีหลังจะได้ created_at เก่ากว่าแถวที่เขียนไป
+ *  แล้ว ทำให้ getBalance (เรียงตาม created_at) หยิบยอดผิดแถว — ใช้เวลาจริง ณ ตอนเขียนแทน */
+export function ledgerTimestamp(): Date {
+  return new Date();
 }
 
 /** Reference implementation — GET /wallet/transactions (เพิ่ม balance ปัจจุบันให้ด้วย
@@ -80,6 +108,7 @@ export async function verifyTopupSlip(user_id: string, packageId: string, slipIm
       });
       if (existing) throw ApiError.conflict("สลิปนี้ถูกใช้เติมเงินไปแล้ว");
 
+      await lockWallets(tx, [user_id]);
       const currentBalance = await getBalance(user_id, tx);
 
       return tx.walletTransaction.create({
@@ -89,6 +118,7 @@ export async function verifyTopupSlip(user_id: string, packageId: string, slipIm
           amount: pkg.coins,
           balance_after: currentBalance + pkg.coins,
           reference_id: referenceId,
+          created_at: ledgerTimestamp(),
         },
         select: { transaction_id: true, type: true, amount: true, balance_after: true, created_at: true },
       });
@@ -102,14 +132,17 @@ export async function verifyTopupSlip(user_id: string, packageId: string, slipIm
 }
 
 /** เพิ่มภายหลัง (audit fix — เปลี่ยนจาก SlipOK/อัปโหลดสลิปมาใช้ Stripe) — POST /wallet/topup/checkout-session
- *  สร้าง Checkout Session แบบ ui_mode: "embedded_page" (ฝังฟอร์มจ่ายเงินในหน้าเว็บเราเอง ไม่เด้งออกไปเว็บ
- *  Stripe) ไม่สร้าง Product/Price ล่วงหน้าใน Stripe Dashboard — ส่ง price_data inline ทุกครั้งแทน
- *  เพื่อให้ COIN_PACKAGES ในไฟล์นี้ยังเป็นแหล่งความจริงราคาเดียว (ไม่ต้องซิงก์ราคากับ Stripe เองอีกที่)
- *  ผูก user_id/package_id ไว้ใน metadata เพื่อให้ webhook (creditStripeTopup) รู้ว่าจะเติมให้ใคร/เท่าไหร่
- *  ตอน checkout.session.completed ยิงกลับมา */
+ *  สร้าง Checkout Session แบบ embedded (ฝังฟอร์มจ่ายเงินในหน้าเว็บเราเอง) ส่ง price_data inline ทุกครั้ง
+ *  ให้ COIN_PACKAGES เป็นแหล่งความจริงราคาเดียว และสร้างแถว topup_orders คู่กันเป็นแหล่งความจริงของ
+ *  สถานะ/วันหมดอายุ — return_url พา order_id กลับมาให้หน้า /wallet เช็คสถานะจาก DB ของเรา */
 export async function createStripeCheckoutSession(user_id: string, packageId: string) {
   const pkg = COIN_PACKAGES[packageId];
   if (!pkg) throw ApiError.badRequest("Invalid package_id");
+
+  const order_id = crypto.randomUUID();
+  // Stripe expires_at เป็น UNIX วินาที (ช่วงที่อนุญาต 30 นาที–24 ชม.) — 30 นาทีคือค่าต่ำสุด ให้ session
+  // ที่ผู้ใช้ทิ้งไว้ไม่จ่ายกลายเป็น expired ได้ไวพอจะบอกผู้ใช้ได้จริง
+  const expiresAtSec = Math.floor(Date.now() / 1000) + 30 * 60;
 
   const stripe = getStripeClient();
   const session = await stripe.checkout.sessions.create({
@@ -120,84 +153,111 @@ export async function createStripeCheckoutSession(user_id: string, packageId: st
         price_data: {
           currency: "thb",
           product_data: { name: `เติม ${pkg.coins} coin เข้า BuddyBook` },
-          // Stripe รับหน่วยเป็นสตางค์ (หน่วยย่อยสุดของสกุลเงิน) ไม่ใช่บาทตรง ๆ — THB ไม่ใช่สกุลเงิน
-          // zero-decimal ของ Stripe จึงต้องคูณ 100 เสมอ
+          // Stripe รับหน่วยเป็นสตางค์ — THB ไม่ใช่สกุลเงิน zero-decimal จึงต้องคูณ 100 เสมอ
           unit_amount: Math.round(pkg.priceThb * 100),
         },
         quantity: 1,
       },
     ],
-    metadata: { user_id, package_id: packageId },
-    return_url: `${env.APP_URL}/wallet?checkout_session_id={CHECKOUT_SESSION_ID}`,
-    // 30 นาที (ค่าต่ำสุดที่ Stripe อนุญาต) แทนค่า default 24 ชม. — ให้ session ที่ผู้ใช้ทิ้งไว้ไม่จ่าย
-    // (เช่น เปิด PromptPay QR ค้างไว้แล้วไม่จ่าย) กลายเป็นสถานะ "expired" ได้ไวพอจะบอกผู้ใช้ได้จริง
-    // ว่ารายการนี้ไม่สำเร็จ ไม่ใช่ปล่อยค้างเป็นวันเหมือน default
-    expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+    metadata: { user_id, package_id: packageId, order_id },
+    return_url: `${env.APP_URL}/wallet?topup_order=${order_id}`,
+    expires_at: expiresAtSec,
   });
 
-  return { client_secret: session.client_secret, session_id: session.id };
-}
-
-/** GET /wallet/topup/checkout-session/:id/status (requireAuth) — เอาไว้ให้ frontend เช็คสถานะ
- *  session เจาะจงตัวเองได้ ตอนที่ poll ยอด balance สั้น ๆ ครบรอบแล้วยังไม่เจอเงินเข้า (ดู
- *  WalletContent.tsx) เพื่อแยกให้ออกว่า "ยังไม่จ่าย/กำลังรอ" (status: open) กับ "รายการหมดอายุ/
- *  ไม่สำเร็จจริง ๆ" (status: expired) เพราะสองเคสนี้ความหมายกับผู้ใช้ต่างกันมาก เช็ค metadata.user_id
- *  เทียบกับ user ที่ล็อกอินอยู่ก่อนเสมอ กัน user คนอื่นเดา session id คนอื่นมาเช็คสถานะได้ */
-export async function getStripeCheckoutSessionStatus(user_id: string, sessionId: string) {
-  const stripe = getStripeClient();
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-  if (session.metadata?.user_id !== user_id) {
-    throw ApiError.notFound("Checkout session not found");
+  try {
+    await prisma.topupOrder.create({
+      data: {
+        order_id,
+        user_id,
+        stripe_session_id: session.id,
+        package_id: packageId,
+        coins: pkg.coins,
+        amount_thb: pkg.priceThb,
+        expires_at: new Date(expiresAtSec * 1000),
+      },
+    });
+  } catch (err) {
+    // บันทึก order ไม่ได้ = ห้ามปล่อยให้จ่ายเงินได้ (ไม่มีที่บันทึกผล) — ปิด session ทิ้งก่อนแจ้ง error
+    await stripe.checkout.sessions.expire(session.id).catch(() => undefined);
+    throw err;
   }
 
-  return { status: session.status, payment_status: session.payment_status };
+  return { client_secret: session.client_secret, order_id, expires_at: new Date(expiresAtSec * 1000) };
 }
 
-/** เรียกจาก webhook handler ตอน checkout.session.completed เท่านั้น (ไม่ใช่ endpoint ที่ frontend
- *  เรียกตรง ๆ) — ต้อง idempotent เพราะ Stripe อาจส่ง webhook event ซ้ำได้ (retry ตอนเราตอบช้า/พลาด)
- *  ใช้ pattern เดียวกับ verifyTopupSlip เป๊ะ ๆ: unique constraint (type, reference_id) ระดับ DB เป็น
- *  เกราะป้องกันจริง ไม่ใช่แค่ findFirst — ต่างกันแค่ตรงนี้ไม่ throw ตอนเจอรายการซ้ำ (เพราะไม่มี client
- *  รออยู่ปลายทางที่ต้องได้ error response กลับไป แค่ต้องไม่เติมเงินซ้ำเงียบ ๆ ก็พอ) */
-export async function creditStripeTopup(session: Stripe.Checkout.Session): Promise<void> {
-  const user_id = session.metadata?.user_id;
-  const packageId = session.metadata?.package_id;
+/** GET /wallet/topup/orders/:order_id/status (requireAuth) — อ่านสถานะจาก topup_orders เท่านั้น
+ *  (ไม่เรียก Stripe และไม่เติม coin — webhook เป็นคนเดียวที่เปลี่ยนสถานะ/เติม coin) */
+export async function getTopupOrderStatus(user_id: string, order_id: string) {
+  const order = await prisma.topupOrder.findUnique({ where: { order_id } });
+  // ของคนอื่นตอบ 404 เหมือนไม่มีอยู่ — กันเดา order_id ของคนอื่นมาดู
+  if (!order || order.user_id !== user_id) throw ApiError.notFound("Top-up order not found");
+  return {
+    order_id,
+    status: resolveOrderStatus(order),
+    coins: order.coins,
+    expires_at: order.expires_at,
+  };
+}
+
+/** webhook: checkout.session.completed (+ paid) / async_payment_succeeded — เติม coin ครั้งเดียวต่อ session
+ *  idempotent 2 ชั้น: order ต้องยัง pending (updateMany เงื่อนไข status) + unique (type, reference_id)
+ *  ของ wallet_transactions — Stripe ส่ง event ซ้ำ หรือสองแท็บ/สอง event มาพร้อมกันก็ไม่เติมซ้ำ */
+export async function fulfillStripeTopup(session: Stripe.Checkout.Session): Promise<void> {
+  const order = await prisma.topupOrder.findUnique({ where: { stripe_session_id: session.id } });
+  const user_id = order?.user_id ?? session.metadata?.user_id;
+  const packageId = order?.package_id ?? session.metadata?.package_id;
   if (!user_id || !packageId) {
-    console.error(`Stripe webhook: missing metadata on session ${session.id}`);
+    console.error(`Stripe webhook: no order/metadata for session ${session.id}`);
     return;
   }
-
   const pkg = COIN_PACKAGES[packageId];
   if (!pkg) {
     console.error(`Stripe webhook: unknown package_id "${packageId}" on session ${session.id}`);
     return;
   }
+  const coins = order?.coins ?? pkg.coins;
+  if (session.amount_total !== null && session.amount_total !== Math.round(Number(order?.amount_thb ?? pkg.priceThb) * 100)) {
+    console.error(`Stripe webhook: amount mismatch on session ${session.id} (${session.amount_total})`);
+    return;
+  }
 
   const referenceId = stringToUuid(session.id);
-
   try {
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.walletTransaction.findFirst({
-        where: { type: "topup", reference_id: referenceId },
-      });
+      if (order) {
+        const claimed = await tx.topupOrder.updateMany({
+          where: { order_id: order.order_id, status: { not: "paid" } },
+          data: { status: "paid", paid_at: new Date(), failed_at: null },
+        });
+        if (claimed.count === 0) return; // จ่ายแล้ว/เติมไปแล้ว
+      }
+      const existing = await tx.walletTransaction.findFirst({ where: { type: "topup", reference_id: referenceId } });
       if (existing) return;
 
+      await lockWallets(tx, [user_id]);
       const currentBalance = await getBalance(user_id, tx);
-
       await tx.walletTransaction.create({
         data: {
           user_id,
           type: "topup",
-          amount: pkg.coins,
-          balance_after: currentBalance + pkg.coins,
+          amount: coins,
+          balance_after: currentBalance + coins,
           reference_id: referenceId,
+          created_at: ledgerTimestamp(),
         },
       });
     });
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      return;
-    }
+    // มีอีก request เติมไปแล้วพร้อมกัน (unique ชน) — ถือว่าสำเร็จ ไม่เติมซ้ำ
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;
     throw err;
   }
+}
+
+/** webhook: checkout.session.expired / async_payment_failed — ปิด order เป็น failed (ไม่แตะ order ที่จ่ายแล้ว) */
+export async function failStripeTopup(session: Stripe.Checkout.Session): Promise<void> {
+  await prisma.topupOrder.updateMany({
+    where: { stripe_session_id: session.id, status: "pending" },
+    data: { status: "failed", failed_at: new Date() },
+  });
 }

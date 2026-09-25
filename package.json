@@ -15,9 +15,21 @@
     "typecheck": "npm run typecheck --workspace=apps/api",
     "prisma:generate": "npm run prisma:generate --workspace=apps/api",
     "prisma:migrate": "npm run prisma:migrate --workspace=apps/api",
-    "prisma:studio": "npm run prisma:studio --workspace=apps/api"
+    "prisma:studio": "npm run prisma:studio --workspace=apps/api",
+    "docker:up": "docker compose --profile app up -d --build",
+    "docker:db": "docker compose up -d --wait",
+    "docker:down": "docker compose --profile app down",
+    "docker:logs": "docker compose --profile app logs -f --tail=100",
+    "docker:ps": "docker compose --profile app ps",
+    "docker:setup": "docker compose --profile app exec api node scripts/db-setup.mjs",
+    "docker:setup:dockerdb": "npm run db:setup:dockerdb --workspace=apps/api",
+    "dev:api:dockerdb": "npm run dev:dockerdb --workspace=apps/api",
+    "docker:reset": "docker compose --profile app down -v",
+    "docker:rebuild": "docker compose --profile app up -d --build --renew-anon-volumes api web",
+    "stripe:listen": "node scripts/stripe-listen.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "typescript": "^5.5.4"
   },
   "engines": {

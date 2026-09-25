@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "@/middleware/auth.middleware";
 import { asyncHandler } from "@/utils/asyncHandler";
 import * as usersController from "@/modules/users/users.controller";
+import * as giftsController from "@/modules/gifts/gifts.controller";
 
 const router = Router();
 
@@ -16,5 +17,7 @@ router.post("/me/interests", requireAuth, asyncHandler(usersController.setIntere
 
 // Public — หน้าโปรไฟล์สาธารณะ (ส่วนขยายนอก API_Endpoints.md เดิม)
 router.get("/:user_id", asyncHandler(usersController.getPublicProfile));
+// เพิ่มภายหลัง (Gift donations) — ป้ายผู้สนับสนุน (เกณฑ์ใน config/supporterBadges.ts)
+router.get("/:user_id/supporter-badges", asyncHandler(giftsController.supporterBadges));
 
 export default router;

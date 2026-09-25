@@ -111,6 +111,8 @@ export async function searchNovels({
         format: true,
         content_rating: true,
         author: { select: { user_id: true, username: true, pen_name: true } },
+        // เพิ่มภายหลัง (หน้าแรก coverflow "มาแรง") — จำนวนตอนที่เผยแพร่แล้ว
+        _count: { select: { chapters: { where: { status: "published" } } } },
       },
       orderBy: sort === "views" ? { view_count: "desc" } : { created_at: "desc" },
       skip: (page - 1) * pageSize,
@@ -142,11 +144,12 @@ export async function searchNovels({
 
   // view_count เป็น BigInt ใน Postgres — res.json() (JSON.stringify) serialize BigInt ตรง ๆ ไม่ได้
   return {
-    novels: novels.map((n) => {
+    novels: novels.map(({ _count, ...n }) => {
       const r = ratingByNovel.get(n.novel_id);
       return {
         ...n,
         view_count: Number(n.view_count),
+        chapter_count: _count.chapters,
         rating: r?._avg.rating ?? 0,
         review_count: r?._count.rating ?? 0,
         like_count: likeCountByNovel.get(n.novel_id) ?? 0,
@@ -686,7 +689,8 @@ export async function listNovelDonors(novel_id: string, viewer_id?: string) {
 
   const grouped = await prisma.donation.groupBy({
     by: ["from_user_id"],
-    where: { novel_id },
+    // Gift donations — ผู้ส่งที่เลือกนิรนามไม่นับในลีดเดอร์บอร์ดเลย (ไม่งั้นเดาตัวตนได้จากยอดรวม)
+    where: { novel_id, is_anonymous: false },
     _sum: { amount: true },
     orderBy: { _sum: { amount: "desc" } },
     take: 10,

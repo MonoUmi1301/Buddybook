@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
@@ -9,7 +9,16 @@ import { Input } from "@/components/ui/Input";
 import { PasswordRequirementsHint } from "@/components/auth/PasswordRequirementsHint";
 import { formatApiError } from "@/lib/formatApiError";
 
+// useSearchParams() ต้องอยู่ใต้ <Suspense> ไม่งั้น next build prerender หน้านี้ไม่ผ่าน (missing-suspense-with-csr-bailout)
 export default function ResetPasswordPage() {
+  return (
+    <Suspense>
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";

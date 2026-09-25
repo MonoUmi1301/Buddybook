@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
 
 // Desktop-first responsive design ตาม spec (breakpoint หลักคือ desktop, ค่อย scale ลง)
 // สี/ฟอนต์อ้างอิงจากไฟล์ดีไซน์จริงใน buddybook_real/UI design
@@ -62,6 +63,18 @@ const config: Config = {
           border: "#2A2A2A",
           muted: "#232323",
         },
+        // เพิ่มภายหลัง (Gift donations) — โทนของขวัญ/การ์ดจดหมาย ค่าจริงอยู่ใน src/app/gifts.css (มีชุด .dark)
+        gift: {
+          paper: "rgb(var(--gift-paper) / <alpha-value>)",
+          edge: "rgb(var(--gift-paper-edge) / <alpha-value>)",
+          surface: "rgb(var(--gift-surface) / <alpha-value>)",
+          bear: "rgb(var(--gift-bear) / <alpha-value>)",
+          matcha: "rgb(var(--gift-matcha) / <alpha-value>)",
+          navy: "rgb(var(--gift-navy) / <alpha-value>)",
+          blush: "rgb(var(--gift-blush) / <alpha-value>)",
+          ink: "rgb(var(--gift-ink) / <alpha-value>)",
+          muted: "rgb(var(--gift-ink-muted) / <alpha-value>)",
+        },
       },
       backgroundColor: {
         white: "rgb(var(--color-surface-card) / <alpha-value>)",
@@ -82,7 +95,8 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  // animate-in / fade-in ฯลฯ — ใช้กับ caption ของ CoverflowCarousel และ popover ในหน้า My Library
+  plugins: [animate],
 };
 
 export default config;

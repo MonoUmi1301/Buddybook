@@ -11,6 +11,7 @@ import { EditNovelForm } from "@/components/writer/EditNovelForm";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 import { estimatePageCount } from "@/lib/textStats";
+import { THAI_TIME_ZONE } from "@/lib/format";
 
 export type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 
@@ -45,7 +46,7 @@ const chapterStatusBadge: Record<ManagedChapter["status"], { label: string; colo
 };
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: THAI_TIME_ZONE });
 }
 
 /** หน้าจัดการนิยาย — ข้อมูลนิยาย + รายการตอนทุกสถานะ + ลบ (Phase D) */

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ShieldBan } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { THAI_TIME_ZONE } from "@/lib/format";
 
 export interface AdminUserRow {
   user_id: string;
@@ -63,7 +64,7 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
               <td className="px-4 py-3 font-medium text-neutral-900">{u.username}</td>
               <td className="px-4 py-3 text-neutral-600">{u.email}</td>
               <td className="px-4 py-3 text-neutral-500">
-                {new Date(u.created_at).toLocaleDateString("th-TH")}
+                {new Date(u.created_at).toLocaleDateString("th-TH", { timeZone: THAI_TIME_ZONE })}
               </td>
               <td className="px-4 py-3">
                 <button

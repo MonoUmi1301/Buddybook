@@ -14,7 +14,7 @@ interface NovelCommentsSectionProps {
   groups: ChapterCommentGroup[];
 }
 
-function countComments(comments: CommentNode[]): number {
+export function countComments(comments: CommentNode[]): number {
   return comments.reduce((sum, c) => sum + 1 + countComments(c.replies), 0);
 }
 
@@ -48,7 +48,7 @@ export function NovelCommentsSection({ novelId, groups }: NovelCommentsSectionPr
 
   return (
     <section className="rounded-card border border-neutral-200 bg-white p-6">
-      <h2 className="mb-3 text-h3 text-neutral-900">คอมเมนต์ทั้งหมด ({totalCount})</h2>
+      <h2 className="mb-3 text-lg font-semibold text-neutral-900">คอมเมนต์จากทุกตอน ({totalCount})</h2>
       {nonEmptyGroups.length === 0 ? (
         <p className="text-sm text-neutral-400">ยังไม่มีคอมเมนต์ในนิยายเรื่องนี้ กดเข้าไปอ่านแล้วเป็นคนแรกที่คอมเมนต์สิ!</p>
       ) : (

@@ -9,9 +9,14 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
+    "check:gift-assets": "tsx scripts/check-gift-assets.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "dev:dockerdb": "tsx watch --env-file=../../docker/host.docker.env src/server.ts",
+    "db:setup": "node scripts/db-setup.mjs",
+    "db:setup:dockerdb": "node --env-file=../../docker/host.docker.env scripts/db-setup.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
@@ -42,10 +47,12 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.0",
+    "nodemon": "^3.1.14",
     "prisma": "^5.18.0",
     "tsc-alias": "^1.8.10",
     "tsx": "^4.16.5",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

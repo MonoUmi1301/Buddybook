@@ -2,7 +2,11 @@
 
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { HeroCarousel, type HeroSlide } from "@/components/home/HeroCarousel";
+import { FeaturedHero } from "@/components/home/FeaturedHero";
+import { TrendingCoverflow, type TrendingSlide } from "@/components/home/TrendingCoverflow";
+import { ContinueReadingCoverflow } from "@/components/home/ContinueReadingCoverflow";
+import type { ImageAccordionItem } from "@/components/ui/image-accordion";
+import type { ContinueReadingItem } from "@/lib/library";
 import { NovelSection } from "@/components/home/NovelSection";
 import { RecommendedBand } from "@/components/home/RecommendedBand";
 import { CategoryPills } from "@/components/home/CategoryPills";
@@ -27,9 +31,11 @@ interface HomeContentProps {
   trending: NovelSummary[];
   /** หมวดตามแท็กจริงที่มีนิยายอยู่จริงอย่างน้อย 1 เรื่อง (กรองมาแล้วจาก app/page.tsx) */
   genreSections: GenreSection[];
-  /** สไลด์ hero — สร้างจากนิยาย top-viewed จริงใน app/page.tsx (ไม่ใช้ mock heroSlides ที่ลิงก์ไป
-   *  novel_id ปลอมอีกต่อไป) */
-  heroSlides: HeroSlide[];
+  /** เพิ่มภายหลัง — hero "แนะนำประจำสัปดาห์" (แทน HeroCarousel เดิม), coverflow "มาแรงตอนนี้" และ "อ่านต่อ"
+   *  (continueReading ว่างถ้าเป็น guest หรือยังไม่เคยเปิดอ่าน) ดู app/page.tsx */
+  featured: ImageAccordionItem[];
+  trendingSlides: TrendingSlide[];
+  continueReading: ContinueReadingItem[];
   /** เพิ่มภายหลัง (Phase K) — แท็ก genre ทั้งหมดจริง (ไม่ตัดเหลือ 4 เหมือน genreSections) ให้
    *  CategoryPills ลิงก์ไปกรองค้นหาได้จริง แทนปุ่มตกแต่งเฉย ๆ ที่กดแล้วไม่ทำอะไรเลยแบบเดิม */
   categoryTags: { tag_id: number; name: string }[];
@@ -49,7 +55,9 @@ export function HomeContent({
   top,
   trending,
   genreSections,
-  heroSlides,
+  featured,
+  trendingSlides,
+  continueReading,
   categoryTags,
   workType,
 }: HomeContentProps) {
@@ -61,66 +69,77 @@ export function HomeContent({
     <div className={cn("flex min-h-screen flex-col", isDark ? "bg-surface" : "bg-white")}>
       <Navbar theme={theme} user={user} />
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
-        {heroSlides.length > 0 && <HeroCarousel slides={heroSlides} />}
-
-        {/* ย้ายขึ้นมาไว้บนสุด (เดิมอยู่ล่างสุดก่อน CategoryPills) ตามที่ขอ — ต้องการชูโรงส่วนนี้ */}
-        {recommended === null ? (
-          <section className="mt-10 rounded-2xl bg-brand-tan/90 px-4 py-8 text-center shadow-md sm:px-6 lg:px-8">
-            <p className="text-lg font-bold text-brand-brown">เข้าสู่ระบบเพื่อดูคำแนะนำที่เหมาะกับคุณ</p>
-            <p className="mt-1 text-sm text-brand-brown/80">
-              เราจะแนะนำนิยายจากความสนใจและสิ่งที่คุณเคยอ่าน ไม่ใช่แค่เรื่องที่กำลังฮิต
-            </p>
-          </section>
-        ) : recommended.length === 0 ? (
-          <section className="mt-10 rounded-2xl bg-brand-tan/20 px-4 py-8 text-center shadow-sm sm:px-6 lg:px-8">
-            <p className="text-sm text-brand-brown/80">
-              ยังไม่มีคำแนะนำสำหรับคุณตอนนี้ — ลองเลือกความสนใจเพิ่ม หรืออ่าน/รีวิวนิยายสักเรื่องก่อน
-            </p>
-          </section>
-        ) : (
-          <RecommendedBand novels={recommended} />
+      <main className="flex-1">
+        {featured.length > 0 && (
+          <div className="mx-auto max-w-[1400px] px-8 py-16 max-lg:px-6 max-lg:py-12 max-md:px-4 max-md:py-8">
+            <FeaturedHero
+              items={featured}
+              startHref={featured[0].href ?? "/search"}
+              exploreHref={`/search?sort=views${modeSuffix}`}
+            />
+          </div>
         )}
 
-        {top.length > 0 && (
-          <NovelSection
-            title="ติดท็อป"
-            emoji="👑"
-            novels={top}
-            theme={theme}
-            viewAllHref={`/search?sort=views${modeSuffix}`}
-          />
-        )}
+        <ContinueReadingCoverflow items={continueReading} />
+        <TrendingCoverflow slides={trendingSlides} seeAllHref={`/search?sort=views${modeSuffix}`} />
 
-        {trending.length > 0 && (
-          <NovelSection
-            title="ใหม่มาแรง"
-            emoji="🔥"
-            novels={trending}
-            theme={theme}
-            viewAllHref={`/search?sort=newest${modeSuffix}`}
-          />
-        )}
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+          {/* ย้ายขึ้นมาไว้บนสุด (เดิมอยู่ล่างสุดก่อน CategoryPills) ตามที่ขอ — ต้องการชูโรงส่วนนี้ */}
+          {recommended === null ? (
+            <section className="mt-10 rounded-2xl bg-brand-tan/90 px-4 py-8 text-center shadow-md sm:px-6 lg:px-8">
+              <p className="text-lg font-bold text-brand-brown">เข้าสู่ระบบเพื่อดูคำแนะนำที่เหมาะกับคุณ</p>
+              <p className="mt-1 text-sm text-brand-brown/80">
+                เราจะแนะนำนิยายจากความสนใจและสิ่งที่คุณเคยอ่าน ไม่ใช่แค่เรื่องที่กำลังฮิต
+              </p>
+            </section>
+          ) : recommended.length === 0 ? (
+            <section className="mt-10 rounded-2xl bg-brand-tan/20 px-4 py-8 text-center shadow-sm sm:px-6 lg:px-8">
+              <p className="text-sm text-brand-brown/80">
+                ยังไม่มีคำแนะนำสำหรับคุณตอนนี้ — ลองเลือกความสนใจเพิ่ม หรืออ่าน/รีวิวนิยายสักเรื่องก่อน
+              </p>
+            </section>
+          ) : (
+            <RecommendedBand novels={recommended} />
+          )}
 
-        {genreSections.map((section) => (
-          <NovelSection
-            key={section.tagId}
-            title={section.title}
-            novels={section.novels}
-            theme={theme}
-            viewAllHref={`/search?genre_ids=${section.tagId}${modeSuffix}`}
-          />
-        ))}
+          {top.length > 0 && (
+            <NovelSection
+              title="ติดท็อป"
+              novels={top}
+              theme={theme}
+              viewAllHref={`/search?sort=views${modeSuffix}`}
+            />
+          )}
 
-        {top.length === 0 && trending.length === 0 && genreSections.length === 0 && (
-          <EmptyState
-            title="ยังไม่มีนิยายเผยแพร่ในระบบตอนนี้"
-            description="กลับมาดูใหม่อีกครั้งเมื่อมีผลงานเผยแพร่แล้ว"
-            className="mt-10"
-          />
-        )}
+          {trending.length > 0 && (
+            <NovelSection
+              title="ใหม่มาแรง"
+              novels={trending}
+              theme={theme}
+              viewAllHref={`/search?sort=newest${modeSuffix}`}
+            />
+          )}
 
-        {categoryTags.length > 0 && <CategoryPills theme={theme} tags={categoryTags} />}
+          {genreSections.map((section) => (
+            <NovelSection
+              key={section.tagId}
+              title={section.title}
+              novels={section.novels}
+              theme={theme}
+              viewAllHref={`/search?genre_ids=${section.tagId}${modeSuffix}`}
+            />
+          ))}
+
+          {top.length === 0 && trending.length === 0 && genreSections.length === 0 && (
+            <EmptyState
+              title="ยังไม่มีนิยายเผยแพร่ในระบบตอนนี้"
+              description="กลับมาดูใหม่อีกครั้งเมื่อมีผลงานเผยแพร่แล้ว"
+              className="mt-10"
+            />
+          )}
+
+          {categoryTags.length > 0 && <CategoryPills theme={theme} tags={categoryTags} />}
+        </div>
       </main>
 
       <Footer theme={theme} />

@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { RETIRED_GIFT_SLUGS, giftCatalog, giftImageUrl } from "./gift-catalog";
 
 const prisma = new PrismaClient();
 
@@ -92,6 +93,23 @@ async function main() {
     await prisma.tag.updateMany({ where: { name }, data: { category: null, parent_tag_id: null } });
   }
 
+  // Gift donations — สร้างของที่ยังไม่มีเท่านั้น แถวเดิมอัปเดตแค่ image_url เพื่อไม่ทับราคา/สถานะ/ชื่อ
+  // ที่แอดมินแก้ผ่าน /admin/gifts ไปแล้ว (seed รันซ้ำได้ทุกครั้งผ่าน db:setup)
+  for (const [index, gift] of giftCatalog.entries()) {
+    await prisma.giftItem.upsert({
+      where: { slug: gift.slug },
+      update: { image_url: giftImageUrl(gift.slug) },
+      create: { ...gift, image_url: giftImageUrl(gift.slug), sort_order: (index + 1) * 10 },
+    });
+  }
+
+  for (const slug of RETIRED_GIFT_SLUGS) {
+    const retired = await prisma.giftItem.findUnique({ where: { slug }, select: { gift_id: true, _count: { select: { donations: true } } } });
+    if (!retired) continue;
+    if (retired._count.donations === 0) await prisma.giftItem.delete({ where: { slug } });
+    else await prisma.giftItem.update({ where: { slug }, data: { is_active: false } });
+  }
+
   const junkResult = await prisma.tag.deleteMany({ where: { name: { in: junkTagNames } } });
 
   const mainCount = genreTaxonomy.length;
@@ -99,7 +117,7 @@ async function main() {
   console.log(
     `Seeded ${mainCount} main genres + ${subCount} sub-genres, ${pairingPresets.length} pairing presets, ` +
       `${freeformPresets.length} freeform theme presets, demoted ${demotedGenreTags.length + demotedPairingTags.length} legacy tags, ` +
-      `deleted ${junkResult.count} junk tags.`
+      `deleted ${junkResult.count} junk tags, ${giftCatalog.length} gift items.`
   );
 }
 

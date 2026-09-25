@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { COLLECTION_ICONS } from "@/lib/collectionIcons";
 
 /**
  * Zod schemas — validate request payload ฝั่ง Next.js "ก่อน" ส่งต่อไป Express Gateway
@@ -114,9 +115,31 @@ export const novelsSearchQuerySchema = z.object({
   mine: z.coerce.boolean().optional(),
 });
 
+// เพิ่มภายหลัง (หน้า My Library) — สถานะในชั้นหนังสือ ต้องตรงกับ enum LibraryStatus ใน schema.prisma
+export const libraryStatusSchema = z.enum(["reading", "up_next", "completed"]);
+
 export const addToLibrarySchema = z.object({
   novel_id: uuid,
+  status: libraryStatusSchema.optional(),
 });
+
+export const libraryQuerySchema = z.object({ status: libraryStatusSchema.optional() });
+export const updateLibraryStatusSchema = z.object({ status: libraryStatusSchema });
+export const continueReadingQuerySchema = z.object({ limit: z.coerce.number().int().min(1).max(30).optional() });
+
+// ชั้นย่อย (collections) — tint ต้องตรงกับ COLLECTION_TINTS ใน apps/api collections.service.ts
+export const collectionTintSchema = z.enum(["purple", "coral", "blue", "orange", "mint", "pink"]);
+export const createCollectionSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  // ไอคอนชั้นเป็นชุดคงที่ (ไม่ใช่อีโมจิ) — ต้องตรงกับ COLLECTION_ICONS ใน lib/collectionIcons.ts
+  icon: z.enum(COLLECTION_ICONS).nullable().optional(),
+  tint: collectionTintSchema.optional(),
+});
+export const updateCollectionSchema = createCollectionSchema
+  .partial()
+  .extend({ position: z.number().int().min(0).optional() })
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
+export const collectionItemSchema = z.object({ novel_id: uuid });
 
 export const createCommentSchema = z.object({
   content: z.string().trim().min(1).max(5000),
@@ -134,7 +157,56 @@ export const createDonationSchema = z.object({
   novel_id: uuid.optional(),
   amount: z.number().positive().max(999999.99),
   message: z.string().trim().max(1000).optional(),
+  idempotency_key: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
 });
+
+// เพิ่มภายหลัง (Gift donations) — ของขวัญ + การ์ดจดหมาย (ดู apps/api/src/modules/gifts)
+// ไม่มีฟิลด์ราคา — ถ้า client แนบมา zod ตัดทิ้งตั้งแต่ชั้นนี้ และ API อ่านราคาจาก gift_items เองอยู่แล้ว
+export const giftCardTemplateEnum = z.enum(["stamp", "matcha", "navy", "bear"]);
+
+export const sendGiftSchema = z
+  .object({
+    author_id: uuid,
+    novel_id: uuid.optional(),
+    chapter_id: uuid.optional(),
+    gift_id: uuid.optional(),
+    custom_coins: z.number().int().positive().optional(),
+    quantity: z.number().int().min(1).max(99).optional(),
+    card: z
+      .object({
+        template: giftCardTemplateEnum.optional(),
+        message: z.string().max(2000).optional(),
+        signature_name: z.string().max(200).optional(),
+        is_anonymous: z.boolean().optional(),
+        is_public: z.boolean().optional(),
+      })
+      .optional(),
+    idempotency_key: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/),
+  })
+  .refine((b) => (b.gift_id === undefined) !== (b.custom_coins === undefined), {
+    message: "Send exactly one of gift_id or custom_coins",
+  });
+
+export const publicGiftsQuerySchema = z.object({ novel_id: uuid.optional() });
+
+export const receivedGiftsQuerySchema = z.object({
+  cursor: uuid.optional(),
+  novel_id: uuid.optional(),
+  gift_id: uuid.optional(),
+  status: z.enum(["hidden", "unread"]).optional(),
+});
+
+export const cursorQuerySchema = z.object({ cursor: uuid.optional() });
+
+export const thankGiftSchema = z.object({ message: z.string().trim().min(1).max(1000) });
+
+export const updateReceivedGiftSchema = z
+  .object({
+    read: z.boolean().optional(),
+    hidden: z.boolean().optional(),
+    report_reason: z.string().max(1000).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
 // ---------------------------------------------------------------------------
 // 3. Writer Workspace
@@ -452,6 +524,32 @@ export const updateTagSchema = z
 export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
 });
+
+// เพิ่มภายหลัง (Gift donations) — แอดมินจัดการแคตตาล็อกของขวัญ + การ์ดที่ถูกรายงาน
+const giftItemFields = {
+  slug: z.string().trim().min(1).max(50).regex(/^[a-z0-9-]+$/),
+  name_th: z.string().trim().min(1).max(100),
+  name_en: z.string().trim().min(1).max(100),
+  description_th: z.string().trim().max(500).nullable().optional(),
+  price_coins: z.number().int().positive().max(1_000_000),
+  tier: z.enum(["S", "M", "L", "XL"]),
+  image_url: z.string().trim().min(1).max(500),
+  animation: z.enum(["none", "pop", "float", "sparkle"]).optional(),
+  is_active: z.boolean().optional(),
+  is_limited: z.boolean().optional(),
+  available_from: z.string().datetime().nullable().optional(),
+  available_to: z.string().datetime().nullable().optional(),
+  sort_order: z.number().int().optional(),
+};
+
+export const createGiftItemSchema = z.object(giftItemFields);
+
+export const updateGiftItemSchema = z
+  .object(giftItemFields)
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
+
+export const resolveGiftReportSchema = z.object({ action: z.enum(["dismiss", "hide"]) });
 
 // ---------------------------------------------------------------------------
 // 6. Uploads (ส่วนขยายนอก API_Endpoints.md เดิม — Cloudinary signed upload)

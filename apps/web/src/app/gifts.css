@@ -1,0 +1,345 @@
+/* เพิ่มภายหลัง (Gift donations) — โทนสีกับแม่แบบการ์ดจดหมายของระบบของขวัญ
+ * สีทั้งหมดเป็น CSS variable ("R G B" ให้ใช้ opacity ได้) มีชุด .dark โทนอุ่นแยก — ใช้ผ่าน Tailwind
+ * gift-* (tailwind.config.ts) หรือคลาส .gift-card--<template> ด้านล่าง
+ * การ์ดวาดด้วยโค้ดล้วน (CSS + SVG ใน LetterCard.tsx) ไม่ใช้ไฟล์รูปเลย */
+
+:root {
+  --gift-paper: 251 246 236; /* #FBF6EC */
+  --gift-paper-edge: 234 219 196;
+  --gift-bear: 184 116 63; /* #B8743F */
+  --gift-matcha: 157 181 122; /* #9DB57A */
+  --gift-navy: 35 48 92; /* #23305C */
+  --gift-blush: 242 167 160; /* #F2A7A0 */
+  --gift-ink: 90 58 40; /* #5A3A28 */
+  --gift-ink-muted: 139 106 84;
+  --gift-surface: 255 252 246;
+
+  --card-stamp-bg: 251 246 236;
+  --card-matcha-bg: 240 245 229;
+  --card-navy-bg: 35 48 92;
+  --card-navy-ink: 251 246 236;
+  --card-bear-bg: 245 230 210;
+
+  /* หมีในการ์ดแบบ "หมีน้อย" (BearPeek.tsx) */
+  --bear-fur: 184 116 63;
+  --bear-fur-light: 222 170 122;
+  --bear-muzzle: 246 228 204;
+  --bear-ink: 74 46 31;
+}
+
+.dark {
+  --gift-paper: 43 36 30;
+  --gift-paper-edge: 78 64 52;
+  --gift-bear: 222 158 106;
+  --gift-matcha: 176 200 140;
+  --gift-navy: 156 172 226;
+  --gift-blush: 238 160 152;
+  --gift-ink: 244 230 212;
+  --gift-ink-muted: 196 172 150;
+  --gift-surface: 34 29 25;
+
+  --card-stamp-bg: 52 44 36;
+  --card-matcha-bg: 40 48 34;
+  --card-navy-bg: 27 36 70;
+  --card-navy-ink: 244 234 218;
+  --card-bear-bg: 56 42 32;
+
+  --bear-fur: 196 128 74;
+  --bear-fur-light: 228 178 130;
+  --bear-muzzle: 240 222 198;
+  --bear-ink: 58 36 24;
+}
+
+/* ---------------------------------------------------------------------------
+ * การ์ดจดหมาย — โครงร่วมกันทุกแม่แบบ ต่างกันแค่ตัวแปรสี + ของตกแต่ง
+ * ------------------------------------------------------------------------- */
+
+.gift-card {
+  --card-bg: var(--card-stamp-bg);
+  --card-ink: var(--gift-ink);
+  --card-muted: var(--gift-ink-muted);
+  --card-accent: var(--gift-bear);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  color: rgb(var(--card-ink));
+  background-color: rgb(var(--card-bg));
+  border-radius: 1rem;
+}
+
+.gift-card__line {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.75em - 1px),
+    rgb(var(--card-accent) / 0.22) calc(1.75em - 1px),
+    rgb(var(--card-accent) / 0.22) 1.75em
+  );
+  line-height: 1.75em;
+}
+
+/* stamp — กรอบแสตมป์ขอบหยักด้วย mask (เทคนิค radial-gradient ของ Temani Afif) ห่อด้วย
+ * .gift-stamp-shadow เพราะ mask ตัดเงาของตัวเองทิ้ง */
+.gift-card--stamp {
+  --r: 6px;
+  --card-bg: var(--card-stamp-bg);
+  --card-accent: var(--gift-bear);
+  border-radius: 0;
+  padding: calc(2 * var(--r));
+  -webkit-mask:
+    radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) /
+      calc(3 * var(--r)) calc(3 * var(--r)),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
+  mask:
+    radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) /
+      calc(3 * var(--r)) calc(3 * var(--r)),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
+}
+
+.gift-card--stamp .gift-card__inner {
+  border: 1.5px dashed rgb(var(--card-accent) / 0.45);
+  border-radius: 0.25rem;
+}
+
+.gift-stamp-shadow {
+  filter: drop-shadow(0 6px 14px rgb(var(--gift-ink) / 0.14));
+}
+
+.gift-postmark {
+  border: 2px solid rgb(var(--card-accent) / 0.55);
+  box-shadow: inset 0 0 0 3px rgb(var(--card-bg)), inset 0 0 0 4px rgb(var(--card-accent) / 0.4);
+  color: rgb(var(--card-accent) / 0.8);
+  transform: rotate(-12deg);
+}
+
+/* matcha — เขียวอ่อน + ครีม มุมบนขวาเป็นริบบิ้นลายตารางกิงแฮม */
+.gift-card--matcha {
+  --card-bg: var(--card-matcha-bg);
+  --card-accent: var(--gift-matcha);
+  border: 1.5px solid rgb(var(--card-accent) / 0.5);
+}
+
+.gift-gingham {
+  background-color: rgb(var(--gift-matcha) / 0.35);
+  background-image:
+    linear-gradient(90deg, rgb(var(--gift-matcha) / 0.55) 50%, transparent 50%),
+    linear-gradient(rgb(var(--gift-matcha) / 0.55) 50%, transparent 50%);
+  background-size: 10px 10px;
+}
+
+.gift-gingham--corner {
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+
+/* navy — กรมท่า + ครีม มีโบว์สีบลัชที่ขอบบน */
+.gift-card--navy {
+  --card-bg: var(--card-navy-bg);
+  --card-ink: var(--card-navy-ink);
+  --card-muted: var(--card-navy-ink);
+  --card-accent: var(--gift-blush);
+}
+
+.gift-card--navy .gift-card__inner {
+  border: 1px solid rgb(var(--card-navy-ink) / 0.35);
+  border-radius: 0.6rem;
+}
+
+.gift-bow {
+  position: relative;
+  width: 64px;
+  height: 28px;
+}
+
+.gift-bow::before,
+.gift-bow::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  width: 30px;
+  height: 22px;
+  background: rgb(var(--gift-blush));
+  border-radius: 50% 10% 50% 10%;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.08);
+}
+
+.gift-bow::before {
+  left: 0;
+  transform: rotate(-12deg);
+}
+
+.gift-bow::after {
+  right: 0;
+  transform: rotate(12deg) scaleX(-1);
+}
+
+.gift-bow__knot {
+  position: absolute;
+  left: 50%;
+  top: 7px;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 4px;
+  background: rgb(var(--gift-blush));
+  box-shadow: 0 0 0 2px rgb(var(--card-navy-bg));
+}
+
+/* bear — น้ำตาลอุ่น/ครีม มีหมี (SVG) โผล่จากขอบล่าง */
+.gift-card--bear {
+  --card-bg: var(--card-bear-bg);
+  --card-accent: var(--gift-bear);
+  border: 1.5px solid rgb(var(--card-accent) / 0.4);
+}
+
+/* ---------------------------------------------------------------------------
+ * ช่องเลือกของขวัญ — ยกขึ้นเล็กน้อยตอน hover เฉพาะอุปกรณ์ที่ hover ได้จริง (จอสัมผัสไม่ติด hover ค้าง)
+ * ------------------------------------------------------------------------- */
+
+.gift-tile {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gift-tile:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 18px rgb(var(--gift-ink) / 0.12);
+  }
+}
+
+.gift-tier-ribbon {
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+}
+
+/* ---------------------------------------------------------------------------
+ * แอนิเมชันของขวัญ (GiftItem.animation) + ส่งสำเร็จ (ของเข้าซอง แล้วซองบินออก)
+ * ------------------------------------------------------------------------- */
+
+@keyframes gift-pop {
+  0% { transform: scale(0.85); }
+  55% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes gift-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes gift-sparkle {
+  0%, 100% { filter: drop-shadow(0 0 0 rgb(var(--gift-bear) / 0)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 10px rgb(var(--gift-blush) / 0.85)); transform: scale(1.04); }
+}
+
+.gift-anim-pop { animation: gift-pop 320ms ease-out both; }
+.gift-anim-float { animation: gift-float 2.4s ease-in-out infinite; }
+.gift-anim-sparkle { animation: gift-sparkle 1.8s ease-in-out infinite; }
+
+@keyframes gift-into-envelope {
+  0% { transform: translateY(-70px) scale(1); opacity: 1; }
+  70% { transform: translateY(10px) scale(0.45); opacity: 1; }
+  100% { transform: translateY(18px) scale(0.35); opacity: 0; }
+}
+
+@keyframes gift-flap-close {
+  from { transform: rotateX(180deg); }
+  to { transform: rotateX(0deg); }
+}
+
+@keyframes gift-envelope-fly {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  25% { transform: translate(-6px, 6px) rotate(-4deg) scale(1.02); opacity: 1; }
+  100% { transform: translate(55vw, -65vh) rotate(18deg) scale(0.4); opacity: 0; }
+}
+
+.gift-send__item { animation: gift-into-envelope 650ms cubic-bezier(0.5, 0, 0.3, 1) both; }
+.gift-send__flap { transform-origin: top; animation: gift-flap-close 260ms ease-in 620ms both; }
+.gift-send__envelope { animation: gift-envelope-fly 800ms cubic-bezier(0.6, 0, 0.4, 1) 950ms both; }
+
+.gift-envelope__body {
+  background: rgb(var(--gift-paper));
+  border: 2px solid rgb(var(--gift-ink) / 0.8);
+}
+
+.gift-envelope__flap {
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: rgb(var(--gift-paper-edge));
+}
+
+.gift-envelope__pocket {
+  clip-path: polygon(0 100%, 50% 45%, 100% 100%);
+  background: rgb(var(--gift-paper-edge) / 0.9);
+}
+
+.gift-wax-seal {
+  background: radial-gradient(circle at 35% 35%, rgb(var(--gift-blush)), rgb(var(--gift-bear)));
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.15);
+}
+
+/* ---------------------------------------------------------------------------
+ * กล่องจดหมายนักเขียน — ซองในกริด (ฝาปิด + ตราครั่ง = ยังไม่อ่าน) แตะแล้วฝาเปิด การ์ดลอยขึ้นมา
+ * ------------------------------------------------------------------------- */
+
+.gift-inbox-flap {
+  transform-origin: top;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: rgb(var(--gift-paper-edge));
+  box-shadow: inset 0 -1px 0 rgb(var(--gift-ink) / 0.15);
+  transition: transform 320ms ease-in;
+}
+
+.gift-inbox-flap--open {
+  transform: rotateX(180deg);
+}
+
+.gift-mini-stamp {
+  --r: 3px;
+  padding: calc(2 * var(--r));
+  background: rgb(var(--gift-surface));
+  -webkit-mask:
+    radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) /
+      calc(3 * var(--r)) calc(3 * var(--r)),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
+  mask:
+    radial-gradient(var(--r), #0000 98%, #000) round calc(-1.5 * var(--r)) calc(-1.5 * var(--r)) /
+      calc(3 * var(--r)) calc(3 * var(--r)),
+    linear-gradient(#000 0 0) no-repeat 50% / calc(100% - 3 * var(--r)) calc(100% - 3 * var(--r));
+}
+
+@keyframes gift-letter-rise {
+  from { transform: translateY(40%) scale(0.94); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.gift-letter-rise { animation: gift-letter-rise 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gift-anim-pop,
+  .gift-anim-float,
+  .gift-anim-sparkle,
+  .gift-send__item,
+  .gift-send__flap,
+  .gift-send__envelope,
+  .gift-letter-rise {
+    animation: none !important;
+  }
+  .gift-inbox-flap {
+    transition: none;
+  }
+  .gift-tile {
+    transition: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .gift-tile:hover {
+      transform: none;
+    }
+  }
+}
+
+/* แผ่นล่าง (mobile) เว้นพื้นที่ home indicator ของ iOS */
+.gift-safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}

@@ -54,7 +54,6 @@ function NovelRow({ novels, theme }: { novels: NovelSummary[]; theme: "dark" | "
 
 interface NovelSectionProps {
   title: string;
-  emoji?: string;
   viewAllHref?: string;
   novels?: NovelSummary[];
   subRows?: { label: string; novels: NovelSummary[] }[];
@@ -64,7 +63,6 @@ interface NovelSectionProps {
 /** แถวหมวดหมู่นิยาย พร้อมหัวข้อ + ลิงก์ "ดูทั้งหมด" — ดู wf_home_dark.png (Love novel, Boy love, ...) */
 export function NovelSection({
   title,
-  emoji,
   viewAllHref = "#",
   novels,
   subRows,
@@ -82,7 +80,6 @@ export function NovelSection({
           )}
         >
           {title}
-          {emoji && <span aria-hidden>{emoji}</span>}
         </h2>
         <Link
           href={viewAllHref}

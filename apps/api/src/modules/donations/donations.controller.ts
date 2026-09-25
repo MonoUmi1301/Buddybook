@@ -7,6 +7,8 @@ const createDonationBodySchema = z.object({
   novel_id: z.string().uuid().optional(),
   amount: z.number().positive().max(999999.99),
   message: z.string().trim().max(1000).optional(),
+  // เพิ่มภายหลัง (Gift donations) — ไม่บังคับ (client เดิมไม่ส่ง) แต่ถ้าส่งมาจะกันหักเงินซ้ำตอน retry
+  idempotency_key: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
 });
 
 export async function create(req: Request, res: Response) {

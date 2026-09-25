@@ -33,12 +33,19 @@ export default async function WriterDashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const result = await callApi({
-    method: "GET",
-    path: "/novels/search",
-    token: getAccessToken(),
-    searchParams: new URLSearchParams({ mine: "true", page: "1" }),
-  });
+  const token = getAccessToken();
+  const [result, giftStats] = await Promise.all([
+    callApi({
+      method: "GET",
+      path: "/novels/search",
+      token,
+      searchParams: new URLSearchParams({ mine: "true", page: "1" }),
+    }),
+    // เพิ่มภายหลัง (Gift donations) — จำนวนจดหมายที่ยังไม่อ่านบนปุ่มกล่องจดหมาย
+    callApi({ method: "GET", path: "/me/gifts/stats", token }),
+  ]);
+  const unreadGifts =
+    !("error" in giftStats) && giftStats.status === 200 ? ((giftStats.json as { unread_count: number }).unread_count ?? 0) : 0;
 
   const myNovels: MyNovel[] =
     !("error" in result) && result.status === 200 && result.json && typeof result.json === "object"
@@ -50,7 +57,21 @@ export default async function WriterDashboardPage() {
       <Navbar user={user} />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        <h1 className="mb-6 text-h2 text-neutral-900">ผลงานของฉัน</h1>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-h2 text-neutral-900">ผลงานของฉัน</h1>
+          <Link
+            href="/write/gifts"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-pill border border-gift-bear/60 bg-gift-paper px-4 text-sm font-medium text-gift-ink hover:bg-gift-bear/10"
+          >
+            กล่องจดหมาย
+            {unreadGifts > 0 && (
+              <span className="rounded-pill bg-gift-bear px-2 py-0.5 text-xs font-semibold tabular-nums text-white">
+                {unreadGifts > 99 ? "99+" : unreadGifts}
+                <span className="sr-only"> ฉบับยังไม่อ่าน</span>
+              </span>
+            )}
+          </Link>
+        </div>
 
         {"error" in result && (
           <p className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">

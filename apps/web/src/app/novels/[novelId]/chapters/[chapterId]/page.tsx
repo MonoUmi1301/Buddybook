@@ -21,7 +21,8 @@ function isAgeGateError(result: ApiResult): boolean {
 interface NovelSummary {
   novel_id: string;
   title: string;
-  author: { username: string; pen_name: string | null };
+  allow_donations: boolean;
+  author: { user_id: string; username: string; pen_name: string | null };
 }
 
 interface ChapterDetail {
@@ -108,6 +109,20 @@ export default async function ChapterReaderPage({
           content={chapter.content ?? ""}
           prevChapterId={prevChapter?.chapter_id}
           nextChapterId={nextChapter?.chapter_id}
+          gift={
+            novel.allow_donations
+              ? {
+                  target: {
+                    authorId: novel.author.user_id,
+                    authorName: getPenName(novel.author),
+                    novelId: novel.novel_id,
+                    novelTitle: novel.title,
+                    chapterId: chapter.chapter_id,
+                  },
+                  viewer: user ? { user_id: user.user_id, name: getPenName(user) } : null,
+                }
+              : undefined
+          }
         />
 
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 sm:px-6 lg:px-8">

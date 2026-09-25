@@ -1,16 +1,25 @@
 import { notFound } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { BackButton } from "@/components/ui/BackButton";
+import { Tabs } from "@/components/ui/Tabs";
 import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
 import { NovelHero, type NovelDetailData } from "@/components/novel-detail/NovelHero";
-import { ReviewCard, type Review } from "@/components/novel-detail/ReviewCard";
-import { ReviewForm } from "@/components/novel-detail/ReviewForm";
+import { NovelOverview } from "@/components/novel-detail/NovelOverview";
 import { CharacterIntro } from "@/components/novel-detail/CharacterIntro";
-import { ContentWarningCard } from "@/components/novel-detail/ContentWarningCard";
 import { ChapterListCard, type ChapterListItem } from "@/components/novel-detail/ChapterListCard";
-import { NovelCommentsSection, type ChapterCommentGroup } from "@/components/novel-detail/NovelCommentsSection";
+import { ReviewsPanel } from "@/components/novel-detail/ReviewsPanel";
+import type { Review } from "@/components/novel-detail/ReviewCard";
+import {
+  NovelCommentsSection,
+  countComments,
+  type ChapterCommentGroup,
+} from "@/components/novel-detail/NovelCommentsSection";
 import type { CommentNode } from "@/components/novel-detail/CommentSection";
-import { DonorList, type Donor } from "@/components/novel-detail/DonorList";
+import { AuthorCard } from "@/components/novel-detail/AuthorCard";
+import { ReaderSupportCard } from "@/components/gifts/ReaderSupportCard";
+import type { PublicGifts } from "@/lib/gifts";
+import { SideNovelList, type SideNovelItem } from "@/components/novel-detail/SideNovelList";
 import { callApi } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
 import { getCurrentUser } from "@/lib/api/session";
@@ -35,11 +44,29 @@ interface ReviewApiItem {
   created_at: string;
 }
 
-function daysAgo(iso: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / (24 * 60 * 60 * 1000)));
+interface AuthorProfileApi {
+  bio: string | null;
+  novel_count: number;
+  novels: (SideNovelItem & { novel_id: string })[];
 }
 
-// ต่อกับ GET /novels/:novel_id, /novels/:novel_id/reviews, /novels/:novel_id/chapters จริงทั้งหมด
+interface SearchApi {
+  novels: (SideNovelItem & { author: { username: string; pen_name: string | null } })[];
+}
+
+function ErrorShell({ user, message }: { user: Awaited<ReturnType<typeof getCurrentUser>>; message: string }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-neutral-50">
+      <Navbar user={user} />
+      <main className="mx-auto flex max-w-5xl flex-1 items-center justify-center px-4 py-16 text-center">
+        <p className="text-sm text-red-500">{message}</p>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+// ต่อกับ GET /novels/:id, /reviews, /chapters, /donations, /users/:authorId และ /novels/search จริงทั้งหมด
 export default async function NovelDetailPage({ params }: { params: { novelId: string } }) {
   const token = getAccessToken();
   const [result, user] = await Promise.all([
@@ -52,15 +79,10 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
   // ซึ่งจะเข้าใจผิดว่านิยายไม่มีอยู่ทั้งที่ backend แค่ล่ม
   if ("error" in result) {
     return (
-      <div className="flex min-h-screen flex-col bg-neutral-50">
-        <Navbar user={user} />
-        <main className="mx-auto flex flex-1 max-w-5xl items-center justify-center px-4 py-16 text-center">
-          <p className="text-sm text-red-500">
-            เชื่อมต่อ API Gateway ไม่ได้ตอนนี้ — ตรวจสอบว่า apps/api (Express) กำลังรันอยู่หรือไม่
-          </p>
-        </main>
-        <Footer />
-      </div>
+      <ErrorShell
+        user={user}
+        message="เชื่อมต่อ API Gateway ไม่ได้ตอนนี้ — ตรวจสอบว่า apps/api (Express) กำลังรันอยู่หรือไม่"
+      />
     );
   }
 
@@ -82,33 +104,39 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
 
   if (result.status >= 400 || !isNovelDetail(result.json)) {
     return (
-      <div className="flex min-h-screen flex-col bg-neutral-50">
-        <Navbar user={user} />
-        <main className="mx-auto flex flex-1 max-w-5xl items-center justify-center px-4 py-16 text-center">
-          <p className="text-sm text-red-500">
-            เกิดข้อผิดพลาดขณะโหลดข้อมูลนิยาย (API Gateway ตอบกลับ status {result.status})
-          </p>
-        </main>
-        <Footer />
-      </div>
+      <ErrorShell user={user} message={`เกิดข้อผิดพลาดขณะโหลดข้อมูลนิยาย (API Gateway ตอบกลับ status ${result.status})`} />
     );
   }
 
   const novel = result.json;
+  const viewer = user ? { user_id: user.user_id, name: getPenName(user) } : null;
 
-  const [reviewsResult, chaptersResult, libraryResult, donorsResult] = await Promise.all([
+  const [reviewsResult, chaptersResult, libraryResult, supportResult, authorResult, similarResult] = await Promise.all([
     // ต้องส่ง token ด้วย ไม่ใช่แค่ public fetch เฉย ๆ เพราะเจ้าของรีวิวที่เลือกไม่ระบุตัวตนไว้
     // ควรยังเห็นชื่อ/รูปจริงของตัวเองตอนดูรีวิวของตัวเองได้ (แค่คนอื่นเห็นเป็น "ผู้อ่านนิรนาม")
     callApi({ method: "GET", path: `/novels/${novel.novel_id}/reviews`, token }),
     callApi({ method: "GET", path: `/novels/${novel.novel_id}/chapters`, token }),
     user ? callApi({ method: "GET", path: "/library", token }) : Promise.resolve(null),
-    callApi({ method: "GET", path: `/novels/${novel.novel_id}/donations` }),
+    // "กำลังใจจากนักอ่าน" เฉพาะของขวัญที่ส่งมาทางนิยายเรื่องนี้ (ส่ง token ให้เจ้าของดูได้แม้นิยายยังไม่เผยแพร่)
+    callApi({
+      method: "GET",
+      path: `/authors/${novel.author.user_id}/gifts/public`,
+      token,
+      searchParams: new URLSearchParams({ novel_id: novel.novel_id }),
+    }),
+    callApi({ method: "GET", path: `/users/${novel.author.user_id}` }),
+    // "นิยายที่คล้ายกัน" = หมวดหมู่หลักเดียวกัน เรียงตามยอดวิว (ส่ง token เพื่อให้ gate เรต 18+ ตรงกับ viewer)
+    novel.primary_tag
+      ? callApi({
+          method: "GET",
+          path: `/novels/search?genre_ids=${novel.primary_tag.tag_id}&sort=views&pageSize=6`,
+          token,
+        })
+      : Promise.resolve(null),
   ]);
 
-  const donors: Donor[] =
-    !("error" in donorsResult) && donorsResult.status === 200
-      ? (donorsResult.json as { donors: Donor[] }).donors
-      : [];
+  const support: PublicGifts | null =
+    !("error" in supportResult) && supportResult.status === 200 ? (supportResult.json as PublicGifts) : null;
 
   const reviews: Review[] =
     !("error" in reviewsResult) && reviewsResult.status === 200
@@ -120,7 +148,8 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
           avatarUrl: r.user.avatar_url ?? undefined,
           rating: r.rating ?? 0,
           comment: r.comment_text ?? "",
-          daysAgo: daysAgo(r.created_at),
+          createdAt: r.created_at,
+          isAnonymous: r.user.username === null,
         }))
       : [];
 
@@ -132,6 +161,30 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
     .filter((c) => c.status === "published")
     .sort((a, b) => a.chapter_number - b.chapter_number);
   const firstChapter = publishedChapters[0];
+  const totalCharacters = publishedChapters.reduce((sum, c) => sum + (c.word_count ?? 0), 0);
+  const lastPublishedAt = publishedChapters
+    .map((c) => c.published_at)
+    .filter((d): d is string => !!d)
+    .sort()
+    .slice(-1)[0];
+
+  const rated = reviews.filter((r) => r.rating > 0);
+  const averageRating = rated.length ? rated.reduce((s, r) => s + r.rating, 0) / rated.length : 0;
+
+  const authorProfile =
+    !("error" in authorResult) && authorResult.status === 200 ? (authorResult.json as AuthorProfileApi) : null;
+  const moreByAuthor: SideNovelItem[] = (authorProfile?.novels ?? [])
+    .filter((n) => n.novel_id !== novel.novel_id)
+    .sort((a, b) => b.view_count - a.view_count)
+    .slice(0, 4);
+
+  const similarNovels: SideNovelItem[] =
+    similarResult && !("error" in similarResult) && similarResult.status === 200
+      ? (similarResult.json as SearchApi).novels
+          .filter((n) => n.novel_id !== novel.novel_id)
+          .slice(0, 4)
+          .map((n) => ({ ...n, authorName: getPenName(n.author) }))
+      : [];
 
   const chapterCommentsResults = await Promise.all(
     publishedChapters.map((c) => callApi({ method: "GET", path: `/chapters/${c.chapter_id}/comments` }))
@@ -142,6 +195,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
       !("error" in r) && r.status === 200 ? (r.json as { comments: CommentNode[] }).comments : [];
     return { chapterId: c.chapter_id, chapterNumber: c.chapter_number, chapterTitle: c.title, comments };
   });
+  const commentCount = commentGroups.reduce((sum, g) => sum + countComments(g.comments), 0);
 
   const inLibrary =
     libraryResult && !("error" in libraryResult) && libraryResult.status === 200
@@ -155,55 +209,102 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
       <Navbar user={user} />
 
       <main className="flex-1">
-        <NovelHero
-          novel={novel}
-          initialInLibrary={inLibrary}
-          isLoggedIn={Boolean(user)}
-          firstChapterId={firstChapter?.chapter_id}
-        />
+        {/* แถบไล่สีอ่อนโทนแบรนด์ด้านบน — ให้หัวเรื่องไม่ลอยบนพื้นเรียบ ๆ */}
+        <div className="bg-gradient-to-b from-primary-500/10 via-brand-tan/5 to-transparent">
+          <div className="mx-auto max-w-7xl px-4 pb-2 pt-4 sm:px-6 lg:px-8">
+            <BackButton />
+          </div>
+        </div>
 
-        <div className="mx-auto max-w-5xl space-y-4 px-4 py-6 sm:px-6 lg:px-8">
-          <section>
-            <h2 className="mb-3 text-h3 text-neutral-900">
-              รีวิวจากนักอ่านท่านอื่น
-              {reviews.length > 0 && <span className="ml-1 text-neutral-400">({reviews.length})</span>}
-            </h2>
-            {reviews.length === 0 ? (
-              <p className="text-sm text-neutral-400">ยังไม่มีรีวิว เป็นคนแรกที่รีวิวนิยายเรื่องนี้สิ!</p>
-            ) : (
-              <div className="scrollbar-hide -mx-4 flex gap-3 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                {reviews.map((r) => (
-                  <ReviewCard key={r.id} review={r} />
-                ))}
-              </div>
-            )}
-            {user && (
-              <div className="mt-4">
-                <ReviewForm novelId={novel.novel_id} />
-              </div>
-            )}
-          </section>
-
-          {novel.character_nodes.length > 0 && (
-            <CharacterIntro
-              characters={novel.character_nodes.map((c) => ({
-                id: c.node_id,
-                name: c.character_name,
-                role: c.character_role ? characterRoleLabel[c.character_role] : c.character_name,
-                avatarUrl: c.avatar_url ?? undefined,
-              }))}
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 pb-12 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
+          <div className="min-w-0 space-y-8">
+            <NovelHero
+              novel={novel}
+              stats={{
+                averageRating,
+                reviewCount: rated.length,
+                chapterCount: publishedChapters.length,
+                totalCharacters,
+              }}
+              initialInLibrary={inLibrary}
+              isLoggedIn={Boolean(user)}
+              viewer={viewer}
+              firstChapterId={firstChapter?.chapter_id}
             />
-          )}
-          <ContentWarningCard synopsis={novel.synopsis ?? ""} />
-          <ChapterListCard novelId={novel.novel_id} chapters={chapters} />
-          <DonorList
-            novelId={novel.novel_id}
-            authorId={novel.author.user_id}
-            authorUsername={getPenName(novel.author)}
-            donors={donors}
-            isLoggedIn={Boolean(user)}
-          />
-          <NovelCommentsSection novelId={novel.novel_id} groups={commentGroups} />
+
+            <Tabs
+              tabs={[
+                {
+                  id: "synopsis",
+                  label: "เรื่องย่อ",
+                  content: (
+                    <div className="space-y-4">
+                      <NovelOverview novel={novel} lastPublishedAt={lastPublishedAt} totalCharacters={totalCharacters} />
+                      {novel.character_nodes.length > 0 && (
+                        <CharacterIntro
+                          characters={novel.character_nodes.map((c) => ({
+                            id: c.node_id,
+                            name: c.character_name,
+                            role: c.character_role ? characterRoleLabel[c.character_role] : "ตัวละคร",
+                            avatarUrl: c.avatar_url ?? undefined,
+                          }))}
+                        />
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  id: "chapters",
+                  label: "สารบัญ",
+                  count: publishedChapters.length,
+                  content: <ChapterListCard novelId={novel.novel_id} chapters={chapters} />,
+                },
+                {
+                  id: "reviews",
+                  label: "รีวิว",
+                  count: reviews.length,
+                  content: <ReviewsPanel novelId={novel.novel_id} reviews={reviews} isLoggedIn={Boolean(user)} />,
+                },
+                {
+                  id: "comments",
+                  label: "คอมเมนต์",
+                  count: commentCount,
+                  content: <NovelCommentsSection novelId={novel.novel_id} groups={commentGroups} />,
+                },
+              ]}
+            />
+          </div>
+
+          <aside className="space-y-5">
+            <AuthorCard
+              author={novel.author}
+              bio={authorProfile?.bio}
+              novelCount={authorProfile?.novel_count}
+              totalViews={authorProfile?.novels.reduce((s, n) => s + n.view_count, 0)}
+            />
+            {novel.allow_donations && (
+              <ReaderSupportCard
+                data={support}
+                viewer={viewer}
+                target={{
+                  authorId: novel.author.user_id,
+                  authorName: getPenName(novel.author),
+                  novelId: novel.novel_id,
+                  novelTitle: novel.title,
+                }}
+              />
+            )}
+            <SideNovelList
+              title={`ผลงานอื่นของ ${getPenName(novel.author)}`}
+              novels={moreByAuthor}
+              moreHref={authorProfile && authorProfile.novel_count > 5 ? `/profile/${novel.author.user_id}` : undefined}
+            />
+            <SideNovelList
+              title="นิยายที่คล้ายกัน"
+              novels={similarNovels}
+              moreHref={novel.primary_tag ? `/search?genre_ids=${novel.primary_tag.tag_id}` : undefined}
+            />
+          </aside>
         </div>
       </main>
 

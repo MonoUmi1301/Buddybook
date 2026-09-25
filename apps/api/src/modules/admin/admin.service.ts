@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
+import { startOfThaiMonth } from "@/modules/gifts/gifts.service";
+import { env } from "@/config/env";
 import type { TagCategory, UserRole } from "@prisma/client";
 
 /** Reference implementation — GET /admin/novels/pending */
@@ -157,11 +159,23 @@ export async function deleteTag(tag_id: number) {
 
 /** Reference implementation — GET /admin/reports/stats */
 export async function getStats() {
-  const [total_users, total_novels, total_chapters, pending_review_count] = await Promise.all([
+  const [total_users, total_novels, total_chapters, pending_review_count, feeAll, feeMonth] = await Promise.all([
     prisma.user.count(),
     prisma.novel.count(),
     prisma.chapter.count(),
     prisma.novel.count({ where: { visibility: "pending_review" } }),
+    // เพิ่มภายหลัง (Gift donations) — ค่าธรรมเนียมแพลตฟอร์มสะสม (SUM donations.fee_amount) ยังไม่เข้าบัญชีใคร
+    // เป็นแค่ตัวเลขบันทึกไว้ (ดู modules/gifts/gift-fee.ts)
+    prisma.donation.aggregate({ _sum: { fee_amount: true } }),
+    prisma.donation.aggregate({ where: { created_at: { gte: startOfThaiMonth() } }, _sum: { fee_amount: true } }),
   ]);
-  return { total_users, total_novels, total_chapters, pending_review_count };
+  return {
+    total_users,
+    total_novels,
+    total_chapters,
+    pending_review_count,
+    platform_fee_total: feeAll._sum.fee_amount?.toNumber() ?? 0,
+    platform_fee_this_month: feeMonth._sum.fee_amount?.toNumber() ?? 0,
+    platform_fee_percent: env.GIFT_PLATFORM_FEE_PERCENT,
+  };
 }

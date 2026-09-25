@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans_Thai, Noto_Serif_Thai, Sarabun } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthFetchInterceptor } from "@/components/auth/AuthFetchInterceptor";
+import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
+import "./gifts.css";
 
 // ตาม font.pdf ใน buddybook_real/UI design — IBM Plex Sans Thai, Regular/Medium/Bold
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
@@ -64,6 +66,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-white font-sans text-neutral-900 antialiased">
         <AuthFetchInterceptor />
         <ThemeProvider>{children}</ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );

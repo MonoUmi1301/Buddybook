@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { GiftButton } from "@/components/gifts/GiftButton";
+import type { GiftTarget } from "@/lib/gifts";
 
 type FontFamily = "sans" | "serif" | "reading";
 type FontSize = "sm" | "md" | "lg" | "xl";
@@ -69,6 +71,8 @@ interface ReaderContentProps {
   content: string;
   prevChapterId?: string;
   nextChapterId?: string;
+  /** เพิ่มภายหลัง (Gift donations) — กล่อง "ชอบตอนนี้ไหม?" ท้ายตอน (ไม่ส่ง = นิยายปิดรับของขวัญ) */
+  gift?: { target: GiftTarget; viewer: { user_id: string; name: string } | null };
 }
 
 /** เพิ่มภายหลัง (audit fix) — Toolbar ปรับฟอนต์/ขนาดตัวอักษร/ธีมตอนอ่าน แบบเดียวกับที่เจอในแอพอ่าน
@@ -92,6 +96,7 @@ export function ReaderContent({
   content,
   prevChapterId,
   nextChapterId,
+  gift,
 }: ReaderContentProps) {
   const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
   const [open, setOpen] = useState(false);
@@ -146,6 +151,18 @@ export function ReaderContent({
           }}
           dangerouslySetInnerHTML={{ __html: content }}
         />
+
+        {gift && gift.viewer?.user_id !== gift.target.authorId && (
+          <div
+            className="mt-10 flex flex-col items-center gap-3 rounded-2xl border px-5 py-5 text-center sm:flex-row sm:text-left"
+            style={{ borderColor: activeTheme.border }}
+          >
+            <p className="min-w-0 flex-1 text-sm" style={{ color: activeTheme.text }}>
+              ชอบตอนนี้ไหม? ส่งกาแฟให้นักเขียน
+            </p>
+            <GiftButton variant="inline" label="ส่งกาแฟ" initialGiftSlug="coffee" resumeHost target={gift.target} viewer={gift.viewer} />
+          </div>
+        )}
 
         <div className="mt-8 flex items-center justify-between border-t pt-4" style={{ borderColor: activeTheme.border }}>
           {prevChapterId ? (

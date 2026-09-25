@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { X } from "lucide-react";
@@ -17,40 +17,38 @@ interface StripeCheckoutPanelProps {
 
 /** ฝังฟอร์มจ่ายเงินของ Stripe ไว้ในหน้าเว็บเราเอง (Embedded Checkout) แทนการอัปโหลดรูปสลิปแบบเดิม —
  *  ไม่สร้าง Product/Price ใน Stripe Dashboard ล่วงหน้า (ดูเหตุผลใน wallet.service.ts) จ่ายเงินเสร็จ
- *  Stripe จะ redirect ทั้งหน้าไปที่ return_url (/wallet?checkout_session_id=...) ที่ตั้งไว้ฝั่ง backend
- *  — การเติมคอยน์จริงเกิดจาก webhook ฝั่ง server เท่านั้น (ดู stripeWebhook ใน wallet.controller.ts)
- *  ไม่ใช่จากการ redirect กลับมานี้ ตัว WalletContent.tsx จะ poll ยอด balance สั้น ๆ หลัง redirect
- *  กลับมาเพื่อให้ UI อัปเดตไว ๆ โดยไม่ต้องรอผู้ใช้กด refresh เอง */
+ *  Stripe จะ redirect ทั้งหน้าไปที่ return_url (/wallet?topup_order=...) ที่ตั้งไว้ฝั่ง backend
+ *  — การเติมคอยน์เกิดจาก webhook ฝั่ง server เท่านั้น (ดู stripeWebhook ใน wallet.controller.ts)
+ *  หน้า /wallet แค่อ่านสถานะ order จาก API (usePaymentResult) แล้วแสดงผลครั้งเดียว */
 export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // ref เก็บ request ไว้ — StrictMode (dev) รัน effect สองรอบ ถ้ายิงใหม่ทุกรอบจะได้ 2 Checkout Session
+  // ต่อการเปิดแผงหนึ่งครั้ง (ของเดิมเป็นแบบนั้น) ให้ทั้งสองรอบใช้ request เดียวกัน
+  const requestRef = useRef<{ pkgId: string; promise: Promise<{ client_secret: string }> } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/v1/wallet/topup/checkout-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ package_id: pkg.id }),
-    })
-      .then(async (res) => {
-        const json = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(json?.error ?? "สร้างรายการชำระเงินไม่สำเร็จ");
-        if (!cancelled) {
-          setClientSecret(json.client_secret as string);
-          // บันทึกไว้ว่ามีการเริ่มจ่ายเงินจริงแล้ว (พร้อม session id) — เผื่อวิธีจ่ายที่เปิดแท็บ/popup
-          // แยกออกไป (เช่น PromptPay) แล้วไม่ redirect กลับมาที่แท็บนี้ตรง ๆ ผ่าน return_url ตัว
-          // WalletContent.tsx จะใช้ค่านี้เช็คตอนแท็บกลับมา active อีกครั้ง (focus/visibilitychange)
-          // แทน — เก็บ session id ไว้ด้วยเพื่อเช็คสถานะ session นี้เจาะจงได้ตอน poll ยอดหมดรอบ
-          try {
-            localStorage.setItem(
-              "bb_pending_topup",
-              JSON.stringify({ sessionId: json.session_id as string, startedAt: Date.now() })
-            );
-          } catch {
-            // localStorage ใช้ไม่ได้ (private mode ฯลฯ) — ไม่ต้องทำอะไร ยัง fallback ไปทาง
-            // return_url ปกติได้อยู่
-          }
-        }
+    if (!requestRef.current || requestRef.current.pkgId !== pkg.id) {
+      requestRef.current = {
+        pkgId: pkg.id,
+        promise: fetch("/api/v1/wallet/topup/checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ package_id: pkg.id }),
+        }).then(async (res) => {
+          const json = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(json?.error ?? "สร้างรายการชำระเงินไม่สำเร็จ");
+          return json as { client_secret: string };
+        }),
+      };
+    }
+    // ไม่เก็บ session/order ไว้ใน storage แล้ว — return_url พา ?topup_order= กลับมาที่ /wallet เอง
+    // (ตัวเช็คสถานะมีตัวเดียวคือ usePaymentResult ใน WalletContent)
+    requestRef.current.promise
+      .then((json) => {
+        if (!cancelled) setClientSecret(json.client_secret);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");

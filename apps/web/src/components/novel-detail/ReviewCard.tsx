@@ -1,28 +1,54 @@
+import { Star } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
-import { RatingStars } from "@/components/ui/RatingStars";
+import { cn } from "@/lib/cn";
+import { formatThaiDate } from "@/lib/format";
 
 export interface Review {
   id: string;
   username: string;
   avatarUrl?: string;
+  /** 0 = ไม่ได้ให้ดาว (rating เป็น null ใน DB) */
   rating: number;
   comment: string;
-  daysAgo: number;
+  createdAt: string;
+  isAnonymous: boolean;
 }
 
-/** การ์ดรีวิวแนวนอน — ดูแถว "รีวิวจากนักอ่านท่านอื่น" ใน wf_novel_detail.png */
+export function StarRow({ rating, className }: { rating: number; className?: string }) {
+  return (
+    <div className={cn("flex items-center gap-0.5", className)} aria-label={`${rating} จาก 5 ดาว`}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Star
+          key={i}
+          className={cn("h-4 w-4", i < Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-neutral-300")}
+          aria-hidden
+        />
+      ))}
+    </div>
+  );
+}
+
+/** การ์ดรีวิวเต็มความกว้าง — ใช้ในแท็บ "รีวิว" ของหน้ารายละเอียดนิยาย */
 export function ReviewCard({ review }: { review: Review }) {
   return (
-    <div className="w-72 shrink-0 rounded-card border border-neutral-200 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Avatar src={review.avatarUrl} alt={review.username} size="sm" />
-          <span className="text-sm font-medium text-neutral-800">{review.username}</span>
+    <article className="rounded-card border border-neutral-200 bg-white p-5">
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar src={review.avatarUrl} alt={review.username} size="md" />
+          <div className="min-w-0">
+            <p className={cn("truncate text-sm font-semibold", review.isAnonymous ? "text-neutral-500" : "text-neutral-900")}>
+              {review.username}
+            </p>
+            <time dateTime={review.createdAt} className="text-xs text-neutral-400">
+              {formatThaiDate(review.createdAt)}
+            </time>
+          </div>
         </div>
-        <span className="text-xs text-neutral-400">{review.daysAgo} วันที่ผ่านมา</span>
-      </div>
-      <RatingStars rating={review.rating} className="mt-2" />
-      <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{review.comment}</p>
-    </div>
+        {review.rating > 0 && <StarRow rating={review.rating} className="shrink-0" />}
+      </header>
+      {review.comment && (
+        <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-neutral-700">{review.comment}</p>
+      )}
+    </article>
   );
 }

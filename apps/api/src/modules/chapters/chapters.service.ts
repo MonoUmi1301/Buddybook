@@ -133,8 +133,33 @@ export async function getChapterById(chapter_id: string, requester_id?: string) 
     });
   }
 
+  if (requester_id && !isOwner && chapter.status === "published") {
+    recordReadingProgress(requester_id, chapter.novel_id, chapter.chapter_id, chapter.chapter_number).catch((err) =>
+      console.error("recordReadingProgress failed:", err)
+    );
+  }
+
   const { novel: _novel, ...rest } = chapter;
   return rest;
+}
+
+/** เพิ่มภายหลัง (หน้า My Library / "อ่านต่อ") — จำตอนล่าสุดที่เปิดอ่าน (ตอนที่เปิดล่าสุด ไม่ใช่ตอนที่ไกลสุด
+ *  ให้ "อ่านต่อ" พากลับไปจุดที่ผู้ใช้อยู่จริง แม้ย้อนกลับไปอ่านตอนก่อนหน้า) และถ้านิยายอยู่ในชั้น "อ่านต่อไป"
+ *  (up_next) ให้ขยับเป็น "กำลังอ่าน" ให้เอง — ไม่แตะ completed ที่ผู้ใช้ตั้งไว้เอง
+ *  fire-and-forget จาก getChapterById: การบันทึกพลาดต้องไม่ทำให้หน้าอ่านพัง */
+async function recordReadingProgress(user_id: string, novel_id: string, chapter_id: string, chapter_number: number) {
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.readingProgress.upsert({
+      where: { user_id_novel_id: { user_id, novel_id } },
+      create: { user_id, novel_id, last_chapter_id: chapter_id, last_chapter_number: chapter_number, last_read_at: now },
+      update: { last_chapter_id: chapter_id, last_chapter_number: chapter_number, last_read_at: now },
+    }),
+    prisma.userLibrary.updateMany({
+      where: { user_id, novel_id, status: "up_next" },
+      data: { status: "reading" },
+    }),
+  ]);
 }
 
 interface UpdateChapterInput {
