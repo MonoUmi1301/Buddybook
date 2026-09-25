@@ -1,14 +1,20 @@
 import { forwardToApi } from "@/lib/api/proxy";
-import { parseJsonBody } from "@/lib/api/validate";
-import { addToLibrarySchema } from "@/lib/api/schemas";
+import { parseJsonBody, parseSearchParams } from "@/lib/api/validate";
+import { addToLibrarySchema, libraryQuerySchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
-// GET /api/v1/library — ชั้นหนังสือของผู้อ่าน
-export async function GET() {
+// GET /api/v1/library?status= — ชั้นหนังสือของผู้อ่าน (กรองตามสถานะได้)
+export async function GET(request: Request) {
   const auth = requireAccessToken();
   if ("error" in auth) return auth.error;
 
-  return forwardToApi({ method: "GET", path: "/library", token: auth.token });
+  const query = parseSearchParams(request, libraryQuerySchema);
+  if ("error" in query) return query.error;
+
+  const searchParams = new URLSearchParams();
+  if (query.data.status) searchParams.set("status", query.data.status);
+
+  return forwardToApi({ method: "GET", path: "/library", token: auth.token, searchParams });
 }
 
 // POST /api/v1/library — บันทึกนิยายเข้าชั้นหนังสือ
