@@ -1,0 +1,9 @@
+{
+  "//": "ใช้ใน Docker เท่านั้น (docker-compose.yml) — bind mount จาก Windows ไม่ส่ง file event เข้า container ต้อง poll แทน tsx watch; รันบนเครื่องปกติยังใช้ npm run dev (tsx watch) เหมือนเดิม",
+  "watch": ["src"],
+  "ext": "ts,json",
+  "legacyWatch": true,
+  "pollingInterval": 1000,
+  "delay": 500,
+  "exec": "tsx src/server.ts"
+}

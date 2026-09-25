@@ -126,6 +126,44 @@ enum WalletTxType {
   donation_received
 }
 
+/// เพิ่มภายหลัง (หน้า My Library) — สถานะในชั้นหนังสือ ตั้งเองได้ + ระบบเปลี่ยน up_next → reading ให้
+/// อัตโนมัติเมื่อเปิดอ่านตอน (ดู chapters.service.ts recordReadingProgress)
+enum LibraryStatus {
+  reading
+  up_next
+  completed
+}
+
+/// เพิ่มภายหลัง (Stripe top-up) — สถานะคำสั่งเติม coin เปลี่ยนโดย webhook เท่านั้น (ดู wallet.controller.ts)
+enum TopupOrderStatus {
+  pending
+  paid
+  failed
+}
+
+/// เพิ่มภายหลัง (Gift donations) — ขนาดของขวัญ ใช้ทำ ribbon/จัดกลุ่มใน GiftDialog
+enum GiftTier {
+  S
+  M
+  L
+  XL
+}
+
+enum GiftAnimation {
+  none
+  pop
+  float
+  sparkle
+}
+
+/// แม่แบบการ์ดจดหมาย (วาดด้วย CSS ฝั่งเว็บ — ดู apps/web/src/lib/donate-assets.ts)
+enum GiftCardTemplate {
+  stamp
+  matcha
+  navy
+  bear
+}
+
 enum NotificationType {
   comment
   reply
@@ -141,43 +179,46 @@ enum NotificationType {
 /// รองรับ OAuth, Age Verification, Role — ไม่มีการแยก reader/writer
 /// (การเป็น "นักเขียน" ดูจาก novels.author_id ที่ชี้มาที่ user คนนั้น ไม่ใช่จาก role)
 model User {
-  user_id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username        String    @unique @db.VarChar(50)
+  user_id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username       String         @unique @db.VarChar(50)
   /// เพิ่มภายหลัง (audit fix) — ชื่อที่นักอ่านเห็นบนหน้านิยาย/ตอน (แยกจาก username ซึ่งใช้กับ
   /// คอมเมนต์/รีวิวเท่านั้น) null = ยังไม่ได้ตั้ง ให้ fallback ไปใช้ username แทนตอนแสดงผล
-  pen_name        String?   @db.VarChar(50)
-  email           String    @unique @db.VarChar(255)
-  password_hash   String?   @db.VarChar(255)
-  oauth_provider  OAuthProvider?
-  oauth_id        String?   @db.VarChar(255)
-  role            UserRole  @default(user)
-  avatar_url      String?   @db.Text
-  bio             String?   @db.Text
-  age_verified    Boolean   @default(false)
+  pen_name       String?        @db.VarChar(50)
+  email          String         @unique @db.VarChar(255)
+  password_hash  String?        @db.VarChar(255)
+  oauth_provider OAuthProvider?
+  oauth_id       String?        @db.VarChar(255)
+  role           UserRole       @default(user)
+  avatar_url     String?        @db.Text
+  bio            String?        @db.Text
+  age_verified   Boolean        @default(false)
   /// เพิ่มภายหลัง (Phase 8) — PATCH /admin/users/:id/suspend มีอยู่ใน API_Endpoints.md แต่
   /// data dictionary เดิมไม่มีคอลัมน์นี้เลย บล็อกตอน login เท่านั้น (ไม่เช็คทุก request เพื่อไม่ให้
   /// เพิ่ม query ในทุก endpoint ที่ผ่าน requireAuth — access token อายุสั้น 15 นาทีอยู่แล้ว)
-  is_suspended    Boolean   @default(false)
+  is_suspended   Boolean        @default(false)
   /// เพิ่มภายหลัง (audit fix) — 2FA ผ่านแอป Authenticator (Google Authenticator/Authy ฯลฯ) แบบ
   /// TOTP (RFC 6238) เหมือน GitHub — เป็นฟีเจอร์ที่ผู้ใช้เปิดเองใน settings (ไม่บังคับทุกบัญชี)
   /// totp_secret เป็น null จนกว่าจะเปิดใช้งานสำเร็จ (ยืนยันรหัสจากแอปถูกต้องรอบแรกก่อน)
-  totp_secret     String?   @db.VarChar(255)
-  totp_enabled    Boolean   @default(false)
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime? @db.Timestamptz(6)
+  totp_secret    String?        @db.VarChar(255)
+  totp_enabled   Boolean        @default(false)
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?      @db.Timestamptz(6)
 
-  novels               Novel[]             @relation("NovelAuthor")
-  user_interests       UserInterest[]
-  chapter_versions     ChapterVersion[]    @relation("ChapterVersionEditor")
-  trash_bin_deletions  TrashBin[]          @relation("TrashDeletedBy")
-  comments             Comment[]
-  reviews              Review[]
-  donations_given      Donation[]          @relation("DonationFrom")
-  donations_received   Donation[]          @relation("DonationTo")
-  wallet_transactions  WalletTransaction[]
-  notifications        Notification[]
-  user_library         UserLibrary[]
-  novel_likes          NovelLike[]
+  novels              Novel[]             @relation("NovelAuthor")
+  user_interests      UserInterest[]
+  chapter_versions    ChapterVersion[]    @relation("ChapterVersionEditor")
+  trash_bin_deletions TrashBin[]          @relation("TrashDeletedBy")
+  comments            Comment[]
+  reviews             Review[]
+  donations_given     Donation[]          @relation("DonationFrom")
+  donations_received  Donation[]          @relation("DonationTo")
+  wallet_transactions WalletTransaction[]
+  notifications       Notification[]
+  user_library        UserLibrary[]
+  novel_likes         NovelLike[]
+  reading_progress    ReadingProgress[]
+  collections         Collection[]
+  topup_orders        TopupOrder[]
 
   @@unique([oauth_provider, oauth_id])
   @@map("users")
@@ -222,46 +263,46 @@ model UserInterest {
 
 /// ข้อมูลนิยาย, สถานะ, ปก
 model Novel {
-  novel_id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  author_id        String        @db.Uuid
-  title            String        @db.VarChar(255)
-  cover_image_url  String?       @db.Text
-  synopsis         String?       @db.Text
-  status           NovelStatus   @default(ongoing)
-  legal_status     LegalStatus   @default(original)
-  visibility       Visibility    @default(published)
-  view_count       BigInt        @default(0)
-  created_at       DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime?     @db.Timestamptz(6)
+  novel_id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  author_id       String      @db.Uuid
+  title           String      @db.VarChar(255)
+  cover_image_url String?     @db.Text
+  synopsis        String?     @db.Text
+  status          NovelStatus @default(ongoing)
+  legal_status    LegalStatus @default(original)
+  visibility      Visibility  @default(published)
+  view_count      BigInt      @default(0)
+  created_at      DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?   @db.Timestamptz(6)
 
   /// เพิ่มภายหลัง (Phase B, wizard สร้างนิยาย 2 ขั้นตอน) — ทั้งหมดด้านล่างไม่มีใน data
   /// dictionary เดิม เช่นเดียวกับ is_suspended (Phase 8) และ NovelLike (audit pass หลัง Phase 9)
-  format             NovelFormat   @default(multi_chapter)
+  format            NovelFormat   @default(multi_chapter)
   /// แยกอิสระจาก legal_status ตั้งใจ — งานแฟนฟิคที่แปลมาก็เป็นไปได้ (ไม่ใช่ mutually exclusive
   /// กับ original/fan_fiction) legal_status คง 3 ค่าเดิมไว้เพื่อไม่ให้ search filter/nav link/
   /// admin ที่ผูกกับ legal_status="fan-fiction" อยู่แล้วพัง — ตอนสร้างใหม่จะเขียนแค่ original/
   /// fan_fiction เท่านั้น ไม่เขียน translation อีกต่อไป (ดู novels.service.ts LEGAL_STATUS_MAP)
-  is_translated      Boolean       @default(false)
-  content_rating      ContentRating @default(all_ages)
-  allow_donations     Boolean       @default(true)
-  allow_screenshots   Boolean       @default(true)
-  allow_comments      Boolean       @default(true)
+  is_translated     Boolean       @default(false)
+  content_rating    ContentRating @default(all_ages)
+  allow_donations   Boolean       @default(true)
+  allow_screenshots Boolean       @default(true)
+  allow_comments    Boolean       @default(true)
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนซ่อนจำนวนหัวใจที่แสดงบนหน้ารายละเอียดนิยายได้ (ยังกดถูกใจได้
   /// ปกติ แค่ไม่โชว์ตัวเลขให้ใครเห็น) ไม่กระทบ NovelLike จริงที่ยังนับอยู่เบื้องหลังเหมือนเดิม
-  hide_like_count     Boolean       @default(false)
-  primary_tag_id      Int?
-  secondary_tag_id    Int?
+  hide_like_count   Boolean       @default(false)
+  primary_tag_id    Int?
+  secondary_tag_id  Int?
 
   /// เพิ่มภายหลัง (audit fix) — แท็บ Plot/Theme ของเครื่องมือ world-building เดิมเป็นแค่ UI
   /// mock (ปุ่ม "บันทึก" ไม่เคยยิง API จริง กรอกแล้วออกจากหน้าข้อมูลหายหมด) เก็บเป็น JSONB คอลัมน์
   /// เดียวต่อนิยาย (key ตรงกับ field name ฝั่ง frontend เช่น intro/twist/... และ mainTheme/
   /// symbol/message) แทนตารางแยก เพราะเป็นข้อมูล 1 ชุดต่อนิยายเท่านั้น ไม่ใช่ collection
-  plot_notes          Json?             @db.JsonB
-  theme_notes         Json?             @db.JsonB
+  plot_notes   Json? @db.JsonB
+  theme_notes  Json? @db.JsonB
   /// เพิ่มภายหลัง (audit fix) — เส้นอิสระที่วาดด้วยมือบนแผนที่ (แท็บ Base) ผู้ใช้ขอเพิ่มให้วาด
   /// รูปทรงชายฝั่ง/เขตแดนเองได้ ไม่ใช่แค่ปักหมุดสถานที่ เก็บเป็น array ของเส้น [{id, points:
   /// [{x,y}], width}] เป็น JSONB คอลัมน์เดียวต่อนิยาย เหมือน plot_notes/theme_notes
-  map_drawings        Json?             @db.JsonB
+  map_drawings Json? @db.JsonB
 
   author           User              @relation("NovelAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   primary_tag      Tag?              @relation("NovelPrimaryTag", fields: [primary_tag_id], references: [tag_id])
@@ -279,6 +320,8 @@ model Novel {
   donations        Donation[]
   user_library     UserLibrary[]
   novel_likes      NovelLike[]
+  reading_progress ReadingProgress[]
+  collection_items CollectionItem[]
 
   @@index([author_id])
   @@index([status, visibility])
@@ -287,25 +330,27 @@ model Novel {
 
 /// ข้อมูลตอน, สถานะเผยแพร่
 model Chapter {
-  chapter_id      String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id        String        @db.Uuid
-  chapter_number  Int
-  title           String        @db.VarChar(255)
-  content         String?       @db.Text
-  status          ChapterStatus @default(draft)
-  word_count      Int           @default(0)
-  published_at    DateTime?     @db.Timestamptz(6)
+  chapter_id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id             String        @db.Uuid
+  chapter_number       Int
+  title                String        @db.VarChar(255)
+  content              String?       @db.Text
+  status               ChapterStatus @default(draft)
+  word_count           Int           @default(0)
+  published_at         DateTime?     @db.Timestamptz(6)
   /// เพิ่มภายหลัง (Phase B) — ใช้คู่กับ status=scheduled เท่านั้น, flip เป็น published โดย
   /// POST /internal/chapters/publish-scheduled (cron pattern เดียวกับ purgeTrashBin)
-  scheduled_publish_at  DateTime?     @db.Timestamptz(6)
-  created_at      DateTime      @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime?     @db.Timestamptz(6)
+  scheduled_publish_at DateTime?     @db.Timestamptz(6)
+  created_at           DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?     @db.Timestamptz(6)
 
-  novel             Novel            @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
-  chapter_versions  ChapterVersion[]
-  comments          Comment[]
+  novel               Novel             @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  chapter_versions    ChapterVersion[]
+  comments            Comment[]
   /// เพิ่มภายหลัง (audit fix) — back-relation ของ Location.linked_chapter_id (หมุดผูกฐานข้อมูล)
-  linked_by_locations Location[] @relation("LocationLinkedChapter")
+  linked_by_locations Location[]        @relation("LocationLinkedChapter")
+  reading_progress    ReadingProgress[]
+  donations           Donation[]
 
   @@unique([novel_id, chapter_number])
   @@map("chapters")
@@ -313,13 +358,13 @@ model Chapter {
 
 /// ประวัติการ Auto-save และจัดเก็บร่าง
 model ChapterVersion {
-  version_id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  chapter_id        String   @db.Uuid
-  content_snapshot  String   @db.Text
-  version_number    Int
-  edited_by         String   @db.Uuid
-  is_autosave       Boolean  @default(true)
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  version_id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chapter_id       String   @db.Uuid
+  content_snapshot String   @db.Text
+  version_number   Int
+  edited_by        String   @db.Uuid
+  is_autosave      Boolean  @default(true)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
 
   chapter Chapter @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
   editor  User    @relation("ChapterVersionEditor", fields: [edited_by], references: [user_id])
@@ -331,18 +376,18 @@ model ChapterVersion {
 
 /// ถังขยะพักตอนนิยาย Soft Delete 30 วัน (polymorphic: chapter/character_node/character_edge/location/timeline_event)
 model TrashBin {
-  trash_id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id          String            @db.Uuid
-  content_type      TrashContentType
-  content_ref_id    String            @db.Uuid
-  content_snapshot  Json              @db.JsonB
-  deleted_by        String            @db.Uuid
-  deleted_at        DateTime          @default(now()) @db.Timestamptz(6)
-  auto_delete_at    DateTime          @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
-  restored_at       DateTime?         @db.Timestamptz(6)
+  trash_id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id         String           @db.Uuid
+  content_type     TrashContentType
+  content_ref_id   String           @db.Uuid
+  content_snapshot Json             @db.JsonB
+  deleted_by       String           @db.Uuid
+  deleted_at       DateTime         @default(now()) @db.Timestamptz(6)
+  auto_delete_at   DateTime         @default(dbgenerated("(now() + interval '30 days')")) @db.Timestamptz(6)
+  restored_at      DateTime?        @db.Timestamptz(6)
 
-  novel      Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
-  deleted_by_user User @relation("TrashDeletedBy", fields: [deleted_by], references: [user_id])
+  novel           Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  deleted_by_user User  @relation("TrashDeletedBy", fields: [deleted_by], references: [user_id])
 
   @@index([auto_delete_at])
   @@map("trash_bin")
@@ -353,27 +398,27 @@ model TrashBin {
 // ---------------------------------------------------------------------------
 
 model Tag {
-  tag_id    Int          @id @default(autoincrement())
-  name      String       @unique @db.VarChar(50)
-  category  TagCategory?
+  tag_id        Int          @id @default(autoincrement())
+  name          String       @unique @db.VarChar(50)
+  category      TagCategory?
   /// เพิ่มภายหลัง (Phase L) — ทำให้ genre เป็นลำดับชั้น 2 ระดับ (หมวดหมู่หลัก/รอง) แทนลิสต์แบนเดิม
   /// null = หมวดหมู่หลัก (top-level), มีค่า = หมวดหมู่รอง ผูกกับหมวดหมู่หลักที่ระบุ
-  parent_tag_id  Int?
+  parent_tag_id Int?
 
-  user_interests  UserInterest[]
-  novel_tags      NovelTag[]
-  novels_as_primary    Novel[] @relation("NovelPrimaryTag")
-  novels_as_secondary  Novel[] @relation("NovelSecondaryTag")
-  parent    Tag?  @relation("TagHierarchy", fields: [parent_tag_id], references: [tag_id], onDelete: SetNull)
-  children  Tag[] @relation("TagHierarchy")
+  user_interests      UserInterest[]
+  novel_tags          NovelTag[]
+  novels_as_primary   Novel[]        @relation("NovelPrimaryTag")
+  novels_as_secondary Novel[]        @relation("NovelSecondaryTag")
+  parent              Tag?           @relation("TagHierarchy", fields: [parent_tag_id], references: [tag_id], onDelete: SetNull)
+  children            Tag[]          @relation("TagHierarchy")
 
   @@map("tags")
 }
 
 /// Junction table: novels <-> tags (M:N)
 model NovelTag {
-  novel_id  String @db.Uuid
-  tag_id    Int
+  novel_id String @db.Uuid
+  tag_id   Int
 
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   tag   Tag   @relation(fields: [tag_id], references: [tag_id], onDelete: Cascade)
@@ -388,79 +433,79 @@ model NovelTag {
 
 /// Node กราฟตัวละครจาก @xyflow/react (node_id = React Flow node.id)
 model CharacterNode {
-  node_id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id         String         @db.Uuid
-  character_name   String         @db.VarChar(100)
-  avatar_url       String?        @db.Text
-  description      String?        @db.Text
-  character_role   CharacterRole?
-  node_type        String         @default("characterNode") @db.VarChar(30)
+  node_id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id       String         @db.Uuid
+  character_name String         @db.VarChar(100)
+  avatar_url     String?        @db.Text
+  description    String?        @db.Text
+  character_role CharacterRole?
+  node_type      String         @default("characterNode") @db.VarChar(30)
   /// เพิ่มภายหลัง (audit fix) — เดิม @default(0) ทำให้ตัวละครที่เพิ่งสร้างถูกวางบนแคนวาสทันที
   /// ไม่มีทางแยกว่า "วางแล้วที่ (0,0)" กับ "ยังไม่เคยวาง" ออกจากกัน เปลี่ยนเป็น nullable — null
   /// หมายถึงยังไม่ถูกวางบนแคนวาส (อยู่ในแถบ "รอวาง" ฝั่ง frontend) แถวเดิมที่มีค่าอยู่แล้วไม่กระทบ
-  position_x       Float?
-  position_y       Float?
-  node_style       Json?          @db.JsonB
-  created_at       DateTime       @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime?      @db.Timestamptz(6)
+  position_x     Float?
+  position_y     Float?
+  node_style     Json?          @db.JsonB
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?      @db.Timestamptz(6)
 
-  novel               Novel           @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
-  edges_as_source     CharacterEdge[] @relation("EdgeSource")
-  edges_as_target     CharacterEdge[] @relation("EdgeTarget")
+  novel           Novel           @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  edges_as_source CharacterEdge[] @relation("EdgeSource")
+  edges_as_target CharacterEdge[] @relation("EdgeTarget")
 
   @@map("character_nodes")
 }
 
 /// Edge กราฟความสัมพันธ์ตัวละครจาก @xyflow/react (edge_id = React Flow edge.id)
 model CharacterEdge {
-  edge_id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id            String   @db.Uuid
-  source_node_id      String   @db.Uuid
-  target_node_id      String   @db.Uuid
-  relationship_type   String?  @db.VarChar(50)
-  edge_label          String?  @db.VarChar(100)
-  description         String?  @db.Text
-  edge_type           String   @default("default") @db.VarChar(30)
-  edge_style          Json?    @db.JsonB
-  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  edge_id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id          String   @db.Uuid
+  source_node_id    String   @db.Uuid
+  target_node_id    String   @db.Uuid
+  relationship_type String?  @db.VarChar(50)
+  edge_label        String?  @db.VarChar(100)
+  description       String?  @db.Text
+  edge_type         String   @default("default") @db.VarChar(30)
+  edge_style        Json?    @db.JsonB
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
 
-  novel        Novel         @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
-  source_node  CharacterNode @relation("EdgeSource", fields: [source_node_id], references: [node_id], onDelete: Cascade)
-  target_node  CharacterNode @relation("EdgeTarget", fields: [target_node_id], references: [node_id], onDelete: Cascade)
+  novel       Novel         @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  source_node CharacterNode @relation("EdgeSource", fields: [source_node_id], references: [node_id], onDelete: Cascade)
+  target_node CharacterNode @relation("EdgeTarget", fields: [target_node_id], references: [node_id], onDelete: Cascade)
 
   // CHECK (source_node_id <> target_node_id) — ดู migrations_manual/checks.sql
   @@map("character_edges")
 }
 
 model Location {
-  location_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id       String   @db.Uuid
-  name           String   @db.VarChar(100)
-  description    String?  @db.Text
+  location_id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id          String   @db.Uuid
+  name              String   @db.VarChar(100)
+  description       String?  @db.Text
   /// เพิ่มภายหลัง (audit fix) — เดิมตั้งใจเก็บ URL รูปไอคอนที่อัปโหลด แต่ยังไม่เคยมี UI ใช้งานจริง
   /// ตอนนี้ใช้เก็บ "icon key" ของไอคอนสถานที่สำเร็จรูป (เช่น "castle","forest") แทน ไม่ใช่ URL แล้ว
   /// (ชื่อ field เดิมคงไว้กัน migration ซ้ำซ้อน — ไม่ใช่ URL จริงอีกต่อไป)
-  map_icon_url   String?  @db.Text
+  map_icon_url      String?  @db.Text
   /// เพิ่มภายหลัง (audit fix) — หมวดหมู่สถานที่ (เช่น "ที่พักอาศัย","ธรรมชาติ","อันตราย") ไว้กรอง/จัดกลุ่ม
-  category       String?  @db.VarChar(50)
+  category          String?  @db.VarChar(50)
   /// เพิ่มภายหลัง (audit fix) — null = ยังไม่ถูกวางบนแคนวาส (อยู่ในแถบ "รอวาง" ฝั่ง frontend)
   /// เดิม @default(0) ทำให้แยกไม่ออกว่า "วางแล้วที่ (0,0)" กับ "ยังไม่เคยวาง"
-  pos_x          Float?
-  pos_y          Float?
+  pos_x             Float?
+  pos_y             Float?
   /// เพิ่มภายหลัง (audit fix, "ทำทั้งหมด") — ย่อ-ขยาย/หมุน/พลิก/ลำดับการซ้อนทับของไอคอนบนแผนที่
-  scale          Float?   @default(1)
-  rotation       Float?   @default(0)
-  flip_x         Boolean? @default(false)
-  z_index        Int?     @default(0)
+  scale             Float?   @default(1)
+  rotation          Float?   @default(0)
+  flip_x            Boolean? @default(false)
+  z_index           Int?     @default(0)
   /// เพิ่มภายหลัง (audit fix) — "หมุดผูกฐานข้อมูล" (Lore Link Marker): คลิกหมุดแล้วเห็นเนื้อหา
   /// เรื่องราว (ใช้ description ที่มีอยู่แล้วเป็นเนื้อหา lore) พร้อมลิงก์ไปยังตอนที่เกี่ยวข้องได้
-  linked_chapter_id       String?  @db.Uuid
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  linked_chapter_id String?  @db.Uuid
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
 
-  novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  novel           Novel          @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   edges_as_source LocationEdge[] @relation("LocationEdgeSource")
   edges_as_target LocationEdge[] @relation("LocationEdgeTarget")
-  linked_chapter       Chapter? @relation("LocationLinkedChapter", fields: [linked_chapter_id], references: [chapter_id], onDelete: SetNull)
+  linked_chapter  Chapter?       @relation("LocationLinkedChapter", fields: [linked_chapter_id], references: [chapter_id], onDelete: SetNull)
 
   @@map("locations")
 }
@@ -482,13 +527,13 @@ model MapVersion {
 /// เพิ่มภายหลัง (audit fix) — เส้นทาง/ถนนเชื่อมระหว่างสถานที่บนแผนที่ ไม่มีในสคีมาเดิม (พอร์ตมาจาก
 /// buddybook_demo/tool_map) เรียบง่ายกว่า CharacterEdge เพราะถนนไม่มี label/ทิศทาง/ประเภท
 model LocationEdge {
-  edge_id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id          String   @db.Uuid
-  source_location_id String @db.Uuid
-  target_location_id String @db.Uuid
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  edge_id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id           String   @db.Uuid
+  source_location_id String   @db.Uuid
+  target_location_id String   @db.Uuid
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
 
-  novel          Novel    @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  novel           Novel    @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   source_location Location @relation("LocationEdgeSource", fields: [source_location_id], references: [location_id], onDelete: Cascade)
   target_location Location @relation("LocationEdgeTarget", fields: [target_location_id], references: [location_id], onDelete: Cascade)
 
@@ -496,20 +541,20 @@ model LocationEdge {
 }
 
 model TimelineEvent {
-  event_id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id              String   @db.Uuid
-  title                 String   @db.VarChar(255)
-  description           String?  @db.Text
-  event_order           Int
-  event_date_in_story   String?  @db.VarChar(50)
+  event_id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id            String   @db.Uuid
+  title               String   @db.VarChar(255)
+  description         String?  @db.Text
+  event_order         Int
+  event_date_in_story String?  @db.VarChar(50)
   /// เพิ่มภายหลัง (audit fix) — รายละเอียดที่ขาดไปตามที่ผู้ใช้ระบุ: เวลาในฉาก, เส้นเรื่อง/ตัวละคร
   /// ที่เหตุการณ์นี้เกี่ยวข้อง (ใช้จัดกลุ่มเป็น swimlane ในมุมมองกราฟ), สีประจำเส้นเรื่อง, และ
   /// ความเข้มข้น/อารมณ์ของฉาก (1-10) ซึ่งกำหนดความสูงของจุดในกราฟ
-  event_time             String?  @db.VarChar(20)
-  thread                 String?  @db.VarChar(100)
-  color                  String?  @db.VarChar(20)
-  intensity              Int?     @default(5)
-  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  event_time          String?  @db.VarChar(20)
+  thread              String?  @db.VarChar(100)
+  color               String?  @db.VarChar(20)
+  intensity           Int?     @default(5)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
 
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
 
@@ -523,19 +568,19 @@ model TimelineEvent {
 /// คอมเมนต์ พร้อม Sentiment Analysis (sentiment_label/score เป็น NULL ตอน insert แรก
 /// แล้ว Python NLP Worker UPDATE กลับมาแบบ async — eventual consistency)
 model Comment {
-  comment_id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  chapter_id          String          @db.Uuid
-  user_id             String          @db.Uuid
-  parent_comment_id   String?         @db.Uuid
-  content             String          @db.Text
-  sentiment_label     SentimentLabel?
-  sentiment_score     Float?
-  created_at          DateTime        @default(now()) @db.Timestamptz(6)
+  comment_id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chapter_id        String          @db.Uuid
+  user_id           String          @db.Uuid
+  parent_comment_id String?         @db.Uuid
+  content           String          @db.Text
+  sentiment_label   SentimentLabel?
+  sentiment_score   Float?
+  created_at        DateTime        @default(now()) @db.Timestamptz(6)
 
-  chapter          Chapter    @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
-  user             User       @relation(fields: [user_id], references: [user_id])
-  parent_comment   Comment?   @relation("CommentReplies", fields: [parent_comment_id], references: [comment_id], onDelete: Cascade)
-  replies          Comment[]  @relation("CommentReplies")
+  chapter        Chapter   @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
+  user           User      @relation(fields: [user_id], references: [user_id])
+  parent_comment Comment?  @relation("CommentReplies", fields: [parent_comment_id], references: [comment_id], onDelete: Cascade)
+  replies        Comment[] @relation("CommentReplies")
 
   // CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migrations_manual/checks.sql
   @@map("comments")
@@ -543,18 +588,18 @@ model Comment {
 
 /// รีวิว พร้อม Sentiment Analysis
 model Review {
-  review_id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id          String          @db.Uuid
-  user_id           String          @db.Uuid
-  rating            Int?            @db.SmallInt
-  comment_text      String?         @db.Text
-  sentiment_label   SentimentLabel?
-  sentiment_score   Float?
+  review_id       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id        String          @db.Uuid
+  user_id         String          @db.Uuid
+  rating          Int?            @db.SmallInt
+  comment_text    String?         @db.Text
+  sentiment_label SentimentLabel?
+  sentiment_score Float?
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนรีวิวเลือกไม่เปิดเผยตัวตนได้ (username/avatar จะไม่ถูกส่ง
   /// ออกไปให้คนอื่นเห็นตอนอ่านรีวิว) ยังต้องเก็บ user_id จริงไว้เสมอ เพื่อคุม @@unique ด้านล่าง
   /// (รีวิวได้เรื่องละ 1 ครั้ง) และให้เจ้าของรีวิวแก้ไข/ลบของตัวเองได้ตามปกติ
-  is_anonymous      Boolean         @default(false)
-  created_at        DateTime        @default(now()) @db.Timestamptz(6)
+  is_anonymous    Boolean         @default(false)
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
 
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   user  User  @relation(fields: [user_id], references: [user_id])
@@ -569,30 +614,84 @@ model Review {
 // ---------------------------------------------------------------------------
 
 model Donation {
-  donation_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id       String?  @db.Uuid
-  from_user_id   String   @db.Uuid
-  to_user_id     String   @db.Uuid
-  amount         Decimal  @db.Decimal(10, 2)
-  message        String?  @db.Text
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  donation_id  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id     String?  @db.Uuid
+  from_user_id String   @db.Uuid
+  to_user_id   String   @db.Uuid
+  /// ยอดที่หักจากผู้ให้ (gross) — ผู้รับได้ net_amount (= amount - fee_amount)
+  amount       Decimal  @db.Decimal(10, 2)
+  message      String?  @db.Text
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
 
-  novel      Novel? @relation(fields: [novel_id], references: [novel_id], onDelete: SetNull)
-  from_user  User   @relation("DonationFrom", fields: [from_user_id], references: [user_id])
-  to_user    User   @relation("DonationTo", fields: [to_user_id], references: [user_id])
+  /// เพิ่มภายหลัง (Gift donations) — gift_id = null คือโดเนท coin แบบเดิม ("Custom coins")
+  /// unit_price_coins เก็บราคา ณ ตอนส่ง (อ่านจาก gift_items ฝั่ง server เสมอ ไม่เชื่อราคาจาก client)
+  chapter_id         String?           @db.Uuid
+  gift_id            String?           @db.Uuid
+  quantity           Int               @default(1)
+  unit_price_coins   Int?
+  fee_amount         Decimal           @default(0) @db.Decimal(10, 2)
+  net_amount         Decimal           @db.Decimal(10, 2)
+  card_template      GiftCardTemplate?
+  signature_name     String?           @db.VarChar(50)
+  is_anonymous       Boolean           @default(false)
+  /// false = มีแค่ผู้รับที่อ่านข้อความได้ (API สาธารณะไม่ส่ง message ของแถวนี้ออกไปเลย)
+  is_public          Boolean           @default(false)
+  /// กันกดซ้ำ/retry หักเงินสองรอบ — unique ต่อผู้ให้ (null ได้หลายแถวสำหรับ POST /donations เดิม)
+  idempotency_key    String?           @db.VarChar(64)
+  read_at            DateTime?         @db.Timestamptz(6)
+  hidden_at          DateTime?         @db.Timestamptz(6)
+  reported_at        DateTime?         @db.Timestamptz(6)
+  report_reason      String?           @db.VarChar(200)
+  report_resolved_at DateTime?         @db.Timestamptz(6)
+  thank_message      String?           @db.VarChar(200)
+  thanked_at         DateTime?         @db.Timestamptz(6)
 
-  // CHECK (amount > 0) — ดู migrations_manual/checks.sql
+  novel     Novel?    @relation(fields: [novel_id], references: [novel_id], onDelete: SetNull)
+  chapter   Chapter?  @relation(fields: [chapter_id], references: [chapter_id], onDelete: SetNull)
+  gift      GiftItem? @relation(fields: [gift_id], references: [gift_id], onDelete: Restrict)
+  from_user User      @relation("DonationFrom", fields: [from_user_id], references: [user_id])
+  to_user   User      @relation("DonationTo", fields: [to_user_id], references: [user_id])
+
+  // CHECK (amount > 0), quantity 1-99, net_amount + fee_amount = amount — ดู migrations_manual/checks.sql
+  @@unique([from_user_id, idempotency_key])
+  @@index([to_user_id, created_at(sort: Desc)])
+  @@index([from_user_id, created_at(sort: Desc)])
   @@map("donations")
 }
 
+/// เพิ่มภายหลัง (Gift donations) — แคตตาล็อกของขวัญ (แอดมินจัดการผ่าน /admin/gifts, seed จาก
+/// prisma/gift-catalog.ts) รูปอยู่ที่ apps/web/public/donate/gifts/<slug>.png
+model GiftItem {
+  gift_id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug           String        @unique @db.VarChar(50)
+  name_th        String        @db.VarChar(100)
+  name_en        String        @db.VarChar(100)
+  description_th String?       @db.Text
+  price_coins    Int
+  tier           GiftTier
+  image_url      String        @db.Text
+  animation      GiftAnimation @default(none)
+  is_active      Boolean       @default(true)
+  is_limited     Boolean       @default(false)
+  available_from DateTime?     @db.Timestamptz(6)
+  available_to   DateTime?     @db.Timestamptz(6)
+  sort_order     Int           @default(0)
+  created_at     DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime?     @db.Timestamptz(6)
+
+  donations Donation[]
+
+  @@map("gift_items")
+}
+
 model WalletTransaction {
-  transaction_id  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id         String       @db.Uuid
-  type            WalletTxType
-  amount          Decimal      @db.Decimal(10, 2)
-  balance_after   Decimal      @db.Decimal(10, 2)
-  reference_id    String?      @db.Uuid
-  created_at      DateTime     @default(now()) @db.Timestamptz(6)
+  transaction_id String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String       @db.Uuid
+  type           WalletTxType
+  amount         Decimal      @db.Decimal(10, 2)
+  balance_after  Decimal      @db.Decimal(10, 2)
+  reference_id   String?      @db.Uuid
+  created_at     DateTime     @default(now()) @db.Timestamptz(6)
 
   user User @relation(fields: [user_id], references: [user_id])
 
@@ -605,18 +704,40 @@ model WalletTransaction {
   @@map("wallet_transactions")
 }
 
+/// เพิ่มภายหลัง (Stripe top-up) — 1 แถวต่อ 1 Checkout Session เป็นแหล่งความจริงเดียวของสถานะ/วันหมดอายุ
+/// frontend อ่านสถานะจากที่นี่ (GET /wallet/topup/orders/:id/status) ไม่เดาเองจาก Stripe
+/// status เปลี่ยนโดย webhook เท่านั้น; expires_at ตรงกับ expires_at ที่ส่งให้ Stripe (30 นาที)
+model TopupOrder {
+  order_id          String           @id @db.Uuid
+  user_id           String           @db.Uuid
+  stripe_session_id String           @unique @db.VarChar(255)
+  package_id        String           @db.VarChar(20)
+  coins             Int
+  amount_thb        Decimal          @db.Decimal(10, 2)
+  status            TopupOrderStatus @default(pending)
+  expires_at        DateTime         @db.Timestamptz(6)
+  paid_at           DateTime?        @db.Timestamptz(6)
+  failed_at         DateTime?        @db.Timestamptz(6)
+  created_at        DateTime         @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, created_at(sort: Desc)])
+  @@map("topup_orders")
+}
+
 // ---------------------------------------------------------------------------
 // 7. การแจ้งเตือน
 // ---------------------------------------------------------------------------
 
 model Notification {
-  notification_id  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id          String            @db.Uuid
-  type             NotificationType
-  content          String            @db.Text
-  link_url         String?           @db.Text
-  is_read          Boolean           @default(false)
-  created_at       DateTime          @default(now()) @db.Timestamptz(6)
+  notification_id String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String           @db.Uuid
+  type            NotificationType
+  content         String           @db.Text
+  link_url        String?          @db.Text
+  is_read         Boolean          @default(false)
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
 
   user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
@@ -629,10 +750,12 @@ model Notification {
 
 /// ชั้นหนังสือ (นิยายที่ผู้อ่านบันทึกไว้) — เพิ่มภายหลังตาม Figma Userflow
 model UserLibrary {
-  library_id  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id     String   @db.Uuid
-  novel_id    String   @db.Uuid
-  added_at    DateTime @default(now()) @db.Timestamptz(6)
+  library_id String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String        @db.Uuid
+  novel_id   String        @db.Uuid
+  added_at   DateTime      @default(now()) @db.Timestamptz(6)
+  /// เพิ่มภายหลัง (หน้า My Library)
+  status     LibraryStatus @default(up_next)
 
   user  User  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
@@ -640,6 +763,57 @@ model UserLibrary {
   @@unique([user_id, novel_id])
   @@index([user_id, added_at(sort: Desc)])
   @@map("user_library")
+}
+
+/// เพิ่มภายหลัง (หน้า My Library / "อ่านต่อ" ในหน้าแรก) — ตอนล่าสุดที่ผู้ใช้เปิดอ่านของแต่ละเรื่อง
+/// แยกจาก UserLibrary เพราะอ่านได้โดยไม่ต้องเพิ่มเข้าชั้น (ประวัติการอ่าน ≠ ชั้นหนังสือ) 1 แถวต่อผู้ใช้ต่อเรื่อง
+/// upsert ทุกครั้งที่เปิดตอนที่เผยแพร่แล้ว (ดู chapters.service.ts recordReadingProgress)
+model ReadingProgress {
+  user_id             String   @db.Uuid
+  novel_id            String   @db.Uuid
+  last_chapter_id     String?  @db.Uuid
+  last_chapter_number Int
+  last_read_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  user         User     @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  novel        Novel    @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  last_chapter Chapter? @relation(fields: [last_chapter_id], references: [chapter_id], onDelete: SetNull)
+
+  @@id([user_id, novel_id])
+  @@index([user_id, last_read_at(sort: Desc)])
+  @@map("reading_progress")
+}
+
+/// เพิ่มภายหลัง (หน้า My Library) — ชั้นหนังสือย่อยที่ผู้ใช้สร้างเอง (เช่น "อ่านริมทะเล")
+/// tint = ชื่อโทนสีชั้นอะคริลิก (purple/coral/blue/orange/mint/pink) ไม่ใช่ค่าสี hex
+model Collection {
+  collection_id String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String   @db.Uuid
+  name          String   @db.VarChar(60)
+  /// เปลี่ยนภายหลัง (เลิกใช้อีโมจิ) — key ของไอคอนชั้น (ดู COLLECTION_ICONS ใน collections.service.ts)
+  icon          String?  @db.VarChar(30)
+  tint          String   @default("purple") @db.VarChar(20)
+  position      Int      @default(0)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  user  User             @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  items CollectionItem[]
+
+  @@index([user_id, position])
+  @@map("collections")
+}
+
+model CollectionItem {
+  collection_id String   @db.Uuid
+  novel_id      String   @db.Uuid
+  position      Int      @default(0)
+  added_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  collection Collection @relation(fields: [collection_id], references: [collection_id], onDelete: Cascade)
+  novel      Novel      @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+
+  @@id([collection_id, novel_id])
+  @@map("collection_items")
 }
 
 /// เพิ่มภายหลัง (audit pass หลัง Phase 9) — ปุ่มถูกใจในหน้ารายละเอียดนิยายเดิมมีแค่ local UI state

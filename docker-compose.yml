@@ -1,0 +1,145 @@
+# BuddyBook — dev stack
+#
+#   DB อย่างเดียว (postgres + neo4j):   docker compose up -d
+#   ทั้งหมด (+ api + web):              docker compose --profile app up -d
+#
+# api/web อยู่ใน profile "app" — ไม่ใส่ profile จะได้แค่ DB แล้วรัน api/web ด้วย Node บนเครื่องได้
+# ขีดจำกัด resource ตั้งไว้สำหรับเครื่องสเปคต่ำ รวมทั้งหมดราว 3.8 GB (ดูตารางใน docker/README.md)
+
+name: buddybook
+
+x-node-app: &node-app
+  build:
+    context: .
+    dockerfile: docker/node.Dockerfile
+  image: buddybook-node-dev
+  profiles: ["app"]
+  restart: unless-stopped
+  init: true
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: buddybook
+      POSTGRES_PASSWORD: buddybook
+      POSTGRES_DB: buddybook
+    # ปรับให้กินแรมน้อย — ข้อมูล dev มีไม่กี่พันแถว ไม่ต้องใช้ค่า default ที่เผื่อ production
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=40
+    ports:
+      - "5525:5432" # 5432 บนเครื่องเป็นของ PostgreSQL ที่ติดตั้งบน Windows อยู่แล้ว
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buddybook -d buddybook"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+  neo4j:
+    image: neo4j:5-community
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/buddybook-dev
+      # JVM heap + page cache ต้องรวมกันต่ำกว่า memory limit พอสมควร (เหลือที่ให้ native/off-heap)
+      NEO4J_server_memory_heap_initial__size: 256m
+      NEO4J_server_memory_heap_max__size: 512m
+      NEO4J_server_memory_pagecache_size: 256m
+      NEO4J_db_memory_transaction_total_max: 128m
+      NEO4J_db_tx__log_rotation_retention__policy: 100M size
+    ports:
+      - "7474:7474" # Neo4j Browser
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4jdata:/data
+    healthcheck:
+      # เช็คแค่ว่าพอร์ต Bolt เปิดแล้ว — ไม่ใช้ cypher-shell เพราะต้องเปิด JVM ใหม่ทุกรอบ (หนัก)
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/7687' 2>/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  api:
+    <<: *node-app
+    working_dir: /app/apps/api
+    # prisma generate ในนี้ทุกครั้ง — ได้ engine ของ linux-musl ตรงกับ container (ไม่ใช่ของ Windows)
+    command: sh -c "npx prisma generate && npx nodemon --config nodemon.docker.json"
+    env_file:
+      - apps/api/.env
+      - docker/api.docker.env # ทับค่า NEO4J_* ให้ชี้ชื่อ service
+    environment:
+      # DB ที่ api ใช้ — ตั้ง DOCKER_DATABASE_URL ใน .env ที่ root (gitignored) เพื่อใช้ PostgreSQL บน Windows
+      # (host.docker.internal:5432) แทน container postgres ได้ ถ้าไม่ตั้งจะใช้ container postgres
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://buddybook:buddybook@postgres:5432/buddybook?schema=public}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./apps/api:/app/apps/api
+      # anonymous volume ทับ bind mount — ใช้ node_modules จาก image ไม่ใช่จาก host
+      - /app/node_modules
+      - /app/apps/api/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "1.0"
+
+  web:
+    <<: *node-app
+    working_dir: /app/apps/web
+    command: npx next dev -H 0.0.0.0 -p 3000
+    environment:
+      # ฝั่ง server ของ Next (route handler/middleware) เรียก api ผ่าน network ของ compose
+      # ส่วน browser ยังใช้ NEXT_PUBLIC_API_URL=http://localhost:4000 จาก .env.local ได้ตามเดิม
+      API_URL: http://api:4000
+      # bind mount จาก Windows ไม่ส่ง file event เข้า container — ต้อง poll แทน
+      WATCHPACK_POLLING: "true"
+      NODE_OPTIONS: --max-old-space-size=1024
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      # .next แยกเป็น volume — ห้ามแชร์กับ next dev ที่รันบนเครื่อง (สองตัวเขียนพร้อมกันแล้ว cache พัง)
+      - /app/apps/web/.next
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+          cpus: "1.5"
+
+volumes:
+  pgdata:
+  neo4jdata:
