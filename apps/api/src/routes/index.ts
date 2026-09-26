@@ -19,6 +19,7 @@ import notificationsRoutes from "@/modules/notifications/notifications.routes";
 import adminRoutes, { publicAdminRouter } from "@/modules/admin/admin.routes";
 import internalRoutes from "@/modules/internal/internal.routes";
 import collectionsRoutes from "@/modules/collections/collections.routes";
+import reportsRoutes from "@/modules/reports/reports.routes";
 
 /**
  * Router รวมทุกโมดูล mount ใต้ /api/v1 (ดู app.ts)
@@ -45,6 +46,8 @@ router.use("/authors", authorsGiftsRouter);
 router.use("/me", meGiftsRouter);
 router.use("/wallet", walletRoutes);
 router.use("/notifications", notificationsRoutes);
+// เพิ่มภายหลัง (รายงานเนื้อหา) — ผู้ใช้รายงาน, แอดมินตรวจที่ /admin/content-reports
+router.use("/reports", reportsRoutes);
 
 // 3. Writer Workspace
 router.use("/trash-bin", trashBinRoutes);

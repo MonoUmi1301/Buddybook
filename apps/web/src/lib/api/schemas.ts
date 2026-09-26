@@ -310,6 +310,8 @@ export const createChapterSchema = z
     content: z.string().optional(),
     status: chapterStatusEnum,
     scheduled_publish_at: z.coerce.date().optional(),
+    // เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = ฟรี
+    price_coins: z.number().int().min(0).max(1000).optional(),
   })
   .refine((v) => v.status !== "scheduled" || (v.scheduled_publish_at && v.scheduled_publish_at > new Date()), {
     message: "scheduled_publish_at is required and must be in the future when status is scheduled",
@@ -322,6 +324,8 @@ export const updateChapterSchema = z
     content: z.string().optional(),
     status: chapterStatusEnum.optional(),
     scheduled_publish_at: z.coerce.date().optional(),
+    // เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = ฟรี
+    price_coins: z.number().int().min(0).max(1000).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" })
   .refine((v) => v.status !== "scheduled" || (v.scheduled_publish_at && v.scheduled_publish_at > new Date()), {
@@ -567,4 +571,43 @@ export const verifySlipSchema = z.object({
 // เพิ่มภายหลัง (audit fix — เปลี่ยนมาใช้ Stripe) — สร้าง Checkout Session สำหรับแพ็กที่เลือก
 export const createCheckoutSessionSchema = z.object({
   package_id: z.string().min(1),
+});
+
+// ---------------------------------------------------------------------------
+// เพิ่มภายหลัง — รายงานเนื้อหา, ถอนรายได้นักเขียน (ดู apps/api/src/modules/reports, wallet/withdrawals)
+// ---------------------------------------------------------------------------
+
+export const reportTargetTypeEnum = z.enum(["novel", "chapter", "comment", "review", "user"]);
+export const reportReasonEnum = z.enum(["spam", "harassment", "inappropriate", "copyright", "other"]);
+
+export const createReportSchema = z.object({
+  target_type: reportTargetTypeEnum,
+  target_id: uuid,
+  reason: reportReasonEnum,
+  details: z.string().trim().max(1000).optional(),
+});
+
+export const contentReportsQuerySchema = z.object({
+  status: z.enum(["open", "dismissed", "actioned"]).optional(),
+  cursor: uuid.optional(),
+});
+
+export const resolveContentReportSchema = z.object({
+  action: z.enum(["dismiss", "action"]),
+  note: z.string().trim().max(500).optional(),
+});
+
+export const createWithdrawalSchema = z.object({
+  amount_coins: z.number().int().positive(),
+  payout_method: z.enum(["promptpay", "bank"]),
+  account_name: z.string().trim().min(1).max(100),
+  account_number: z.string().trim().min(10).max(20),
+  bank_name: z.string().trim().max(100).optional(),
+});
+
+export const withdrawalsQuerySchema = z.object({ status: z.enum(["pending", "paid", "rejected"]).optional() });
+
+export const processWithdrawalSchema = z.object({
+  action: z.enum(["paid", "rejected"]),
+  note: z.string().trim().max(500).optional(),
 });

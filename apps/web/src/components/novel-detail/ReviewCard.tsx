@@ -2,6 +2,7 @@ import { Star } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { formatThaiDate } from "@/lib/format";
+import { ReportButton } from "@/components/social/ReportButton";
 
 export interface Review {
   id: string;
@@ -29,7 +30,7 @@ export function StarRow({ rating, className }: { rating: number; className?: str
 }
 
 /** การ์ดรีวิวเต็มความกว้าง — ใช้ในแท็บ "รีวิว" ของหน้ารายละเอียดนิยาย */
-export function ReviewCard({ review }: { review: Review }) {
+export function ReviewCard({ review, isLoggedIn = false }: { review: Review; isLoggedIn?: boolean }) {
   return (
     <article className="rounded-card border border-neutral-200 bg-white p-5">
       <header className="flex items-start justify-between gap-3">
@@ -44,7 +45,10 @@ export function ReviewCard({ review }: { review: Review }) {
             </time>
           </div>
         </div>
-        {review.rating > 0 && <StarRow rating={review.rating} className="shrink-0" />}
+        <div className="flex shrink-0 items-center gap-3">
+          {review.rating > 0 && <StarRow rating={review.rating} />}
+          <ReportButton targetType="review" targetId={review.id} isLoggedIn={isLoggedIn} variant="icon" />
+        </div>
       </header>
       {review.comment && (
         <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-neutral-700">{review.comment}</p>

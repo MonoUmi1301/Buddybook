@@ -12,7 +12,7 @@
     "build:web": "npm run build --workspace=apps/web",
     "build:api": "npm run build --workspace=apps/api",
     "lint": "npm run lint --workspace=apps/web && npm run lint --workspace=apps/api",
-    "typecheck": "npm run typecheck --workspace=apps/api",
+    "typecheck": "npm run typecheck --workspace=apps/api && npm run typecheck --workspace=apps/web",
     "prisma:generate": "npm run prisma:generate --workspace=apps/api",
     "prisma:migrate": "npm run prisma:migrate --workspace=apps/api",
     "prisma:studio": "npm run prisma:studio --workspace=apps/api",
@@ -26,7 +26,8 @@
     "dev:api:dockerdb": "npm run dev:dockerdb --workspace=apps/api",
     "docker:reset": "docker compose --profile app down -v",
     "docker:rebuild": "docker compose --profile app up -d --build --renew-anon-volumes api web",
-    "stripe:listen": "node scripts/stripe-listen.mjs"
+    "stripe:listen": "node scripts/stripe-listen.mjs",
+    "test": "npm test --workspace=apps/api"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

@@ -27,7 +27,11 @@ interface ChapterEditorFormProps {
   initialTitle?: string;
   initialContent?: string;
   initialStatus?: "draft" | "published" | "scheduled" | "hidden";
+  /** เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = อ่านฟรี */
+  initialPriceCoins?: number;
 }
+
+const MAX_CHAPTER_PRICE = 1000;
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -47,12 +51,15 @@ export function ChapterEditorForm({
   initialTitle = "",
   initialContent = "",
   initialStatus = "draft",
+  initialPriceCoins = 0,
 }: ChapterEditorFormProps) {
   const router = useRouter();
   const [chapterId, setChapterId] = useState(initialChapterId);
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [chapterStatus, setChapterStatus] = useState(initialStatus);
+  const [isPaid, setIsPaid] = useState(initialPriceCoins > 0);
+  const [priceCoins, setPriceCoins] = useState(initialPriceCoins > 0 ? initialPriceCoins : 10);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -80,6 +87,12 @@ export function ChapterEditorForm({
       return false;
     }
 
+    const price_coins = isPaid ? priceCoins : 0;
+    if (isPaid && (!Number.isInteger(priceCoins) || priceCoins < 1 || priceCoins > MAX_CHAPTER_PRICE)) {
+      (onError ?? setErrorMessage)(`ราคาตอนต้องอยู่ระหว่าง 1-${MAX_CHAPTER_PRICE} คอยน์`);
+      return false;
+    }
+
     try {
       if (!chapterId) {
         const res = await fetch(`/api/v1/novels/${novelId}/chapters`, {
@@ -91,6 +104,7 @@ export function ChapterEditorForm({
             content: contentRef.current,
             status,
             scheduled_publish_at: scheduledPublishAt,
+            price_coins,
           }),
         });
         const json = await res.json();
@@ -112,6 +126,7 @@ export function ChapterEditorForm({
           content: contentRef.current,
           status,
           scheduled_publish_at: scheduledPublishAt,
+          price_coins,
         }),
       });
       const json = await res.json();
@@ -242,6 +257,35 @@ export function ChapterEditorForm({
         <p className="mt-1.5 text-left text-xs text-neutral-400">
           {charCount.toLocaleString("th-TH")} ตัวอักษร (≈{pageCount} หน้า)
         </p>
+
+        {/* เพิ่มภายหลัง (ตอนติดเหรียญ) — ผู้อ่านต้องจ่ายคอยน์ปลดล็อกก่อนอ่าน รายได้เข้ากระเป๋านักเขียน */}
+        <div className="mt-6 rounded-lg border border-neutral-200 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
+            <input
+              type="checkbox"
+              checked={isPaid}
+              onChange={(e) => setIsPaid(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 text-primary-500"
+            />
+            ตอนติดเหรียญ (ผู้อ่านต้องปลดล็อกด้วยคอยน์)
+          </label>
+          {isPaid && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-neutral-600">
+              <span>ราคา</span>
+              <input
+                type="number"
+                min={1}
+                max={MAX_CHAPTER_PRICE}
+                step={1}
+                value={priceCoins}
+                onChange={(e) => setPriceCoins(Math.trunc(Number(e.target.value)))}
+                className="w-24 rounded-md border border-neutral-300 px-2 py-1 text-neutral-800"
+                aria-label="ราคาตอน (คอยน์)"
+              />
+              <span>คอยน์</span>
+            </div>
+          )}
+        </div>
 
         {errorMessage && <p className="mt-3 text-sm text-red-500">{errorMessage}</p>}
 

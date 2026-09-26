@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownUp, ChevronRight } from "lucide-react";
+import { ArrowDownUp, ChevronRight, Coins, Lock } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatThaiDate } from "@/lib/format";
 
@@ -15,6 +15,9 @@ export interface ChapterListItem {
   word_count: number;
   published_at: string | null;
   scheduled_publish_at?: string | null;
+  /** เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = ฟรี, is_unlocked = อ่านได้แล้ว (ฟรี/ซื้อแล้ว/เป็นเจ้าของ) */
+  price_coins?: number;
+  is_unlocked?: boolean;
 }
 
 interface ChapterListCardProps {
@@ -87,6 +90,24 @@ export function ChapterListCard({ novelId, chapters }: ChapterListCardProps) {
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-400">
                     {date && <span>{formatThaiDate(date)}</span>}
                     {ch.word_count > 0 && <span>· {ch.word_count.toLocaleString()} ตัวอักษร</span>}
+                    {(ch.price_coins ?? 0) > 0 && (
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-pill px-2 py-0.5 font-medium",
+                          ch.is_unlocked ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"
+                        )}
+                      >
+                        {ch.is_unlocked ? (
+                          "ปลดล็อกแล้ว"
+                        ) : (
+                          <>
+                            <Lock className="h-3 w-3" aria-hidden />
+                            <Coins className="h-3 w-3" aria-hidden />
+                            {ch.price_coins}
+                          </>
+                        )}
+                      </span>
+                    )}
                     {ch.status !== "published" && (
                       <span
                         className={cn(

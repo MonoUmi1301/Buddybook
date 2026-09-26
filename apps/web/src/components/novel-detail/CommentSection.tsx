@@ -6,6 +6,7 @@ import { Smile } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { ReportButton } from "@/components/social/ReportButton";
 
 export interface CommentNode {
   comment_id: string;
@@ -22,19 +23,22 @@ interface CommentSectionProps {
   isLoggedIn: boolean;
 }
 
-function CommentRow({ node, depth = 0 }: { node: CommentNode; depth?: number }) {
+function CommentRow({ node, depth = 0, isLoggedIn }: { node: CommentNode; depth?: number; isLoggedIn: boolean }) {
   return (
     <li className={cn("flex gap-3", depth > 0 && "ml-10 mt-3")}>
       <Avatar src={node.user.avatar_url ?? undefined} alt={node.user.username} size="sm" />
       <div className="flex-1">
         <div className="rounded-lg bg-neutral-50 px-4 py-2.5">
-          <p className="text-sm font-medium text-neutral-800">{node.user.username}</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-neutral-800">{node.user.username}</p>
+            <ReportButton targetType="comment" targetId={node.comment_id} isLoggedIn={isLoggedIn} variant="icon" />
+          </div>
           <p className="text-sm text-neutral-600">{node.content}</p>
         </div>
         {node.replies.length > 0 && (
           <ul>
             {node.replies.map((reply) => (
-              <CommentRow key={reply.comment_id} node={reply} depth={depth + 1} />
+              <CommentRow key={reply.comment_id} node={reply} depth={depth + 1} isLoggedIn={isLoggedIn} />
             ))}
           </ul>
         )}
@@ -141,7 +145,7 @@ export function CommentSection({ chapterId, comments: initialComments, isLoggedI
       ) : (
         <ul className="mt-4 space-y-4">
           {sorted.map((c) => (
-            <CommentRow key={c.comment_id} node={c} />
+            <CommentRow key={c.comment_id} node={c} isLoggedIn={isLoggedIn} />
           ))}
         </ul>
       )}

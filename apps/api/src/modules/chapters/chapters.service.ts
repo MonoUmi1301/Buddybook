@@ -6,6 +6,9 @@ import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 import type { ChapterStatus } from "@prisma/client";
+import { env } from "@/config/env";
+import { getBalance, ledgerTimestamp, lockWallets, WALLET_TX_OPTIONS } from "@/modules/wallet/wallet.service";
+import { splitGiftFee } from "@/modules/gifts/gift-fee";
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ");
@@ -40,6 +43,7 @@ interface CreateChapterInput {
   content?: string;
   status: ChapterStatus;
   scheduled_publish_at?: Date;
+  price_coins?: number;
 }
 
 /** Reference implementation — POST /novels/:novel_id/chapters
@@ -62,6 +66,7 @@ export async function createChapter(novel_id: string, author_id: string, input: 
         word_count: computeWordCount(input.content),
         published_at: input.status === "published" ? new Date() : null,
         scheduled_publish_at: input.status === "scheduled" ? input.scheduled_publish_at : null,
+        price_coins: input.price_coins ?? 0,
       },
       select: {
         chapter_id: true,
@@ -69,6 +74,7 @@ export async function createChapter(novel_id: string, author_id: string, input: 
         title: true,
         status: true,
         scheduled_publish_at: true,
+        price_coins: true,
         created_at: true,
       },
     });
@@ -108,11 +114,31 @@ export async function listNovelChapters(novel_id: string, requester_id?: string)
       published_at: true,
       scheduled_publish_at: true,
       updated_at: true,
+      price_coins: true,
     },
     orderBy: { chapter_number: "asc" },
   });
 
-  return { chapters };
+  // เพิ่มภายหลัง (ตอนติดเหรียญ) — is_unlocked บอกหน้าเว็บว่าตอนไหนอ่านได้เลย (ฟรี/ซื้อแล้ว/เป็นเจ้าของ)
+  const paidIds = chapters.filter((c) => c.price_coins > 0).map((c) => c.chapter_id);
+  const owned =
+    requester_id && !isOwner && paidIds.length
+      ? new Set(
+          (
+            await prisma.chapterPurchase.findMany({
+              where: { user_id: requester_id, chapter_id: { in: paidIds } },
+              select: { chapter_id: true },
+            })
+          ).map((p) => p.chapter_id)
+        )
+      : new Set<string>();
+
+  return {
+    chapters: chapters.map((c) => ({
+      ...c,
+      is_unlocked: isOwner || c.price_coins === 0 || owned.has(c.chapter_id),
+    })),
+  };
 }
 
 /** Reference implementation — GET /chapters/:chapter_id (Public — draft เห็นเฉพาะเจ้าของ,
@@ -133,6 +159,13 @@ export async function getChapterById(chapter_id: string, requester_id?: string) 
     });
   }
 
+  // เพิ่มภายหลัง (ตอนติดเหรียญ) — ยังไม่ได้ซื้อ: ส่งข้อมูลตอนกลับไปได้ (ชื่อ/ราคา) แต่ไม่ส่งเนื้อหา
+  const locked = chapter.price_coins > 0 && !isOwner && !(await hasPurchased(requester_id, chapter_id));
+  if (locked) {
+    const { novel: _n, content: _c, ...meta } = chapter;
+    return { ...meta, content: null, locked: true };
+  }
+
   if (requester_id && !isOwner && chapter.status === "published") {
     recordReadingProgress(requester_id, chapter.novel_id, chapter.chapter_id, chapter.chapter_number).catch((err) =>
       console.error("recordReadingProgress failed:", err)
@@ -140,7 +173,90 @@ export async function getChapterById(chapter_id: string, requester_id?: string) 
   }
 
   const { novel: _novel, ...rest } = chapter;
-  return rest;
+  return { ...rest, locked: false };
+}
+
+async function hasPurchased(user_id: string | undefined, chapter_id: string) {
+  if (!user_id) return false;
+  const row = await prisma.chapterPurchase.findUnique({
+    where: { user_id_chapter_id: { user_id, chapter_id } },
+    select: { purchase_id: true },
+  });
+  return Boolean(row);
+}
+
+/** เพิ่มภายหลัง (ตอนติดเหรียญ) — POST /chapters/:chapter_id/purchase
+ *  หัก coin ผู้อ่าน → เข้ากระเป๋านักเขียนหลังหักค่าธรรมเนียม (CHAPTER_PLATFORM_FEE_PERCENT) ใน transaction
+ *  เดียวกับ lockWallets (pattern เดียวกับ gifts.service.ts sendGift) — ซื้อซ้ำ = idempotent คืนรายการเดิม */
+export async function purchaseChapter(user_id: string, chapter_id: string) {
+  const chapter = await getChapterWithNovel(chapter_id);
+  const isOwner = assertNovelVisible(chapter.novel, user_id, "Chapter not found");
+  if (chapter.status !== "published") throw ApiError.notFound("Chapter not found");
+  if (isOwner) throw ApiError.unprocessable("You already own this chapter");
+  if (chapter.price_coins <= 0) throw ApiError.unprocessable("This chapter is free");
+  if (chapter.novel.content_rating === "mature" && !(await isViewerAgeVerified(user_id))) {
+    throw ApiError.forbidden("ต้องยืนยันอายุ 18 ปีขึ้นไปก่อนถึงจะอ่านตอนนี้ได้", {
+      code: "AGE_VERIFICATION_REQUIRED",
+    });
+  }
+
+  const author_id = chapter.novel.author_id;
+  const price = chapter.price_coins;
+  const { fee, net } = splitGiftFee(price, env.CHAPTER_PLATFORM_FEE_PERCENT);
+
+  return prisma.$transaction(async (tx) => {
+    await lockWallets(tx, [user_id, author_id]);
+
+    const existing = await tx.chapterPurchase.findUnique({
+      where: { user_id_chapter_id: { user_id, chapter_id } },
+      select: { purchase_id: true, price_coins: true, created_at: true },
+    });
+    if (existing) {
+      return { ...existing, chapter_id, balance_after: await getBalance(user_id, tx), already_owned: true };
+    }
+
+    const balance = await getBalance(user_id, tx);
+    if (balance < price) {
+      throw ApiError.unprocessable("Insufficient coin balance", {
+        balance,
+        required: price,
+        missing: price - balance,
+      });
+    }
+
+    const purchase = await tx.chapterPurchase.create({
+      data: { user_id, chapter_id, price_coins: price, fee_coins: fee },
+      select: { purchase_id: true, price_coins: true, created_at: true },
+    });
+
+    const balance_after = balance - price;
+    await tx.walletTransaction.create({
+      data: {
+        user_id,
+        type: "chapter_purchase",
+        amount: price,
+        balance_after,
+        reference_id: purchase.purchase_id,
+        created_at: ledgerTimestamp(),
+      },
+    });
+
+    if (net > 0) {
+      const authorBalance = await getBalance(author_id, tx);
+      await tx.walletTransaction.create({
+        data: {
+          user_id: author_id,
+          type: "chapter_sale",
+          amount: net,
+          balance_after: authorBalance + net,
+          reference_id: purchase.purchase_id,
+          created_at: ledgerTimestamp(),
+        },
+      });
+    }
+
+    return { ...purchase, chapter_id, balance_after, already_owned: false };
+  }, WALLET_TX_OPTIONS);
 }
 
 /** เพิ่มภายหลัง (หน้า My Library / "อ่านต่อ") — จำตอนล่าสุดที่เปิดอ่าน (ตอนที่เปิดล่าสุด ไม่ใช่ตอนที่ไกลสุด
@@ -167,6 +283,7 @@ interface UpdateChapterInput {
   content?: string;
   status?: ChapterStatus;
   scheduled_publish_at?: Date;
+  price_coins?: number;
 }
 
 export async function updateChapter(chapter_id: string, user_id: string, input: UpdateChapterInput) {
@@ -184,6 +301,7 @@ export async function updateChapter(chapter_id: string, user_id: string, input: 
         ? { content: input.content, word_count: computeWordCount(input.content) }
         : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.price_coins !== undefined ? { price_coins: input.price_coins } : {}),
       ...(willPublishNow ? { published_at: new Date() } : {}),
       // เคลียร์เวลาตั้งเผยแพร่เดิมทิ้งถ้าเปลี่ยนสถานะไปเป็นอย่างอื่นที่ไม่ใช่ scheduled อีกต่อไป
       scheduled_publish_at: willSchedule ? input.scheduled_publish_at : input.status !== undefined ? null : undefined,
@@ -198,6 +316,7 @@ export async function updateChapter(chapter_id: string, user_id: string, input: 
       word_count: true,
       published_at: true,
       scheduled_publish_at: true,
+      price_coins: true,
       updated_at: true,
     },
   });
@@ -214,14 +333,20 @@ export async function deleteChapter(chapter_id: string, user_id: string) {
   const chapter = await getChapterWithNovel(chapter_id);
   if (chapter.novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
 
-  const { novel: _novel, ...snapshot } = chapter;
+  const { novel: _novel, ...row } = chapter;
 
   const trash = await prisma.$transaction(async (tx) => {
+    // เพิ่มภายหลัง (ตอนติดเหรียญ) — การซื้อของผู้อ่านถูก cascade ลบไปกับแถวตอน เก็บไว้ใน snapshot
+    // เพื่อกู้คืนพร้อมตอน (ผู้อ่านที่จ่ายแล้วไม่ต้องจ่ายซ้ำ) — ดู trash-bin.service.ts restore
+    const purchases = await tx.chapterPurchase.findMany({
+      where: { chapter_id },
+      select: { purchase_id: true, user_id: true, price_coins: true, fee_coins: true, created_at: true },
+    });
     const created = await moveToTrash(tx, {
       novel_id: chapter.novel_id,
       content_type: "chapter",
       content_ref_id: chapter.chapter_id,
-      content_snapshot: snapshot,
+      content_snapshot: { ...row, purchases },
       deleted_by: user_id,
     });
     await tx.chapter.delete({ where: { chapter_id } });

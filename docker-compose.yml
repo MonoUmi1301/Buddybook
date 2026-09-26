@@ -140,6 +140,33 @@ services:
           memory: 1536M
           cpus: "1.5"
 
+  # เพิ่มภายหลัง — Python NLP Worker (WangchanBERTa) poll /internal/nlp/pending-queue ของ api แล้วส่ง sentiment กลับ
+  # อยู่ใน profile "nlp" แยก เพราะต้องมีโฟลเดอร์โมเดล fine-tuned (~400MB อยู่นอก repo) และกินแรมมาก
+  #   เปิด: NLP_MODEL_DIR=/path/to/my_final_sentiment_model docker compose --profile app --profile nlp up -d
+  # (ตั้ง NLP_MODEL_DIR ใน .env ที่ root ก็ได้) INTERNAL_SERVICE_TOKEN อ่านจาก apps/api/.env ให้ตรงกับ api เสมอ
+  nlp-worker:
+    build:
+      context: ./apps/nlp-worker
+    image: buddybook-nlp-worker
+    profiles: ["nlp"]
+    restart: unless-stopped
+    init: true
+    env_file:
+      - apps/api/.env
+    environment:
+      API_BASE_URL: http://api:4000/api/v1
+      MODEL_PATH: /model
+      POLL_INTERVAL_SECONDS: "10"
+    volumes:
+      - ${NLP_MODEL_DIR:-./apps/nlp-worker/model}:/model:ro
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "1.0"
+
 volumes:
   pgdata:
   neo4jdata:

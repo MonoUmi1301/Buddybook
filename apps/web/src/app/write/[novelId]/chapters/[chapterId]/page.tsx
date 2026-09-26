@@ -17,6 +17,7 @@ interface ChapterDetail {
   title: string;
   content: string | null;
   status: "draft" | "published" | "scheduled" | "hidden";
+  price_coins?: number;
 }
 
 export default async function ChapterEditorPage({
@@ -50,6 +51,7 @@ export default async function ChapterEditorPage({
       initialTitle={chapter.title}
       initialContent={chapter.content ?? ""}
       initialStatus={chapter.status}
+      initialPriceCoins={chapter.price_coins ?? 0}
     />
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -73,6 +73,8 @@ interface ReaderContentProps {
   nextChapterId?: string;
   /** เพิ่มภายหลัง (Gift donations) — กล่อง "ชอบตอนนี้ไหม?" ท้ายตอน (ไม่ส่ง = นิยายปิดรับของขวัญ) */
   gift?: { target: GiftTarget; viewer: { user_id: string; name: string } | null };
+  /** เพิ่มภายหลัง (ตอนติดเหรียญ) — ตอนที่ยังไม่ได้ซื้อ: แสดง panel นี้แทนเนื้อหา */
+  lockedPanel?: ReactNode;
 }
 
 /** เพิ่มภายหลัง (audit fix) — Toolbar ปรับฟอนต์/ขนาดตัวอักษร/ธีมตอนอ่าน แบบเดียวกับที่เจอในแอพอ่าน
@@ -97,6 +99,7 @@ export function ReaderContent({
   prevChapterId,
   nextChapterId,
   gift,
+  lockedPanel,
 }: ReaderContentProps) {
   const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
   const [open, setOpen] = useState(false);
@@ -142,15 +145,17 @@ export function ReaderContent({
           โดยนักเขียน {authorUsername}
         </p>
 
-        <article
-          className="prose prose-neutral mt-6 max-w-none transition-colors"
-          style={{
-            fontFamily: activeFont.cssVar,
-            fontSize: `${activeSize.px}px`,
-            color: activeTheme.text,
-          }}
-          dangerouslySetInnerHTML={{ __html: content }}
-        />
+        {lockedPanel ?? (
+          <article
+            className="prose prose-neutral mt-6 max-w-none transition-colors"
+            style={{
+              fontFamily: activeFont.cssVar,
+              fontSize: `${activeSize.px}px`,
+              color: activeTheme.text,
+            }}
+            dangerouslySetInnerHTML={{ __html: content }}
+          />
+        )}
 
         {gift && gift.viewer?.user_id !== gift.target.authorId && (
           <div

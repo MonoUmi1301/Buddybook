@@ -8,6 +8,8 @@ const router = Router();
 router.get("/:chapter_id", attachUserIfPresent, asyncHandler(chaptersController.getById));
 router.patch("/:chapter_id", requireAuth, asyncHandler(chaptersController.update));
 router.delete("/:chapter_id", requireAuth, asyncHandler(chaptersController.remove));
+// เพิ่มภายหลัง (ตอนติดเหรียญ) — ปลดล็อกตอนด้วย coin
+router.post("/:chapter_id/purchase", requireAuth, asyncHandler(chaptersController.purchase));
 
 // Auto-save ทุก 30 วินาที — เขียนลง chapter_versions (is_autosave=true)
 router.patch("/:chapter_id/autosave", requireAuth, asyncHandler(chaptersController.autosave));

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API — typecheck, lint, tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: buddybook
+          POSTGRES_PASSWORD: buddybook
+          POSTGRES_DB: buddybook
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U buddybook -d buddybook"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://buddybook:buddybook@localhost:5432/buddybook?schema=public
+      # psql rejects Prisma's ?schema= query param, so it gets a plain URL
+      PSQL_URL: postgresql://buddybook:buddybook@localhost:5432/buddybook
+      # Neo4j is not needed by the test suite; the driver only connects lazily.
+      NEO4J_URI: bolt://localhost:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: unused-in-ci
+      JWT_SECRET: ci-jwt-secret-not-used-anywhere-else
+      JWT_REFRESH_SECRET: ci-jwt-refresh-secret-not-used-anywhere-else
+      INTERNAL_SERVICE_TOKEN: ci-internal-token
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Prepare database
+        working-directory: apps/api
+        run: |
+          psql "$PSQL_URL" -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          npx prisma generate
+          npx prisma migrate deploy
+          psql "$PSQL_URL" -f prisma/migrations_manual/checks.sql
+          npx tsx prisma/seed.ts
+      - run: npm run typecheck --workspace=apps/api
+      - run: npm run lint --workspace=apps/api
+      - run: npm test --workspace=apps/api
+
+  web:
+    name: Web — typecheck, lint, build
+    runs-on: ubuntu-latest
+    env:
+      API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck --workspace=apps/web
+      - run: npm run lint --workspace=apps/web
+      - run: npm run build --workspace=apps/web
+
+  nlp-worker:
+    name: NLP worker — syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m py_compile apps/nlp-worker/src/*.py
