@@ -49,3 +49,6 @@ coverage/
 
 # NLP worker model folder (mounted into the nlp-worker container, ~400MB)
 apps/nlp-worker/model/
+
+# pg_dump ของ dev DB — ข้อมูล ห้าม commit
+backups/
