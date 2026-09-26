@@ -14,6 +14,7 @@ import { isEmailConfigured, sendOtpEmail, sendPasswordResetEmail } from "@/lib/e
 import { generateTotpSecret, buildTotpUri, generateTotpQrCodeDataUrl, verifyTotpCode } from "@/lib/totp";
 import { env } from "@/config/env";
 import type { OAuthProfile } from "@/lib/oauthProfile";
+import { normalizeEmail } from "@/lib/normalizeEmail";
 
 // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — เดิม 10 rounds ยังปลอดภัยอยู่ (ขั้นต่ำที่ OWASP
 // แนะนำ) แต่ 12 เป็นค่าที่แนะนำกันทั่วไปมากกว่าสำหรับปี 2026 (เผื่อ headroom กับฮาร์ดแวร์ที่เร็วขึ้น)
@@ -40,7 +41,8 @@ function generateOtpCode(): string {
 /** Reference implementation — POST /auth/register/request-otp
  *  ยังไม่สร้างแถว User ใด ๆ — แค่เก็บข้อมูลสมัครไว้ชั่วคราวใน PendingRegistration แล้วส่ง OTP
  *  ไปอีเมล รอ verifyRegistrationOtp ยืนยันถูกต้องก่อนถึงจะสร้างบัญชีจริง */
-export async function requestRegistrationOtp({ username, email, password }: RegisterInput) {
+export async function requestRegistrationOtp({ username, email: rawEmail, password }: RegisterInput) {
+  const email = normalizeEmail(rawEmail);
   if (!isEmailConfigured()) {
     throw ApiError.badRequest("ระบบส่งอีเมลยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ");
   }
@@ -99,7 +101,8 @@ interface VerifyOtpInput {
 /** Reference implementation — POST /auth/register/verify-otp
  *  กรอก OTP ถูกต้อง → สร้างบัญชีจริงจากข้อมูลที่เก็บไว้ + ลบ PendingRegistration ทิ้ง แล้ว
  *  ออก token ให้เลย (auto-login) เพราะยืนยันทั้งอีเมลและรหัสผ่านมาแล้วครบตามเงื่อนไข login ปกติ */
-export async function verifyRegistrationOtp({ email, otp }: VerifyOtpInput) {
+export async function verifyRegistrationOtp({ email: rawEmail, otp }: VerifyOtpInput) {
+  const email = normalizeEmail(rawEmail);
   const pending = await prisma.pendingRegistration.findUnique({ where: { email } });
   if (!pending) {
     throw ApiError.badRequest("ไม่พบคำขอสมัครสมาชิกสำหรับอีเมลนี้ กรุณาสมัครใหม่");
@@ -147,7 +150,7 @@ interface LoginInput {
 }
 
 export async function loginUser({ email, password }: LoginInput) {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
 
   if (!user || !user.password_hash) {
     // ข้อความเดียวกันไม่ว่า email จะมีอยู่จริงหรือไม่ (กัน user enumeration)
@@ -266,29 +269,50 @@ async function generateUniqueUsername(base: string): Promise<string> {
   throw ApiError.conflict("Could not generate a unique username");
 }
 
-/** Reference implementation — login/register ผ่าน OAuth (Google/LINE, GET /auth/oauth/:provider/callback)
- *  ผูกบัญชีด้วย (oauth_provider, oauth_id) เป็นหลัก — ถ้ายังไม่เคยมี แต่ email ตรงกับบัญชี
- *  password เดิมที่มีอยู่แล้ว ให้ผูก oauth เข้ากับบัญชีเดิมแทนสร้างใหม่ซ้ำ (กัน 2 บัญชีคนละรหัส
- *  ผ่านอีเมลเดียวกัน) */
+const oauthProviderLabel: Record<OAuthProfile["provider"], string> = {
+  google: "Google",
+  facebook: "Facebook",
+  line: "LINE",
+};
+
+/** Reference implementation — login/register ผ่าน OAuth (Google/LINE/Facebook, POST /auth/oauth/:provider/callback)
+ *  ผูกบัญชีด้วย (oauth_provider, oauth_id) เป็นหลัก — ถ้ายังไม่เคยมี แต่ email ตรงกับบัญชีเดิม จะผูกเข้ากับ
+ *  บัญชีเดิมก็ต่อเมื่อ (audit fix — account takeover):
+ *   - provider ยืนยันอีเมลแล้ว (email_verified) — ไม่งั้นใครตั้งอีเมลของเหยื่อในบัญชี provider ก็เข้าบัญชีเหยื่อได้
+ *   - บัญชีเดิมยังไม่ผูกกับ provider อื่น — users มีช่อง oauth_provider/oauth_id ชุดเดียว เขียนทับแล้ว
+ *     provider เดิมจะหลุด (ล็อกอินวิธีเดิมไม่ได้อีก) จึงปฏิเสธแทน ให้ล็อกอินด้วยวิธีเดิม
+ *  บัญชีที่เปิด 2FA ไว้ต้องผ่านรหัสจากแอปก่อนเสมอ เหมือนล็อกอินด้วยรหัสผ่าน (คืน challenge_token แทน token จริง
+ *  แล้วยืนยันต่อที่ POST /auth/login/verify-2fa) */
 export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
+  const email = normalizeEmail(profile.email);
   let user = await prisma.user.findUnique({
     where: { oauth_provider_oauth_id: { oauth_provider: profile.provider, oauth_id: profile.sub } },
   });
 
   if (!user) {
-    const existingByEmail = await prisma.user.findUnique({ where: { email: profile.email } });
+    const existingByEmail = await prisma.user.findUnique({ where: { email } });
 
     if (existingByEmail) {
+      if (!profile.email_verified) {
+        throw ApiError.conflict(
+          `อีเมลนี้มีบัญชีอยู่แล้ว แต่ ${oauthProviderLabel[profile.provider]} ไม่ได้ยืนยันอีเมลนี้ กรุณาเข้าสู่ระบบด้วยวิธีเดิม`
+        );
+      }
+      if (existingByEmail.oauth_provider) {
+        throw ApiError.conflict(
+          `อีเมลนี้ผูกกับการเข้าสู่ระบบด้วย ${oauthProviderLabel[existingByEmail.oauth_provider]} อยู่แล้ว กรุณาเข้าสู่ระบบด้วยวิธีเดิม`
+        );
+      }
       user = await prisma.user.update({
         where: { user_id: existingByEmail.user_id },
         data: { oauth_provider: profile.provider, oauth_id: profile.sub },
       });
     } else {
-      const username = await generateUniqueUsername(profile.email.split("@")[0]);
+      const username = await generateUniqueUsername(email.split("@")[0]);
       user = await prisma.user.create({
         data: {
           username,
-          email: profile.email,
+          email,
           oauth_provider: profile.provider,
           oauth_id: profile.sub,
           avatar_url: profile.picture,
@@ -301,9 +325,14 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
     throw ApiError.forbidden("This account has been suspended");
   }
 
+  if (user.totp_enabled) {
+    return { requires_2fa: true as const, challenge_token: signTwoFactorChallengeToken(user.user_id) };
+  }
+
   const tokenPayload = { user_id: user.user_id, role: user.role };
 
   return {
+    requires_2fa: false as const,
     access_token: signAccessToken(tokenPayload),
     refresh_token: signRefreshToken(tokenPayload),
     user: { user_id: user.user_id, username: user.username, role: user.role },
@@ -315,7 +344,8 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
  *  reset_link ตรง ๆ ใน response แบบเดิม (ซึ่งเท่ากับเปิดเผยว่าอีเมลนี้มีบัญชีอยู่จริงหรือไม่ — ตอนนี้ปิด
  *  ช่องโหว่นั้นแล้วเพราะคืน response หน้าตาเดียวกันเสมอไม่ว่าอีเมลจะมีอยู่จริงหรือไม่)
  *  token เซ็นด้วย JWT_REFRESH_SECRET แยกจาก access token หมดอายุ 30 นาที (ดู signResetToken) */
-export async function requestPasswordReset(email: string) {
+export async function requestPasswordReset(rawEmail: string) {
+  const email = normalizeEmail(rawEmail);
   const user = await prisma.user.findUnique({ where: { email }, select: { user_id: true, password_hash: true } });
   if (!user || !user.password_hash) {
     // ไม่มีบัญชี หรือเป็นบัญชี OAuth ล้วน (ไม่มีรหัสผ่านให้ reset) — ทำเหมือนสำเร็จเสมอ ไม่ throw

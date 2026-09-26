@@ -26,23 +26,24 @@ export const passwordSchema = z
 
 export const registerSchema = z.object({
   username: z.string().trim().min(3).max(50),
-  email: z.string().trim().email().max(255),
+  email: z.string().trim().toLowerCase().email().max(255),
   password: passwordSchema,
 });
 
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
 });
 
 export const verifyRegisterOtpSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().toLowerCase().email(),
   otp: z.string().trim().length(6),
 });
 
 // เพิ่มภายหลัง (audit fix — 2FA) — ยืนยันขั้นที่สองตอนล็อกอิน (รหัสจากแอป Authenticator)
 export const verifyLogin2faSchema = z.object({
-  challenge_token: z.string().min(1),
+  // ไม่ส่งมา = ล็อกอินผ่าน OAuth (challenge อยู่ใน httpOnly cookie bb_oauth_2fa — ดู lib/api/oauth.ts)
+  challenge_token: z.string().min(1).optional(),
   code: z.string().trim().length(6),
 });
 

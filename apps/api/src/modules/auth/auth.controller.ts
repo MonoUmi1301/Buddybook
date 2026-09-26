@@ -19,10 +19,11 @@ import { buildFacebookAuthUrl, exchangeFacebookCode } from "@/lib/facebookOAuth"
 import type { OAuthProfile } from "@/lib/oauthProfile";
 import { ApiError } from "@/utils/ApiError";
 import { passwordSchema } from "@/lib/passwordPolicy";
+import { emailSchema } from "@/lib/normalizeEmail";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(50),
-  email: z.string().email(),
+  email: emailSchema,
   password: passwordSchema,
 });
 
@@ -33,7 +34,7 @@ export async function requestRegisterOtp(req: Request, res: Response) {
 }
 
 const verifyOtpSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   otp: z.string().length(6),
 });
 
@@ -44,7 +45,7 @@ export async function verifyRegisterOtp(req: Request, res: Response) {
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: emailSchema,
   password: z.string().min(1),
 });
 
@@ -116,7 +117,7 @@ export async function logout(_req: Request, res: Response) {
   res.status(204).send();
 }
 
-const forgotPasswordSchema = z.object({ email: z.string().email() });
+const forgotPasswordSchema = z.object({ email: emailSchema });
 
 export async function forgotPassword(req: Request, res: Response) {
   const { email } = forgotPasswordSchema.parse(req.body);

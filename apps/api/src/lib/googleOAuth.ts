@@ -11,20 +11,37 @@ export function isGoogleOAuthConfigured(): boolean {
 
 const REDIRECT_URI = () => `${env.APP_URL}/api/v1/auth/oauth/google/callback`;
 
-/** เซ็น state ด้วย HMAC(JWT_SECRET) แทนการเก็บ session ฝั่ง server (สถาปัตยกรรมนี้ stateless
- *  ล้วน ใช้ JWT อย่างเดียว ไม่มี session store) — ป้องกัน CSRF โดยเช็คลายเซ็นตอน callback
- *  แทนที่จะเทียบกับค่าที่จำไว้ */
-export function createOAuthState(): string {
-  const nonce = crypto.randomBytes(16).toString("hex");
-  const signature = crypto.createHmac("sha256", env.JWT_SECRET).update(nonce).digest("hex");
-  return `${nonce}.${signature}`;
+/** อายุของ state — ต้องตรงกับ maxAge ของ cookie bb_oauth_state ฝั่ง apps/web */
+export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const CLOCK_SKEW_MS = 60 * 1000;
+
+function signState(payload: string) {
+  return crypto.createHmac("sha256", env.JWT_SECRET).update(payload).digest("hex");
 }
 
-export function verifyOAuthState(state: string): boolean {
-  const [nonce, signature] = state.split(".");
-  if (!nonce || !signature) return false;
-  const expected = crypto.createHmac("sha256", env.JWT_SECRET).update(nonce).digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+/** state = "<nonce>.<issuedAtMs>.<HMAC(JWT_SECRET)>" — ลายเซ็นกันปลอม, issuedAt ทำให้หมดอายุได้
+ *  ส่วนการผูกกับเบราว์เซอร์ที่เริ่ม flow ทำฝั่ง apps/web: เก็บ state เดียวกันไว้ใน httpOnly cookie ตอนเริ่ม
+ *  แล้วเทียบกับ ?state= ตอน callback (กัน login CSRF — เอา state ที่ขอมาเองไปให้เหยื่อใช้ไม่ได้) */
+export function createOAuthState(now = Date.now()): string {
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const payload = `${nonce}.${now}`;
+  return `${payload}.${signState(payload)}`;
+}
+
+/** false ทุกกรณีที่ไม่ผ่าน (รูปแบบผิด ความยาวผิด ลายเซ็นผิด หมดอายุ) — ไม่ throw ให้ controller ตอบ 401 เอง */
+export function verifyOAuthState(state: string, now = Date.now()): boolean {
+  const parts = state.split(".");
+  if (parts.length !== 3) return false;
+  const [nonce, issuedAtRaw, signature] = parts;
+  if (!/^[0-9a-f]{32}$/.test(nonce) || !/^\d{1,15}$/.test(issuedAtRaw)) return false;
+
+  const expected = Buffer.from(signState(`${nonce}.${issuedAtRaw}`), "utf8");
+  const actual = Buffer.from(signature, "utf8");
+  // timingSafeEqual throw RangeError ถ้าความยาวไม่เท่ากัน (เดิมกลายเป็น 500) — เช็คก่อนเสมอ
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return false;
+
+  const issuedAt = Number(issuedAtRaw);
+  return issuedAt <= now + CLOCK_SKEW_MS && now - issuedAt <= OAUTH_STATE_TTL_MS;
 }
 
 export function buildGoogleAuthUrl(state: string): string {
@@ -86,5 +103,13 @@ export async function exchangeGoogleCode(code: string): Promise<OAuthProfile> {
     throw ApiError.unauthorized("Could not fetch Google profile");
   }
 
-  return { provider: "google", sub: profile.sub, email: profile.email, name: profile.name, picture: profile.picture };
+  return {
+    provider: "google",
+    sub: profile.sub,
+    email: profile.email,
+    name: profile.name,
+    picture: profile.picture,
+    // userinfo คืน email_verified มาเสมอ — เชื่อเฉพาะ true ตรง ๆ เท่านั้น
+    email_verified: profile.email_verified === true,
+  };
 }

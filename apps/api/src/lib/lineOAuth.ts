@@ -75,5 +75,7 @@ export async function exchangeLineCode(code: string): Promise<OAuthProfile> {
     email: claims.email ?? `line_${claims.sub}@line.buddybook.local`,
     name: claims.name ?? "LINE User",
     picture: claims.picture ?? null,
+    // LINE ไม่มี claim email_verified — ถือว่ายังไม่ยืนยัน (ไม่ใช้ผูกกับบัญชีเดิม)
+    email_verified: false,
   };
 }

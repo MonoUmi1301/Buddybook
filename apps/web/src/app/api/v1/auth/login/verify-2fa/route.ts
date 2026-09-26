@@ -1,9 +1,11 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { callApi } from "@/lib/api/proxy";
 import { parseJsonBody } from "@/lib/api/validate";
 import { verifyLogin2faSchema } from "@/lib/api/schemas";
 import { jsonOk } from "@/lib/api/http";
 import { setAuthCookies } from "@/lib/api/auth";
+import { OAUTH_2FA_COOKIE, clearOAuth2faCookie } from "@/lib/api/oauth";
 
 interface VerifyLogin2faResponse {
   access_token: string;
@@ -24,13 +26,23 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, verifyLogin2faSchema);
   if ("error" in parsed) return parsed.error;
 
-  const result = await callApi({ method: "POST", path: "/auth/login/verify-2fa", body: parsed.data });
+  // ล็อกอินด้วยรหัสผ่าน: challenge_token มากับ body / ล็อกอินผ่าน OAuth: อยู่ใน httpOnly cookie ที่ callback ตั้งไว้
+  const challenge_token = parsed.data.challenge_token ?? cookies().get(OAUTH_2FA_COOKIE)?.value;
+  if (!challenge_token) {
+    return NextResponse.json({ error: "เซสชันหมดอายุ กรุณาล็อกอินใหม่อีกครั้ง" }, { status: 401 });
+  }
+
+  const result = await callApi({
+    method: "POST",
+    path: "/auth/login/verify-2fa",
+    body: { challenge_token, code: parsed.data.code },
+  });
   if ("error" in result) return result.error;
 
   if (result.status !== 200 || !isVerifyLogin2faResponse(result.json)) {
     return NextResponse.json(result.json ?? { error: "Verification failed" }, { status: result.status });
   }
 
-  const response = jsonOk({ user: result.json.user }, 200);
+  const response = clearOAuth2faCookie(jsonOk({ user: result.json.user }, 200));
   return setAuthCookies(response, result.json);
 }

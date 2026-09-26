@@ -13,6 +13,10 @@ import { formatApiError } from "@/lib/formatApiError";
 
 interface AuthFormProps {
   mode: "login" | "register";
+  /** มาจาก OAuth callback ของบัญชีที่เปิด 2FA — เปิดขั้นกรอกรหัสเลย (challenge อยู่ใน httpOnly cookie) */
+  oauthTwoFactor?: boolean;
+  /** ข้อความ error จาก ?error= ของ OAuth callback */
+  initialError?: string | null;
 }
 
 const OTP_RESEND_COOLDOWN_SEC = 60;
@@ -30,11 +34,11 @@ const OTP_RESEND_COOLDOWN_SEC = 60;
  * "form" (กรอกข้อมูลสมัคร → ขอ OTP) แล้วค่อย "otp" (กรอกรหัส 6 หลักที่ส่งไปอีเมล → สร้างบัญชีจริง
  * + auto-login) โหมด login ไม่เปลี่ยนแปลง ยังเป็นฟอร์มขั้นตอนเดียวเหมือนเดิม
  */
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: AuthFormProps) {
   const isLogin = mode === "login";
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — ต้อง track เป็น state (ไม่ใช่แค่ FormData ตอน
   // submit เหมือนเดิม) เพื่อโชว์ PasswordRequirementsHint แบบสด ๆ ตอนพิมพ์ (เฉพาะโหมด register)
   const [password, setPassword] = useState("");
@@ -42,7 +46,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   // (login ไม่ต้องมี เพราะเป็นรหัสที่ตั้งไว้แล้ว ไม่ใช่ตอนสร้างใหม่)
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [step, setStep] = useState<"form" | "otp" | "2fa">("form");
+  const [step, setStep] = useState<"form" | "otp" | "2fa">(oauthTwoFactor ? "2fa" : "form");
   // เพิ่มภายหลัง (audit fix — 2FA) — ตอนล็อกอิน ถ้าบัญชีเปิด 2FA ไว้ backend จะตอบ challenge_token
   // แทน token จริง ต้องเก็บไว้ส่งต่อพร้อมรหัส 6 หลักจากแอป Authenticator ที่ /login/verify-2fa
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
@@ -145,14 +149,15 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   async function handleVerifyTwoFactor(e: React.FormEvent) {
     e.preventDefault();
-    if (!challengeToken) return;
+    if (!challengeToken && !oauthTwoFactor) return;
     setError(null);
     setVerifying2fa(true);
     try {
       const res = await fetch("/api/v1/auth/login/verify-2fa", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challenge_token: challengeToken, code: twoFactorCode }),
+        // OAuth: ไม่ส่ง challenge_token — route handler อ่านจาก httpOnly cookie เอง
+        body: JSON.stringify(challengeToken ? { challenge_token: challengeToken, code: twoFactorCode } : { code: twoFactorCode }),
       });
       const json = await res.json().catch(() => null);
 
