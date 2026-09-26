@@ -93,7 +93,7 @@ export function ReviewsPanel({ novelId, reviews, isLoggedIn }: ReviewsPanelProps
       ) : (
         <>
           {reviews.slice(0, visible).map((r) => (
-            <ReviewCard key={r.id} review={r} />
+            <ReviewCard key={r.id} review={r} isLoggedIn={isLoggedIn} />
           ))}
           {reviews.length > visible && (
             <button

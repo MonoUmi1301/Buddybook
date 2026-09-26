@@ -4,6 +4,8 @@ import { Footer } from "@/components/layout/Footer";
 import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
 import { CommentSection, type CommentNode } from "@/components/novel-detail/CommentSection";
 import { ReaderContent } from "@/components/reader/ReaderContent";
+import { ChapterUnlockPanel } from "@/components/reader/ChapterUnlockPanel";
+import { ReportButton } from "@/components/social/ReportButton";
 import { BackButton } from "@/components/ui/BackButton";
 import { callApi, type ApiResult } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
@@ -33,6 +35,9 @@ interface ChapterDetail {
   content: string | null;
   status: "draft" | "published";
   word_count: number;
+  /** เพิ่มภายหลัง (ตอนติดเหรียญ) */
+  price_coins: number;
+  locked: boolean;
 }
 
 interface ChapterListItem {
@@ -109,6 +114,11 @@ export default async function ChapterReaderPage({
           content={chapter.content ?? ""}
           prevChapterId={prevChapter?.chapter_id}
           nextChapterId={nextChapter?.chapter_id}
+          lockedPanel={
+            chapter.locked ? (
+              <ChapterUnlockPanel chapterId={chapter.chapter_id} priceCoins={chapter.price_coins} isLoggedIn={Boolean(user)} />
+            ) : undefined
+          }
           gift={
             novel.allow_donations
               ? {
@@ -126,6 +136,11 @@ export default async function ChapterReaderPage({
         />
 
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 sm:px-6 lg:px-8">
+          {user?.user_id !== novel.author.user_id && (
+            <div className="mt-4 flex justify-end">
+              <ReportButton targetType="chapter" targetId={chapter.chapter_id} isLoggedIn={Boolean(user)} />
+            </div>
+          )}
           <div className="mt-8">
             <CommentSection chapterId={chapter.chapter_id} comments={comments} isLoggedIn={Boolean(user)} />
           </div>

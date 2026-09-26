@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, BookPlus, Check, Eye, Heart, Star, Type } from "lucide-react";
 import { ShareButton } from "@/components/ui/ShareButton";
+import { ReportButton } from "@/components/social/ReportButton";
 import { GiftButton } from "@/components/gifts/GiftButton";
 import { cn } from "@/lib/cn";
 import { getPenName } from "@/lib/displayName";
@@ -294,6 +295,9 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
           </button>
 
           <ShareButton title={novel.title} />
+          {viewer?.user_id !== novel.author.user_id && (
+            <ReportButton targetType="novel" targetId={novel.novel_id} isLoggedIn={isLoggedIn} variant="icon" className="px-2" />
+          )}
         </div>
       </div>
     </section>

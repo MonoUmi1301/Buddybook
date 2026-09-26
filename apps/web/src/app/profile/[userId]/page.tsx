@@ -14,6 +14,8 @@ import { SupporterBadges } from "@/components/gifts/SupporterBadges";
 import type { PublicGifts, SupporterBadge } from "@/lib/gifts";
 import { callApi } from "@/lib/api/proxy";
 import { getCurrentUser } from "@/lib/api/session";
+import { FollowButton } from "@/components/social/FollowButton";
+import { ReportButton } from "@/components/social/ReportButton";
 import { getPenName } from "@/lib/displayName";
 import { formatCompactNumber, formatThaiMonthYear } from "@/lib/format";
 
@@ -188,6 +190,7 @@ export default async function ProfilePage({ params }: { params: { userId: string
                       แก้ไขโปรไฟล์
                     </Link>
                   )}
+                  {isWriter && !isOwnProfile && <FollowButton authorId={profile.user_id} isLoggedIn={Boolean(user)} />}
                   {isWriter && !isOwnProfile && (
                     <GiftButton
                       variant="profile"
@@ -197,6 +200,7 @@ export default async function ProfilePage({ params }: { params: { userId: string
                     />
                   )}
                   <ShareButton title={name} label="แชร์โปรไฟล์" />
+                  {!isOwnProfile && <ReportButton targetType="user" targetId={profile.user_id} isLoggedIn={Boolean(user)} variant="icon" className="px-2" />}
                 </div>
               </div>
 

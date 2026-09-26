@@ -288,6 +288,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
               bio={authorProfile?.bio}
               novelCount={authorProfile?.novel_count}
               totalViews={authorProfile?.novels.reduce((s, n) => s + n.view_count, 0)}
+              viewerId={user?.user_id}
             />
             {novel.allow_donations && (
               <ReaderSupportCard

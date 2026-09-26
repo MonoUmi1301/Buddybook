@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, BookOpen, Gift, MessageCircle } from "lucide-react";
+import { Bell, BookOpen, Gift, MessageCircle, UserPlus } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
 
 interface NotificationItem {
   notification_id: string;
-  type: "comment" | "reply" | "donation" | "system" | "new_chapter";
+  type: "comment" | "reply" | "donation" | "system" | "new_chapter" | "new_follower";
   content: string;
   link_url: string | null;
   is_read: boolean;
@@ -21,7 +21,8 @@ const tabFilter: Record<"updates" | "comments" | "activity", NotificationItem["t
   // เช่นเดียวกับ system
   updates: ["system", "new_chapter"],
   comments: ["comment", "reply"],
-  activity: ["donation"],
+  // เพิ่มภายหลัง (ติดตามนักเขียน) — มีผู้ติดตามใหม่
+  activity: ["donation", "new_follower"],
 };
 
 const tabs: { key: keyof typeof tabFilter; label: string }[] = [
@@ -36,6 +37,7 @@ const tabIcon: Record<NotificationItem["type"], typeof Bell> = {
   donation: Gift,
   system: Bell,
   new_chapter: BookOpen,
+  new_follower: UserPlus,
 };
 
 function timeAgo(iso: string): string {
