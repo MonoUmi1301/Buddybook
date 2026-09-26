@@ -9,6 +9,8 @@ import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { formatRelativeThai } from "@/lib/format";
 import { getPenName } from "@/lib/displayName";
 import { continueHref, coverOf, progressPercent, type ContinueReadingItem } from "@/lib/library";
+import Image from "next/image";
+import { CAROUSEL_COVER_SIZES } from "@/lib/library";
 
 interface ContinueSlide extends CoverflowSlide {
   href: string;
@@ -93,8 +95,15 @@ export function ContinueReadingCoverflow({ items }: { items: ContinueReadingItem
 export function ProgressCover({ slide }: { slide: { src: string; alt: string; percent: number } }) {
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก + carousel วาด transform เอง */}
-      <img src={slide.src} alt={slide.alt} draggable={false} className="h-full w-full select-none object-cover" />
+      <Image
+        src={slide.src}
+        alt={slide.alt}
+        width={400}
+        height={600}
+        sizes={CAROUSEL_COVER_SIZES}
+        draggable={false}
+        className="h-full w-full select-none object-cover"
+      />
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8">
         <div
           className="h-1.5 overflow-hidden rounded-pill bg-white/30"

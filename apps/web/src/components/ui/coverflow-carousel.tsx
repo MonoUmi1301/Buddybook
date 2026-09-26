@@ -1,6 +1,8 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
+import { CAROUSEL_COVER_SIZES } from "@/lib/library";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/cn";
@@ -100,7 +102,16 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
   const dragRef = React.useRef<{ id: number; x: number; startX: number; pos: number; v: number; t: number } | null>(
     null
   );
-  const pausedRef = React.useRef({ hover: false, focus: false, drag: false });
+  // offscreen: คารูเซลเลื่อนพ้นจอแล้ว — autoplay หยุด ไม่วาดแอนิเมชันที่ไม่มีใครเห็น (ดู IntersectionObserver ด้านล่าง)
+  const pausedRef = React.useRef({ hover: false, focus: false, drag: false, offscreen: false });
+
+  // เปลี่ยนภายหลัง (perf) — will-change เฉพาะตอนกำลังขยับ (เดิมติดทุกการ์ดตลอดเวลา = ทุกใบเป็น compositor
+  // layer ค้างไว้ กินหน่วยความจำ GPU แม้คารูเซลนิ่ง)
+  const setAnimating = React.useCallback((on: boolean) => {
+    cardRefs.current.forEach((card) => {
+      if (card) card.style.willChange = on ? "transform" : "";
+    });
+  }, []);
 
   const [selected, setSelected] = React.useState(0);
 
@@ -148,15 +159,18 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
         posRef.current = target;
         paint();
         rafRef.current = null;
+        setAnimating(false);
         return;
       }
 
+      setAnimating(true);
       const step = () => {
         const remaining = target - posRef.current;
         if (Math.abs(remaining) < 0.0004) {
           posRef.current = target;
           paint();
           rafRef.current = null;
+          setAnimating(false);
           return;
         }
         posRef.current += remaining * 0.16;
@@ -165,7 +179,7 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
       };
       rafRef.current = requestAnimationFrame(step);
     },
-    [indexAt, paint, reducedMotion]
+    [indexAt, paint, reducedMotion, setAnimating]
   );
 
   const clamp = React.useCallback((pos: number) => (loop ? pos : Math.max(0, Math.min(count - 1, pos))), [count, loop]);
@@ -189,6 +203,7 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
     event.currentTarget.setPointerCapture(event.pointerId);
     targetRef.current = posRef.current;
     pausedRef.current.drag = true;
+    setAnimating(true);
     dragRef.current = {
       id: event.pointerId,
       x: event.clientX,
@@ -275,12 +290,23 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- แจ้งเฉพาะตอน selected เปลี่ยน
   }, [selected]);
 
+  // เพิ่มภายหลัง (perf) — หยุด autoplay เมื่อคารูเซลอยู่นอกจอ (หน้าแรกมีหลายตัว เลื่อนลงไปแล้วตัวบนยังหมุนวาดเฟรมอยู่)
+  React.useEffect(() => {
+    const frame = frameRef.current;
+    if (!autoplay || !frame || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      pausedRef.current.offscreen = !entry.isIntersecting;
+    });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [autoplay]);
+
   // autoplay — ไม่ขยับถ้าผู้ใช้กำลังดู/ใช้อยู่ หรือแท็บถูกซ่อน หรือขอลดการเคลื่อนไหว
   React.useEffect(() => {
     if (!autoplay || count < 2 || reducedMotion) return;
     const timer = window.setInterval(() => {
       const p = pausedRef.current;
-      if (p.hover || p.focus || p.drag || document.hidden) return;
+      if (p.hover || p.focus || p.drag || p.offscreen || document.hidden) return;
       nudge(1);
     }, autoplay);
     return () => window.clearInterval(timer);
@@ -343,7 +369,7 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
                 aria-label={`${index + 1} จาก ${count}${slide.title ? ` — ${slide.title}` : ""}`}
                 aria-current={index === selected ? "true" : undefined}
                 className={cn(
-                  "absolute left-1/2 top-0 overflow-hidden rounded-2xl bg-neutral-100 shadow-xl will-change-transform",
+                  "absolute left-1/2 top-0 overflow-hidden rounded-2xl bg-neutral-100 shadow-xl",
                   cardClassName
                 )}
                 style={{ width: "var(--cf-card)", aspectRatio }}
@@ -351,8 +377,15 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
                 {renderCard ? (
                   renderCard(slide, index, index === selected)
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element -- ปกเป็น URL ภายนอก + transform วาดเอง
-                  <img src={slide.src} alt={slide.alt} draggable={false} className="h-full w-full select-none object-cover" />
+                  <Image
+                    src={slide.src}
+                    alt={slide.alt}
+                    width={400}
+                    height={600}
+                    sizes={CAROUSEL_COVER_SIZES}
+                    draggable={false}
+                    className="h-full w-full select-none object-cover"
+                  />
                 )}
               </div>
             ))}

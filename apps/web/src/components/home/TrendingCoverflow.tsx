@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { CoverflowCarousel, type CoverflowSlide } from "@/components/ui/coverflow-carousel";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import Image from "next/image";
+import { CAROUSEL_COVER_SIZES } from "@/lib/library";
 
 export interface TrendingSlide extends CoverflowSlide {
   href: string;
@@ -68,8 +70,15 @@ export function TrendingCoverflow({ slides, seeAllHref }: TrendingCoverflowProps
           onActivate={(i) => router.push(slides[i].href)}
           renderCard={(slide) => (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก + carousel วาด transform เอง */}
-              <img src={slide.src} alt={slide.alt} draggable={false} className="h-full w-full select-none object-cover" />
+              <Image
+                src={slide.src}
+                alt={slide.alt}
+                width={400}
+                height={600}
+                sizes={CAROUSEL_COVER_SIZES}
+                draggable={false}
+                className="h-full w-full select-none object-cover"
+              />
               <span className="absolute left-2 top-2 rounded-lg bg-black/65 px-2 py-0.5 text-sm font-bold text-white backdrop-blur">
                 #{slide.rank}
               </span>

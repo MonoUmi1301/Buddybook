@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/cn";
@@ -33,6 +34,27 @@ const FALLBACK_IMAGE =
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="600"><rect width="100%" height="100%" fill="#d4d4d4"/></svg>'
   );
+
+/** เปลี่ยนภายหลัง (perf) — next/image แทน <img> (เดิมโหลดปกต้นฉบับเต็มไฟล์แม้แผงหดเหลือ 72px) ขนาดตาม
+ *  แผงที่ขยายสุด 420px (มือถือเต็มความกว้าง) ถ้าโหลดไม่ได้สลับเป็นพื้นเทาเหมือนเดิม */
+function AccordionImage({ src }: { src: string }) {
+  const [failed, setFailed] = React.useState(false);
+  if (failed || !src) {
+    // eslint-disable-next-line @next/next/no-img-element -- data URI พื้นเทาเฉย ๆ ไม่ต้องผ่าน optimizer
+    return <img src={FALLBACK_IMAGE} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />;
+  }
+  return (
+    <Image
+      src={src}
+      alt=""
+      fill
+      sizes="(max-width: 767px) 100vw, (max-width: 1023px) 300px, 420px"
+      draggable={false}
+      onError={() => setFailed(true)}
+      className="object-cover"
+    />
+  );
+}
 
 /**
  * แผงรูปที่ขยายออกทีละแผง (hero หน้าแรก)
@@ -101,16 +123,7 @@ export function ImageAccordion({
                 : cn(collapsedWidth, "max-lg:w-[56px] max-md:h-[56px] max-md:w-full")
             )}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก, แผงคุมขนาดเอง */}
-            <img
-              src={item.imageUrl}
-              alt=""
-              draggable={false}
-              onError={(e) => {
-                if (e.currentTarget.src !== FALLBACK_IMAGE) e.currentTarget.src = FALLBACK_IMAGE;
-              }}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
+            <AccordionImage src={item.imageUrl} />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
             {/* ข้อความตอนขยาย */}

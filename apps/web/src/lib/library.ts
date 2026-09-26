@@ -76,6 +76,12 @@ export const collectionTintLabel: Record<CollectionTint, string> = {
   pink: "ชมพู",
 };
 
+/** เพิ่มภายหลัง (perf) — ปกในคารูเซลสามมิติ (การ์ดกว้างสุด 240px, มือถือ 46vw) ให้ next/image เลือกไฟล์ขนาดพอดี
+ *  แทนภาพต้นฉบับ 400x600 (ปกเดิมโหลดเต็มไฟล์ทุกใบผ่าน <img> ตรง ๆ) */
+// ใช้ px ทั้งคู่ (การ์ดมือถือ clamp(150px, 46vw, 200px) ไม่เกิน 200px): ถ้ามี vw อยู่ใน sizes, next/image จะตัดตัวเลือก
+// ขนาดที่เล็กกว่า 640 x vw ทิ้ง (46vw -> ต่ำสุด 384) ทำให้ได้ไฟล์ใหญ่เกินการ์ด 240px
+export const CAROUSEL_COVER_SIZES = "(max-width: 767px) 200px, 240px";
+
 export function coverOf(novel: Pick<LibraryNovel, "novel_id" | "cover_image_url">): string {
   return novel.cover_image_url ?? `https://picsum.photos/seed/${novel.novel_id}/400/600`;
 }

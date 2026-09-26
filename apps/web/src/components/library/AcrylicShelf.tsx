@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, MoreHorizontal, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -173,11 +174,12 @@ export function AcrylicShelf({ group, onAdd, onRename, onTint, onDelete }: Acryl
                 )}
                 style={{ zIndex: group.novels.length - i }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก */}
-                <img
+                <Image
                   src={coverOf(novel)}
                   alt={novel.title}
-                  loading="lazy"
+                  width={400}
+                  height={600}
+                  sizes="(max-width: 767px) 110px, (max-width: 1023px) 130px, 150px"
                   draggable={false}
                   className="aspect-[2/3] w-[150px] rounded-md object-cover shadow-md ring-1 ring-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary-400 max-lg:w-[130px] max-md:w-[110px]"
                 />

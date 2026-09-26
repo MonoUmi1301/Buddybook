@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PlayCircle } from "lucide-react";
@@ -130,8 +131,7 @@ export function SpineShelf({ group, entries }: SpineShelfProps) {
                           : "opacity-0"
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก */}
-                    <img src={coverOf(novel)} alt="" loading="lazy" className="aspect-[2/3] w-full object-cover" />
+                    <Image src={coverOf(novel)} alt="" width={400} height={600} sizes="160px" className="aspect-[2/3] w-full object-cover" />
                   </span>
                 </Link>
               );
@@ -143,8 +143,7 @@ export function SpineShelf({ group, entries }: SpineShelfProps) {
       <Dialog open={sheet !== null} title={sheet?.title ?? ""} onClose={() => setSheet(null)}>
         {sheet && (
           <div className="flex gap-4">
-            {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก */}
-            <img src={coverOf(sheet)} alt="" className="aspect-[2/3] w-24 shrink-0 rounded-md object-cover shadow-md" />
+            <Image src={coverOf(sheet)} alt="" width={400} height={600} sizes="96px" className="aspect-[2/3] w-24 shrink-0 rounded-md object-cover shadow-md" />
             <div className="min-w-0 flex-1">
               <p className="text-sm text-neutral-500">{getPenName(sheet.author)}</p>
               {sheetEntry && (

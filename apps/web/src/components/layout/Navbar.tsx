@@ -10,17 +10,17 @@ import { NotificationPanel } from "@/components/layout/NotificationPanel";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { cn } from "@/lib/cn";
 import type { SessionUser } from "@/lib/api/session";
-import { WORK_TYPE_COOKIE, asWorkType, type WorkType } from "@/lib/workType";
+import { DEFAULT_WORK_TYPE, WORK_TYPE_COOKIE, resolveWorkType, type WorkType } from "@/lib/workType";
 
 const modeButtons: { label: string; value: WorkType }[] = [
   { label: "นิยาย", value: "original" },
   { label: "แฟนฟิค", value: "fan-fiction" },
 ];
 
-function readWorkTypeCookie(): WorkType | undefined {
-  if (typeof document === "undefined") return undefined;
+function readWorkTypeCookie(): WorkType {
+  if (typeof document === "undefined") return DEFAULT_WORK_TYPE;
   const match = document.cookie.match(new RegExp(`(?:^|; )${WORK_TYPE_COOKIE}=([^;]*)`));
-  return asWorkType(match ? decodeURIComponent(match[1]) : undefined);
+  return resolveWorkType(match ? decodeURIComponent(match[1]) : undefined);
 }
 
 interface NavbarProps {
@@ -49,7 +49,9 @@ export function Navbar({ theme, user = null }: NavbarProps) {
   // สถานะเพราะหน้าแรก (app/page.tsx) เป็น Server Component อ่าน React state/localStorage ไม่ได้
   // อ่านค่าเริ่มต้นผ่าน useEffect (ไม่ใช่ระหว่าง render) กัน hydration mismatch เพราะ document.cookie
   // มีให้ใช้เฉพาะฝั่ง client เท่านั้น
-  const [activeWorkType, setActiveWorkType] = useState<WorkType | undefined>(undefined);
+  // เปลี่ยนภายหลัง — เริ่มที่ "นิยาย" (ค่าเดียวกับที่ server render หน้าแรก) ให้แท็บถูกไฮไลต์ตั้งแต่ paint แรก
+  // ไม่ต้องรอ useEffect อ่าน cookie (ผู้ที่เคยเลือก "แฟนฟิค" ไว้จะสลับตามทันทีหลัง hydrate)
+  const [activeWorkType, setActiveWorkType] = useState<WorkType>(DEFAULT_WORK_TYPE);
   useEffect(() => {
     setActiveWorkType(readWorkTypeCookie());
   }, [pathname]);
@@ -63,9 +65,11 @@ export function Navbar({ theme, user = null }: NavbarProps) {
 
   return (
     <header
+      // เปลี่ยนภายหลัง (perf) — เอา backdrop-blur ออก: พื้นทึบ 95% อยู่แล้วจน blur แทบมองไม่เห็น แต่ยังต้องเบลอ
+      // ทั้งแถบกว้างเต็มจอใหม่ทุกเฟรมตอนเลื่อนหน้า (หนักบนมือถือ) — ใช้พื้นทึบเต็มแทน หน้าตาเท่าเดิม
       className={cn(
-        "sticky top-0 z-40 border-b backdrop-blur",
-        isDark ? "border-surface-border bg-surface/95" : "border-neutral-200 bg-white/95"
+        "sticky top-0 z-40 border-b",
+        isDark ? "border-surface-border bg-surface" : "border-neutral-200 bg-white"
       )}
     >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -80,16 +84,16 @@ export function Navbar({ theme, user = null }: NavbarProps) {
                 <button
                   key={mode.value}
                   type="button"
+                  aria-pressed={isActive}
                   onClick={() => selectWorkType(mode.value)}
                   className={cn(
                     "rounded-pill px-3 py-1.5 text-sm font-medium transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2",
                     isActive
-                      ? isDark
-                        ? "bg-white/15 text-white font-semibold"
-                        : "bg-primary-50 text-primary-600 font-semibold"
+                      ? "bg-primary-500 font-semibold text-white shadow-sm"
                       : isDark
-                        ? "text-zinc-300 hover:text-white"
-                        : "text-neutral-600 hover:text-brand-brown"
+                        ? "text-zinc-300 hover:bg-white/10 hover:text-white"
+                        : "text-neutral-600 hover:bg-neutral-100 hover:text-brand-brown"
                   )}
                 >
                   {mode.label}

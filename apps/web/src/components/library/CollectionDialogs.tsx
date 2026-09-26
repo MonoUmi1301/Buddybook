@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Check, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -205,8 +206,7 @@ export function AddNovelsDialog({ open, collection, entries, onClose, onToggle }
                 aria-pressed={checked}
                 className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left hover:bg-neutral-50 disabled:opacity-60"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- ปกภายนอก */}
-                <img src={coverOf(entry.novel)} alt="" className="aspect-[2/3] w-9 shrink-0 rounded object-cover" />
+                <Image src={coverOf(entry.novel)} alt="" width={400} height={600} sizes="36px" className="aspect-[2/3] w-9 shrink-0 rounded object-cover" />
                 <span className="min-w-0 flex-1 truncate text-sm text-neutral-800">{entry.novel.title}</span>
                 <span
                   className={cn(

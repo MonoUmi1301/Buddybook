@@ -111,7 +111,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
   const novel = result.json;
   const viewer = user ? { user_id: user.user_id, name: getPenName(user) } : null;
 
-  const [reviewsResult, chaptersResult, libraryResult, supportResult, authorResult, similarResult] = await Promise.all([
+  const [reviewsResult, chaptersResult, libraryResult, supportResult, authorResult, similarResult, commentsResult] = await Promise.all([
     // ต้องส่ง token ด้วย ไม่ใช่แค่ public fetch เฉย ๆ เพราะเจ้าของรีวิวที่เลือกไม่ระบุตัวตนไว้
     // ควรยังเห็นชื่อ/รูปจริงของตัวเองตอนดูรีวิวของตัวเองได้ (แค่คนอื่นเห็นเป็น "ผู้อ่านนิรนาม")
     callApi({ method: "GET", path: `/novels/${novel.novel_id}/reviews`, token }),
@@ -133,6 +133,8 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
           token,
         })
       : Promise.resolve(null),
+    // เพิ่มภายหลัง (perf) — คอมเมนต์ทุกตอนในครั้งเดียว (เดิมยิง /chapters/:id/comments ทีละตอนหลังจากนี้ = N+1)
+    callApi({ method: "GET", path: `/novels/${novel.novel_id}/comments`, token }),
   ]);
 
   const support: PublicGifts | null =
@@ -186,15 +188,20 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
           .map((n) => ({ ...n, authorName: getPenName(n.author) }))
       : [];
 
-  const chapterCommentsResults = await Promise.all(
-    publishedChapters.map((c) => callApi({ method: "GET", path: `/chapters/${c.chapter_id}/comments` }))
+  const commentsByChapter = new Map(
+    !("error" in commentsResult) && commentsResult.status === 200
+      ? (commentsResult.json as { chapters: { chapter_id: string; comments: CommentNode[] }[] }).chapters.map((c) => [
+          c.chapter_id,
+          c.comments,
+        ])
+      : []
   );
-  const commentGroups: ChapterCommentGroup[] = publishedChapters.map((c, i) => {
-    const r = chapterCommentsResults[i];
-    const comments: CommentNode[] =
-      !("error" in r) && r.status === 200 ? (r.json as { comments: CommentNode[] }).comments : [];
-    return { chapterId: c.chapter_id, chapterNumber: c.chapter_number, chapterTitle: c.title, comments };
-  });
+  const commentGroups: ChapterCommentGroup[] = publishedChapters.map((c) => ({
+    chapterId: c.chapter_id,
+    chapterNumber: c.chapter_number,
+    chapterTitle: c.title,
+    comments: commentsByChapter.get(c.chapter_id) ?? [],
+  }));
   const commentCount = commentGroups.reduce((sum, g) => sum + countComments(g.comments), 0);
 
   const inLibrary =

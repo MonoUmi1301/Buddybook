@@ -9,3 +9,11 @@ export type WorkType = "original" | "fan-fiction";
 export function asWorkType(value: string | undefined | null): WorkType | undefined {
   return value === "original" || value === "fan-fiction" ? value : undefined;
 }
+
+/** เพิ่มภายหลัง — โหมดเริ่มต้นเมื่อผู้ใช้ยังไม่เคยเลือก (ไม่มี cookie): "นิยาย" เสมอ ทั้งแท็บที่ไฮไลต์ใน Navbar
+ *  และเนื้อหาหน้าแรก ต้องใช้ค่าเดียวกันผ่าน resolveWorkType() ไม่งั้นแท็บที่เลือกกับเนื้อหาจะไม่ตรงกัน */
+export const DEFAULT_WORK_TYPE: WorkType = "original";
+
+export function resolveWorkType(value: string | undefined | null): WorkType {
+  return asWorkType(value) ?? DEFAULT_WORK_TYPE;
+}
