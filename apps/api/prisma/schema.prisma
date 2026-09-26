@@ -315,6 +315,8 @@ model Novel {
   title           String      @db.VarChar(255)
   cover_image_url String?     @db.Text
   synopsis        String?     @db.Text
+  /// เพิ่มภายหลัง — "แนะนำนิยาย" คำเกริ่นนำ/โปรโมตฉบับยาว แยกจาก synopsis (เรื่องย่อสั้น) แสดงต่อท้ายในแท็บเรื่องย่อ
+  introduction    String?     @db.Text
   status          NovelStatus @default(ongoing)
   legal_status    LegalStatus @default(original)
   visibility      Visibility  @default(published)

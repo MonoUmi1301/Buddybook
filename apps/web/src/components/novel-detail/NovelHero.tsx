@@ -25,6 +25,7 @@ export interface NovelDetailData {
   novel_id: string;
   title: string;
   synopsis: string | null;
+  introduction: string | null;
   cover_image_url: string | null;
   status: NovelStatus;
   legal_status: LegalStatus;
@@ -123,11 +124,6 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
     }
   }
 
-  // หมวดหมู่หลัก/รองขึ้นก่อน (เน้นสีแบรนด์) ตามด้วยแท็กทั่วไป — กันชื่อซ้ำถ้าแท็กเดียวกันอยู่ทั้งสองที่
-  const genreTags = [novel.primary_tag, novel.secondary_tag].filter((t): t is { tag_id: number; name: string } => !!t);
-  const genreIds = new Set(genreTags.map((t) => t.tag_id));
-  const otherTags = novel.tags.filter((t) => !genreIds.has(t.tag_id));
-
   return (
     <section className="flex flex-col gap-6 sm:flex-row sm:gap-8">
       <div className="relative mx-auto aspect-[3/4] w-44 shrink-0 overflow-hidden rounded-card bg-gradient-to-br from-brand-tan/40 to-primary-200/60 shadow-lg ring-1 ring-black/5 sm:mx-0 sm:w-48 lg:w-52">
@@ -170,31 +166,6 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
             {getPenName(novel.author)}
           </Link>
         </p>
-
-        {(genreTags.length > 0 || otherTags.length > 0) && (
-          <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="แท็ก">
-            {genreTags.map((t) => (
-              <li key={`g-${t.tag_id}`}>
-                <Link
-                  href={`/search?genre_ids=${t.tag_id}`}
-                  className="inline-flex rounded-pill bg-primary-500/10 px-2.5 py-1 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-500/20 dark:text-primary-300"
-                >
-                  {t.name}
-                </Link>
-              </li>
-            ))}
-            {otherTags.map((t) => (
-              <li key={t.tag_id}>
-                <Link
-                  href={`/search?tag_ids=${t.tag_id}`}
-                  className="inline-flex rounded-pill border border-neutral-200 bg-white px-2.5 py-1 text-xs text-neutral-600 transition-colors hover:border-primary-300 hover:text-primary-600"
-                >
-                  {t.name}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
 
         <dl className="mt-5 grid grid-cols-2 divide-neutral-100 rounded-card border border-neutral-200 bg-white sm:grid-cols-4 sm:divide-x [&>*:nth-child(-n+2)]:border-b [&>*:nth-child(-n+2)]:border-neutral-100 sm:[&>*:nth-child(-n+2)]:border-b-0">
           <StatCell label="ยอดวิว" icon={Eye}>

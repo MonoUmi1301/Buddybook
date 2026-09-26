@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 interface AvatarProps {
   src?: string | null;
   alt: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
@@ -13,9 +13,10 @@ const sizeClasses = {
   sm: "h-8 w-8",
   md: "h-10 w-10",
   lg: "h-14 w-14",
+  xl: "h-20 w-20 sm:h-24 sm:w-24",
 };
 
-const sizePx = { sm: 32, md: 40, lg: 56 };
+const sizePx = { sm: 32, md: 40, lg: 56, xl: 96 };
 
 export function Avatar({ src, alt, size = "md", className }: AvatarProps) {
   return (

@@ -57,6 +57,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
   // Step 2
   const [title, setTitle] = useState("");
   const [synopsis, setSynopsis] = useState("");
+  const [introduction, setIntroduction] = useState("");
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [primaryTagId, setPrimaryTagId] = useState<number | null>(null);
   const [secondaryTagId, setSecondaryTagId] = useState<number | null>(null);
@@ -120,6 +121,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
         body: JSON.stringify({
           title: title.trim(),
           synopsis: synopsis.trim() || undefined,
+          introduction: introduction.trim() || undefined,
           legal_status: legalStatus,
           cover_image_url: coverImageUrl ?? undefined,
           tag_ids: Array.from(tagValue.selectedIds),
@@ -251,6 +253,15 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
         value={synopsis}
         onChange={(e) => setSynopsis(e.target.value)}
         rows={5}
+      />
+
+      <Textarea
+        label="แนะนำนิยาย (คำเกริ่นนำยาว)"
+        hint="รายละเอียดเพิ่มเติม/คำโปรโมตฉบับยาว แสดงต่อท้ายเรื่องย่อในหน้านิยาย (ไม่บังคับ)"
+        value={introduction}
+        onChange={(e) => setIntroduction(e.target.value)}
+        rows={8}
+        maxLength={20000}
       />
 
       {mainGenreTags.length > 0 && (

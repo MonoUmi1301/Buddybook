@@ -110,6 +110,8 @@ const createNovelBodySchema = z
   .object({
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
+    // เพิ่มภายหลัง — "แนะนำนิยาย" คำเกริ่นนำยาว แยกจาก synopsis
+    introduction: z.string().max(20000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: z.enum(["original", "fan-fiction", "translation"]),
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -159,6 +161,8 @@ const updateNovelBodySchema = z
   .object({
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
+    // null = ล้างค่า (ผู้เขียนลบข้อความในช่องแนะนำนิยายทิ้ง)
+    introduction: z.string().max(20000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: z.enum(["ongoing", "completed", "hiatus"]).optional(),
     visibility: z.enum(["published", "private", "pending_review"]).optional(),

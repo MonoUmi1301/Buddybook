@@ -163,6 +163,7 @@ export async function searchNovels({
 interface CreateNovelInput {
   title: string;
   synopsis?: string;
+  introduction?: string;
   cover_image_url?: string;
   legal_status: "original" | "fan-fiction" | "translation";
   tag_ids: number[];
@@ -256,6 +257,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
       author_id,
       title: input.title,
       synopsis: input.synopsis,
+      introduction: input.introduction,
       cover_image_url: input.cover_image_url,
       legal_status: LEGAL_STATUS_MAP[input.legal_status],
       // audit fix — เดิมพึ่ง default ของ schema.prisma (visibility @default(published)) ทำให้นิยาย
@@ -289,6 +291,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
 interface UpdateNovelInput {
   title?: string;
   synopsis?: string;
+  introduction?: string | null;
   cover_image_url?: string;
   status?: NovelStatus;
   visibility?: Visibility;
@@ -362,6 +365,7 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
         novel_id: true,
         title: true,
         synopsis: true,
+        introduction: true,
         cover_image_url: true,
         status: true,
         visibility: true,
@@ -754,6 +758,7 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
       novel_id: true,
       title: true,
       synopsis: true,
+      introduction: true,
       cover_image_url: true,
       status: true,
       legal_status: true,

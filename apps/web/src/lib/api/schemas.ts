@@ -223,6 +223,7 @@ export const createNovelSchema = z
   .object({
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
+    introduction: z.string().max(20000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: legalStatusEnum,
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -264,6 +265,7 @@ export const updateNovelSchema = z
   .object({
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
+    introduction: z.string().max(20000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: novelStatusEnum.optional(),
     visibility: visibilityEnum.optional(),
