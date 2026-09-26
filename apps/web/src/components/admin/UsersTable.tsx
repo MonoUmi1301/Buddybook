@@ -18,7 +18,7 @@ interface UsersTableProps {
   initialUsers: AdminUserRow[];
 }
 
-// PATCH /admin/users/:user_id/role|suspend — ดู API_Endpoints.md ส่วนที่ 5
+// PATCH /admin/users/:user_id/role|suspend|unsuspend — ดู API_Endpoints.md ส่วนที่ 5
 export function UsersTable({ initialUsers }: UsersTableProps) {
   const [users, setUsers] = useState<AdminUserRow[]>(initialUsers);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -37,11 +37,13 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
     setPendingId(null);
   }
 
-  async function toggleSuspend(id: string) {
+  async function toggleSuspend(id: string, isSuspended: boolean) {
     setPendingId(id);
-    const res = await fetch(`/api/v1/admin/users/${id}/suspend`, { method: "PATCH" });
+    const action = isSuspended ? "unsuspend" : "suspend";
+    const res = await fetch(`/api/v1/admin/users/${id}/${action}`, { method: "PATCH" });
     if (res.ok) {
-      setUsers((us) => us.map((u) => (u.user_id === id ? { ...u, is_suspended: !u.is_suspended } : u)));
+      const data = (await res.json()) as { suspended: boolean };
+      setUsers((us) => us.map((u) => (u.user_id === id ? { ...u, is_suspended: data.suspended } : u)));
     }
     setPendingId(null);
   }
@@ -85,7 +87,7 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                 <button
                   type="button"
                   disabled={pendingId === u.user_id}
-                  onClick={() => toggleSuspend(u.user_id)}
+                  onClick={() => toggleSuspend(u.user_id, u.is_suspended)}
                   className={cn(
                     "flex items-center gap-1.5 rounded-pill px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50",
                     u.is_suspended

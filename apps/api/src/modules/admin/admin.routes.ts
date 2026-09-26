@@ -20,6 +20,7 @@ router.patch("/novels/:novel_id/reject", asyncHandler(adminController.rejectNove
 router.get("/users", asyncHandler(adminController.listUsers));
 router.patch("/users/:user_id/role", asyncHandler(adminController.updateUserRole));
 router.patch("/users/:user_id/suspend", asyncHandler(adminController.suspendUser));
+router.patch("/users/:user_id/unsuspend", asyncHandler(adminController.unsuspendUser));
 
 router.post("/tags", asyncHandler(adminController.createTag));
 router.patch("/tags/:tag_id", asyncHandler(adminController.updateTag));

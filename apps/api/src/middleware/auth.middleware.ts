@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { verifyAccessToken } from "@/lib/jwt";
 import { ApiError } from "@/utils/ApiError";
 import { env } from "@/config/env";
+import { isUserSuspended } from "@/lib/suspension";
 
 /**
  * ตรวจ `Authorization: Bearer <access_token>` แล้วแนบ req.user
@@ -15,13 +16,21 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
 
   const token = header.slice("Bearer ".length);
 
+  let payload: ReturnType<typeof verifyAccessToken>;
   try {
-    const payload = verifyAccessToken(token);
-    req.user = { user_id: payload.user_id, role: payload.role };
-    next();
+    payload = verifyAccessToken(token);
   } catch {
     throw ApiError.unauthorized("Invalid or expired token");
   }
+
+  // เพิ่มภายหลัง (auth hardening) — บัญชีที่ถูกระงับใช้ access token ที่ออกไปแล้วต่อไม่ได้ (ดู lib/suspension.ts)
+  isUserSuspended(payload.user_id)
+    .then((isSuspended) => {
+      if (isSuspended) return next(ApiError.forbidden("This account has been suspended"));
+      req.user = { user_id: payload.user_id, role: payload.role };
+      next();
+    })
+    .catch(next);
 }
 
 /**
@@ -31,11 +40,22 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
 export function attachUserIfPresent(req: Request, _res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (header?.startsWith("Bearer ")) {
+    let payload: ReturnType<typeof verifyAccessToken> | null = null;
     try {
-      const payload = verifyAccessToken(header.slice("Bearer ".length));
-      req.user = { user_id: payload.user_id, role: payload.role };
+      payload = verifyAccessToken(header.slice("Bearer ".length));
     } catch {
       // ไม่มี user ที่ถูกต้อง — ปล่อยผ่านเป็น anonymous request
+    }
+    if (payload) {
+      const { user_id, role } = payload;
+      // บัญชีที่ถูกระงับ → ปฏิบัติเหมือน anonymous
+      isUserSuspended(user_id)
+        .then((isSuspended) => {
+          if (!isSuspended) req.user = { user_id, role };
+          next();
+        })
+        .catch(next);
+      return;
     }
   }
   next();

@@ -46,3 +46,6 @@ coverage/
 
 # TypeScript incremental build cache (machine-specific, regenerated automatically)
 *.tsbuildinfo
+
+# NLP worker model folder (mounted into the nlp-worker container, ~400MB)
+apps/nlp-worker/model/

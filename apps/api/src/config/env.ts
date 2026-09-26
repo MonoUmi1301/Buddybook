@@ -63,6 +63,20 @@ const envSchema = z.object({
   GIFT_MAX_COINS_PER_SEND: z.coerce.number().int().positive().default(100000),
   // จำนวนครั้งที่ส่งของขวัญ/โดเนทได้ต่อผู้ใช้ต่อนาที (in-memory ต่อ process — ดู middleware/rateLimit.middleware.ts)
   GIFT_SEND_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(10),
+  // เพิ่มภายหลัง (scheduler) — งานเบื้องหลังที่รันใน process ของ api เอง (ดู lib/scheduler.ts)
+  // ปิดได้ด้วย SCHEDULER_ENABLED=false ถ้าจะใช้ cron ภายนอกยิง /internal/* แทน (ปิดเองอัตโนมัติตอน NODE_ENV=test)
+  SCHEDULER_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true")),
+  SCHEDULE_PUBLISH_INTERVAL_SEC: z.coerce.number().int().positive().default(60),
+  SCHEDULE_TRASH_PURGE_INTERVAL_SEC: z.coerce.number().int().positive().default(3600),
+  SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC: z.coerce.number().int().positive().default(6 * 3600),
+  // เพิ่มภายหลัง (auth hardening) — จำนวนครั้งต่อ IP ต่อ 15 นาทีของ endpoint login/register/OTP/ลืมรหัส
+  AUTH_RATE_LIMIT_PER_15MIN: z.coerce.number().int().positive().default(20),
+  // เพิ่มภายหลัง (ถอนเงินนักเขียน) — ขั้นต่ำ coin ต่อการขอถอน 1 ครั้ง และอัตรา coin → บาท
+  WITHDRAWAL_MIN_COINS: z.coerce.number().int().positive().default(500),
+  COIN_TO_THB_RATE: z.coerce.number().positive().default(1),
 });
 
 const parsed = envSchema.safeParse(process.env);

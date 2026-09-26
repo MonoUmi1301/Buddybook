@@ -48,6 +48,12 @@ export async function suspendUser(req: Request, res: Response) {
   res.status(200).json(result);
 }
 
+export async function unsuspendUser(req: Request, res: Response) {
+  const { user_id } = userIdParamSchema.parse(req.params);
+  const result = await adminService.unsuspendUser(user_id);
+  res.status(200).json(result);
+}
+
 export async function listTags(_req: Request, res: Response) {
   const result = await adminService.listTags();
   res.status(200).json(result);

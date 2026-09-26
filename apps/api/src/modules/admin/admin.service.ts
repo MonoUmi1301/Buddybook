@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { setUserSuspendedCache } from "@/lib/suspension";
 import { ApiError } from "@/utils/ApiError";
 import { startOfThaiMonth } from "@/modules/gifts/gifts.service";
 import { env } from "@/config/env";
@@ -96,14 +97,24 @@ export async function updateUserRole(user_id: string, role: UserRole) {
 }
 
 /** Reference implementation — PATCH /admin/users/:user_id/suspend
- *  บล็อกที่ login เท่านั้น (ดู auth.service.ts loginUser) — ไม่เช็คทุก request ผ่าน requireAuth
- *  เพื่อไม่ให้เพิ่ม query ในทุก endpoint (access token อายุสั้น 15 นาทีอยู่แล้ว) */
+ *  เพิ่มภายหลัง (auth hardening) — มีผลทันทีกับทุก request ผ่าน cache ใน lib/suspension.ts
+ *  (เดิมบล็อกแค่ตอน login/refresh ทำให้ access token ที่ออกไปแล้วใช้ต่อได้อีกถึง 15 นาที) */
 export async function suspendUser(user_id: string) {
+  return setSuspended(user_id, true);
+}
+
+/** เพิ่มภายหลัง — PATCH /admin/users/:user_id/unsuspend (เดิมระงับแล้วยกเลิกไม่ได้จากหน้าแอดมิน) */
+export async function unsuspendUser(user_id: string) {
+  return setSuspended(user_id, false);
+}
+
+async function setSuspended(user_id: string, is_suspended: boolean) {
   const user = await prisma.user.update({
     where: { user_id },
-    data: { is_suspended: true },
+    data: { is_suspended },
     select: { user_id: true, is_suspended: true },
   });
+  setUserSuspendedCache(user.user_id, user.is_suspended);
   return { user_id: user.user_id, suspended: user.is_suspended };
 }
 
