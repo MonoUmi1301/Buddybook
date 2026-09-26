@@ -19,7 +19,7 @@ export function NovelTagList({ novel, className }: { novel: TagSource; className
         <li key={`g-${t.tag_id}`}>
           <Link
             href={`/search?genre_ids=${t.tag_id}`}
-            className="inline-flex rounded-pill bg-primary-500/10 px-3 py-1 text-xs font-medium text-primary-700 ring-1 ring-inset ring-primary-500/20 transition-colors hover:bg-primary-500/20 dark:text-primary-300"
+            className="inline-flex rounded-full border border-primary-500/25 bg-primary-500/10 px-3 py-1 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-500/20 dark:border-primary-400/30 dark:bg-primary-400/10 dark:text-primary-300 dark:hover:bg-primary-400/20"
           >
             {t.name}
           </Link>
@@ -29,7 +29,7 @@ export function NovelTagList({ novel, className }: { novel: TagSource; className
         <li key={t.tag_id}>
           <Link
             href={`/search?tag_ids=${t.tag_id}`}
-            className="inline-flex rounded-pill border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs text-neutral-600 transition-colors hover:border-primary-300 hover:bg-primary-500/5 hover:text-primary-600"
+            className="inline-flex rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-sm text-neutral-600 transition-colors hover:border-primary-300 hover:bg-primary-500/5 hover:text-primary-600 dark:hover:border-primary-400/50 dark:hover:text-primary-300"
           >
             {t.name}
           </Link>

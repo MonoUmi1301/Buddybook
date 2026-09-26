@@ -26,7 +26,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-/** แท็บ "เรื่องย่อ" — เรื่องย่อ (synopsis) → แนะนำตัวละคร → แท็ก → แนะนำนิยาย (introduction) → ตารางข้อมูลนิยาย
+/** แท็บ "เรื่องย่อ" — เรื่องย่อ (synopsis) → แนะนำตัวละคร → แท็ก → แนะนำเรื่อง (introduction) → ตารางข้อมูลนิยาย
  *  ไม่มี mock fallback: ถ้านิยายไม่มีตัวละคร/แท็ก/คำแนะนำนิยาย ก็ซ่อนส่วนนั้นไป ไม่แสดงข้อมูลปลอมบนหน้าจริง
  *  หมายเหตุ: เดิมเคยมีบล็อกคำเตือนเนื้อหา (Content & Trigger Warning) แต่เป็นข้อความ hardcode
  *  ตัวเดียวกันทุกนิยาย และ schema ไม่มีคอลัมน์ให้นักเขียนระบุคำเตือนจริง จึงไม่แสดง */
@@ -49,10 +49,12 @@ export function NovelOverview({ novel, characters, lastPublishedAt, totalCharact
         </div>
       )}
 
-      {novel.introduction && (
+      {novel.introduction?.trim() && (
         <div>
-          <h2 className="text-lg font-semibold text-neutral-900">แนะนำนิยาย</h2>
-          <p className="mt-3 max-w-prose whitespace-pre-line text-base leading-8 text-neutral-700">{novel.introduction}</p>
+          <h2 className="text-lg font-semibold text-neutral-900">แนะนำเรื่อง</h2>
+          <p className="mt-3 max-w-prose whitespace-pre-line text-base leading-relaxed text-neutral-700">
+            {novel.introduction.trim()}
+          </p>
         </div>
       )}
 
