@@ -305,9 +305,26 @@ export async function listChapterComments(chapter_id: string, requester_id?: str
   const rows = await prisma.comment.findMany({
     where: { chapter_id },
     orderBy: { created_at: "asc" },
-    include: { user: { select: { user_id: true, username: true, avatar_url: true } } },
+    select: commentRowSelect,
   });
 
+  return { comments: buildCommentTree(rows) };
+}
+
+const commentRowSelect = {
+  comment_id: true,
+  chapter_id: true,
+  parent_comment_id: true,
+  content: true,
+  sentiment_label: true,
+  created_at: true,
+  user: { select: { user_id: true, username: true, avatar_url: true } },
+} satisfies Prisma.CommentSelect;
+
+type CommentRow = Prisma.CommentGetPayload<{ select: typeof commentRowSelect }>;
+
+/** ประกอบ flat rows (เรียงตามเวลาแล้ว) เป็นต้นไม้ replies ตาม parent_comment_id */
+function buildCommentTree(rows: CommentRow[]): CommentNode[] {
   const nodes = new Map<string, CommentNode>();
   for (const row of rows) {
     nodes.set(row.comment_id, {
@@ -327,8 +344,43 @@ export async function listChapterComments(chapter_id: string, requester_id?: str
     if (parent) parent.replies.push(node);
     else roots.push(node);
   }
+  return roots;
+}
 
-  return { comments: roots };
+/** เพิ่มภายหลัง (perf) — GET /novels/:novel_id/comments (Public, gated ด้วย visibility ของนิยายเหมือน
+ *  listChapterComments) คอมเมนต์ของทุกตอนที่เผยแพร่แล้วในครั้งเดียว
+ *
+ *  เดิมหน้านิยายยิง GET /chapters/:id/comments ทีละตอน (N+1 ผ่าน HTTP — นิยาย 40 ตอน = 40 request
+ *  x 2 query ต่อ request, หน้าช้า ~580 ms บน production build) ตอนนี้ใช้ 1 query เช็คสิทธิ์ + 2 query
+ *  คู่ขนาน ไม่ว่าจะมีกี่ตอน */
+export async function listNovelComments(novel_id: string, requester_id?: string) {
+  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true, visibility: true } });
+  if (!novel) throw ApiError.notFound("Novel not found");
+  assertNovelVisible(novel, requester_id);
+
+  const [chapters, rows] = await Promise.all([
+    prisma.chapter.findMany({
+      where: { novel_id, status: "published" },
+      orderBy: { chapter_number: "asc" },
+      select: { chapter_id: true, chapter_number: true, title: true },
+    }),
+    prisma.comment.findMany({
+      where: { chapter: { novel_id, status: "published" } },
+      orderBy: { created_at: "asc" },
+      select: commentRowSelect,
+    }),
+  ]);
+
+  const rowsByChapter = new Map<string, CommentRow[]>();
+  for (const row of rows) {
+    const list = rowsByChapter.get(row.chapter_id);
+    if (list) list.push(row);
+    else rowsByChapter.set(row.chapter_id, [row]);
+  }
+
+  return {
+    chapters: chapters.map((c) => ({ ...c, comments: buildCommentTree(rowsByChapter.get(c.chapter_id) ?? []) })),
+  };
 }
 
 interface CreateCommentInput {

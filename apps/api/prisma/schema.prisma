@@ -424,6 +424,8 @@ model NovelTag {
   tag   Tag   @relation(fields: [tag_id], references: [tag_id], onDelete: Cascade)
 
   @@id([novel_id, tag_id])
+  // เพิ่มภายหลัง (perf) — ค้นนิยายตามแท็ก (search/หมวดหน้าแรก) PK นำด้วย novel_id จึงใช้กับ tag_id ไม่ได้
+  @@index([tag_id])
   @@map("novel_tags")
 }
 
@@ -583,6 +585,8 @@ model Comment {
   replies        Comment[] @relation("CommentReplies")
 
   // CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migrations_manual/checks.sql
+  // เพิ่มภายหลัง (perf) — คอมเมนต์ตามตอน เรียงเวลา (GET /chapters/:id/comments, /novels/:id/comments)
+  @@index([chapter_id, created_at])
   @@map("comments")
 }
 
@@ -701,6 +705,8 @@ model WalletTransaction {
   // สร้าง 2 แถว (donation_sent ของผู้ให้ + donation_received ของผู้รับ) ที่ตั้งใจให้ reference_id
   // เดียวกัน (=donation_id) ซ้ำกันได้ — compound กับ type ยังคงแยกแยะสองแถวนั้นออกจากกันได้ปกติ
   @@unique([type, reference_id])
+  // เพิ่มภายหลัง (perf) — getBalance() (ยอดล่าสุดของ user) รันในทุกธุรกรรมเงิน เดิม Seq Scan + Sort ทั้งตาราง
+  @@index([user_id, created_at(sort: Desc)])
   @@map("wallet_transactions")
 }
 
@@ -741,6 +747,8 @@ model Notification {
 
   user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 
+  // เพิ่มภายหลัง (perf) — รายการแจ้งเตือนของ user เรียงใหม่สุดก่อน (notifications.service.ts)
+  @@index([user_id, created_at(sort: Desc)])
   @@map("notifications")
 }
 
@@ -762,6 +770,8 @@ model UserLibrary {
 
   @@unique([user_id, novel_id])
   @@index([user_id, added_at(sort: Desc)])
+  // เพิ่มภายหลัง (perf) — หาผู้ติดตามนิยายตอนลงตอนใหม่ (lib/chapterNotifications.ts)
+  @@index([novel_id])
   @@map("user_library")
 }
 

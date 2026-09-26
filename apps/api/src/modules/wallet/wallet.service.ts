@@ -22,6 +22,12 @@ export async function getBalance(user_id: string, client: QueryClient = prisma):
   return latest ? latest.balance_after.toNumber() : 0;
 }
 
+/** เพิ่มภายหลัง (perf/safety) — ขอบเขตเวลาของทุก transaction ที่แตะกระเป๋าเงิน (ค่า default ของ Prisma คือ
+ *  maxWait 2 วิ / timeout 5 วิ) ระบุให้ชัด: รอ connection ได้ 5 วิ, ทั้ง transaction (รวมรอ advisory lock) ไม่เกิน
+ *  10 วิ เท่ากับ lock_timeout ของ DB (ดู migration connection_guards) — เกินแล้ว Prisma rollback ทั้งก้อน
+ *  ไม่มีการหักเงินครึ่งทาง */
+export const WALLET_TX_OPTIONS = { maxWait: 5000, timeout: 10000 } as const;
+
 /** namespace ของ advisory lock กระเป๋าเงิน (key แรกของ pg_advisory_xact_lock(int, int)) กันชนกับ
  *  advisory lock อื่นที่อาจเพิ่มในอนาคต */
 const WALLET_LOCK_NAMESPACE = 7310;
@@ -122,7 +128,7 @@ export async function verifyTopupSlip(user_id: string, packageId: string, slipIm
         },
         select: { transaction_id: true, type: true, amount: true, balance_after: true, created_at: true },
       });
-    });
+    }, WALLET_TX_OPTIONS);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       throw ApiError.conflict("สลิปนี้ถูกใช้เติมเงินไปแล้ว");
@@ -246,7 +252,7 @@ export async function fulfillStripeTopup(session: Stripe.Checkout.Session): Prom
           created_at: ledgerTimestamp(),
         },
       });
-    });
+    }, WALLET_TX_OPTIONS);
   } catch (err) {
     // มีอีก request เติมไปแล้วพร้อมกัน (unique ชน) — ถือว่าสำเร็จ ไม่เติมซ้ำ
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") return;

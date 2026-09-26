@@ -1,7 +1,13 @@
 import { app } from "@/app";
 import { env } from "@/config/env";
 import { prisma } from "@/lib/prisma";
-import { neo4jDriver } from "@/lib/neo4j";
+import { ensureNeo4jIndexes, neo4jDriver } from "@/lib/neo4j";
+
+// เพิ่มภายหลัง (perf) — index ของกราฟ (ดู lib/neo4j.ts) ไม่รอ ไม่ทำให้ api ล่มถ้า Neo4j ยังไม่พร้อม
+ensureNeo4jIndexes().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.warn("Neo4j index setup skipped:", err instanceof Error ? err.message : err);
+});
 
 const server = app.listen(env.PORT, () => {
   // eslint-disable-next-line no-console

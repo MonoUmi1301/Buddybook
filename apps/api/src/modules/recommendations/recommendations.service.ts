@@ -1,4 +1,4 @@
-import { withNeo4jSession } from "@/lib/neo4j";
+import { NEO4J_READ_TIMEOUT_MS, withNeo4jSession } from "@/lib/neo4j";
 import { prisma } from "@/lib/prisma";
 
 interface GraphRow {
@@ -47,20 +47,22 @@ const EMPTY_RECOMMENDATIONS = { content_based: [], collaborative: [], underrated
 export async function getRecommendations(user_id: string) {
   let graphRows: { contentBasedRows: GraphRow[]; collaborativeRows: GraphRow[]; underratedRows: GraphRow[] };
   try {
-    graphRows = await withNeo4jSession(async (session) => {
+    // เปลี่ยนภายหลัง (perf) — เดิมรัน 3 query ต่อกันใน session เดียว (session รันพร้อมกันไม่ได้) ตอนนี้
+    // แยก session ต่อ query แล้วรันพร้อมกันจริง + timeout ต่อ query (เกินแล้ว catch ด้านล่าง degrade เป็นผลว่าง)
+    const read = (cypher: string) =>
+      withNeo4jSession((session) => session.run(cypher, { user_id }, { timeout: NEO4J_READ_TIMEOUT_MS }));
     // Q1 — Content-based: แท็กที่ user สนใจ ตรงกับนิยายที่ยังไม่เคยอ่าน
-    const contentBased = await session.run(
+    const contentBasedQuery = read(
       `MATCH (u:User {user_id: $user_id})-[:INTERESTED_IN]->(t:Tag)<-[:HAS_TAG]-(n:Novel)
        WHERE NOT (u)-[:READ]->(n)
        RETURN DISTINCT n.novel_id AS novel_id
-       LIMIT 10`,
-      { user_id }
+       LIMIT 10`
     );
 
     // Q2 — Collaborative + Sentiment-weighted: หา user (a) ที่ให้คะแนนนิยายเรื่องเดียวกับเรา
     // ใกล้เคียงกัน (±0.05) แล้วแนะนำเรื่องอื่นที่ a ให้คะแนนบวก (>0.5) และมีแท็กร่วมกับเรื่องที่
     // อ่านด้วยกัน — เป็นหัวใจของระบบตาม Proposal_montira.docx (ลด popularity bias ด้วย sentiment)
-    const collaborative = await session.run(
+    const collaborativeQuery = read(
       `MATCH (a:User)-[r1:READ]->(shared:Novel)<-[r2:READ]-(b:User {user_id: $user_id})
        WHERE a <> b AND r1.sentiment_score IS NOT NULL AND r2.sentiment_score IS NOT NULL
          AND abs(r1.sentiment_score - r2.sentiment_score) <= 0.05
@@ -70,13 +72,12 @@ export async function getRecommendations(user_id: string) {
          AND NOT (b)-[:READ]->(candidate)
        MATCH (shared)-[:HAS_TAG]->(tag:Tag)<-[:HAS_TAG]-(candidate)
        RETURN DISTINCT candidate.novel_id AS novel_id
-       LIMIT 10`,
-      { user_id }
+       LIMIT 10`
     );
 
     // Q3 — Popularity Bias Reduction: นิยายที่คะแนนความรู้สึกเฉลี่ยสูงแต่มีคนอ่านน้อย
     // (ไม่นับเรื่องที่ user นี้อ่านไปแล้ว) — ตรงกับ "แก้ปัญหา popularity bias" ที่เป็นแก่นของ thesis
-    const underrated = await session.run(
+    const underratedQuery = read(
       `MATCH (u:User)-[r:READ]->(n:Novel)
        WHERE r.sentiment_score IS NOT NULL
          AND NOT (:User {user_id: $user_id})-[:READ]->(n)
@@ -84,16 +85,16 @@ export async function getRecommendations(user_id: string) {
        WHERE avg_sentiment >= 0.5
        RETURN n.novel_id AS novel_id
        ORDER BY avg_sentiment DESC, read_count ASC
-       LIMIT 10`,
-      { user_id }
+       LIMIT 10`
     );
 
-      return {
-        contentBasedRows: contentBased.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
-        collaborativeRows: collaborative.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
-        underratedRows: underrated.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
-      };
-    });
+    const [contentBased, collaborative, underrated] = await Promise.all([contentBasedQuery, collaborativeQuery, underratedQuery]);
+
+    graphRows = {
+      contentBasedRows: contentBased.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
+      collaborativeRows: collaborative.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
+      underratedRows: underrated.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
+    };
   } catch (err) {
     console.error("Neo4j recommendations query failed, degrading to empty result:", err);
     return EMPTY_RECOMMENDATIONS;

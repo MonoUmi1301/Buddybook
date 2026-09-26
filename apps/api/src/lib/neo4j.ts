@@ -43,6 +43,22 @@ export async function withNeo4jSession<T>(
   }
 }
 
+/** เพิ่มภายหลัง (perf) — timeout ต่อ query ของหน้าที่ผู้ใช้รออยู่ (เช่น recommendations บนหน้าแรก)
+ *  กราฟช้า/ค้างต้องไม่ลากทั้งหน้าไปด้วย — เกินนี้ driver ยกเลิก transaction แล้วฝั่ง service degrade เป็นผลว่าง */
+export const NEO4J_READ_TIMEOUT_MS = 2000;
+
+/** เพิ่มภายหลัง (perf) — index ของ property ที่ทุก MATCH/MERGE ใช้หา node (ดู lib/graphSync.ts)
+ *  เดิมไม่มีเลย (มีแค่ LOOKUP index ของ label) ทุก `MATCH (u:User {user_id})` จึงสแกนทั้ง label
+ *  ใช้ range index ไม่ใช่ unique constraint เพื่อไม่ให้ล้มถ้ากราฟเดิมมี node ซ้ำ — IF NOT EXISTS รันซ้ำได้
+ *  เรียกครั้งเดียวตอน api เริ่ม (server.ts) ถ้า Neo4j ยังไม่พร้อมแค่เตือน ไม่ทำให้ api ล่ม */
+export async function ensureNeo4jIndexes(): Promise<void> {
+  await withNeo4jSession(async (session) => {
+    await session.run("CREATE INDEX user_user_id IF NOT EXISTS FOR (u:User) ON (u.user_id)");
+    await session.run("CREATE INDEX novel_novel_id IF NOT EXISTS FOR (n:Novel) ON (n.novel_id)");
+    await session.run("CREATE INDEX tag_name IF NOT EXISTS FOR (t:Tag) ON (t.name)");
+  });
+}
+
 export async function verifyNeo4jConnectivity(): Promise<void> {
   await neo4jDriver.verifyConnectivity();
 }

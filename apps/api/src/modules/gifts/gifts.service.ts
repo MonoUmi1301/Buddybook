@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
 import { assertNovelVisible } from "@/lib/novelVisibility";
-import { getBalance, ledgerTimestamp, lockWallets } from "@/modules/wallet/wallet.service";
+import { WALLET_TX_OPTIONS, getBalance, ledgerTimestamp, lockWallets } from "@/modules/wallet/wallet.service";
 import { sanitizeCardText } from "@/modules/gifts/gift-sanitize";
 import { splitGiftFee } from "@/modules/gifts/gift-fee";
 import { SUPPORTER_BADGES } from "@/config/supporterBadges";
@@ -336,7 +336,7 @@ export async function sendGift(from_user_id: string, input: SendGiftInput): Prom
       });
 
       return { donation, balance_after, replayed: false };
-    });
+    }, WALLET_TX_OPTIONS);
 
   let result: { donation: DonationListRow; balance_after: number; replayed: boolean };
   try {

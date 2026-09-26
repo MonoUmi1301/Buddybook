@@ -9,6 +9,8 @@ const router = Router();
 router.get("/search", attachUserIfPresent, asyncHandler(novelsController.search));
 router.get("/:novel_id", attachUserIfPresent, asyncHandler(novelsController.getById));
 router.get("/:novel_id/chapters", attachUserIfPresent, asyncHandler(novelsController.listChapters));
+// เพิ่มภายหลัง (perf) — คอมเมนต์ทุกตอนในครั้งเดียว (หน้านิยายเคยยิงทีละตอน = N+1)
+router.get("/:novel_id/comments", attachUserIfPresent, asyncHandler(novelsController.listComments));
 
 // ส่วนขยายนอก API_Endpoints.md เดิม — เพิ่มภายหลัง audit pass หลัง Phase 9 (ดู schema.prisma NovelLike)
 router.post("/:novel_id/like", requireAuth, asyncHandler(novelsController.like));

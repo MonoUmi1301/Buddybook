@@ -224,6 +224,12 @@ export async function listChapters(req: Request, res: Response) {
   res.status(200).json(result);
 }
 
+/** เพิ่มภายหลัง (perf) — คอมเมนต์ทุกตอนของนิยายในครั้งเดียว แทน GET /chapters/:id/comments ทีละตอน */
+export async function listComments(req: Request, res: Response) {
+  const { novel_id } = novelIdParamSchema.parse(req.params);
+  res.status(200).json(await chaptersService.listNovelComments(novel_id, req.user?.user_id));
+}
+
 const createChapterBodySchema = z
   .object({
     chapter_number: z.number().int().positive(),
