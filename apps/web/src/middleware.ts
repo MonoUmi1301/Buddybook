@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/api/auth";
+import { appUrl } from "@/lib/api/config";
 
 /**
  * Silent Token Refresh สำหรับ Persistent Session
@@ -123,7 +124,7 @@ export async function middleware(request: NextRequest) {
     !request.cookies.get(HAS_INTERESTS_COOKIE)?.value &&
     !isOnboardingExempt(pathname)
   ) {
-    const onboardingUrl = new URL("/onboarding", request.url);
+    const onboardingUrl = appUrl("/onboarding");
     // จำหน้าที่ตั้งใจจะไป — ผู้ใช้ที่ตอบ onboarding แล้วแค่ไม่มี cookie จะถูกส่งกลับไปหน้านั้น (ดู onboarding-sync)
     if (pathname !== "/") onboardingUrl.searchParams.set("next", pathname + request.nextUrl.search);
     const redirectResponse = NextResponse.redirect(onboardingUrl);

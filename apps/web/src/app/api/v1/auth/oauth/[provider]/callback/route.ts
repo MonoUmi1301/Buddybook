@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { callApi } from "@/lib/api/proxy";
 import { setAuthCookies } from "@/lib/api/auth";
+import { appUrl } from "@/lib/api/config";
 
 interface OAuthLoginResponse {
   access_token: string;
@@ -16,7 +17,7 @@ export async function GET(request: Request, { params }: { params: { provider: st
   const state = url.searchParams.get("state");
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL("/login?error=oauth_missing_code", request.url));
+    return NextResponse.redirect(appUrl("/login?error=oauth_missing_code"));
   }
 
   const result = await callApi({
@@ -26,10 +27,10 @@ export async function GET(request: Request, { params }: { params: { provider: st
   });
 
   if ("error" in result || result.status !== 200) {
-    return NextResponse.redirect(new URL("/login?error=oauth_failed", request.url));
+    return NextResponse.redirect(appUrl("/login?error=oauth_failed"));
   }
 
   const { access_token, refresh_token } = result.json as OAuthLoginResponse;
-  const response = NextResponse.redirect(new URL("/", request.url));
+  const response = NextResponse.redirect(appUrl("/"));
   return setAuthCookies(response, { access_token, refresh_token });
 }
