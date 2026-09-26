@@ -9,19 +9,9 @@ apps/
   nlp-worker/    Python 3.11 — Thai Sentiment Analysis (WangchanBERTa)
 ```
 
-สถานะปัจจุบัน: **skeleton ที่รันได้จริง ยังไม่มี business logic ครบทุก endpoint**
-(ดู `API_Endpoints.md` — endpoint ที่ยัง `501 Not Implemented` มีคอมเมนต์ `TODO`/label กำกับไว้
-ว่าให้ implement ตาม pattern ของ `apps/api/src/modules/auth` และ `apps/api/src/modules/novels`
-ซึ่งเป็นตัวอย่างที่ต่อ Prisma จริงแล้ว)
-
-## ⚠️ ข้อจำกัดของ sandbox ที่ใช้เขียนโค้ดนี้
-
-Sandbox ที่ใช้สร้างไฟล์ชุดนี้ไม่มีสิทธิ์เข้าถึง npm registry / PyPI (นโยบายความปลอดภัย) จึง
-**ไม่สามารถรัน `npm install`, `prisma validate`, `prisma generate`, `next build`, หรือ `pip install`
-เพื่อตรวจสอบอัตโนมัติได้ในสภาพแวดล้อมนี้** ไฟล์ทั้งหมดผ่านการรีวิวโค้ดด้วยมืออย่างละเอียด
-(ตรวจ import path, ตรวจ relation ใน Prisma schema, ตรวจ syntax ผ่าน Python `py_compile`) แต่ยัง
-**ต้องรัน `npm install` และ `pip install -r requirements.txt` บนเครื่องจริงของคุณเพื่อยืนยันอีกครั้ง**
-ก่อนใช้งานจริง
+สถานะปัจจุบัน: **ใช้งานได้ครบทุก endpoint** ใน `API_Endpoints.md` (ไม่มี endpoint ที่ตอบ 501 แล้ว) รวมส่วนขยาย
+ที่เพิ่มภายหลัง — ของขวัญ/เติมเงิน Stripe, ชั้นหนังสือ/คอลเลกชัน, 2FA, ติดตามนักเขียน, รายงานเนื้อหา, ตอนติดเหรียญ
+และถอนรายได้นักเขียน (ดูส่วนที่ 6 ของ `API_Endpoints.md`)
 
 ## เริ่มต้นใช้งาน
 
@@ -35,7 +25,7 @@ cp .env.example .env
 
 npm install                 # ติดตั้งจาก root ก็ได้ (npm workspaces): npm install ที่ root
 npm run prisma:generate     # generate Prisma Client
-npm run prisma:migrate      # สร้างตารางทั้ง 18 ตัวใน Postgres
+npm run prisma:migrate      # สร้างตารางทั้งหมดใน Postgres
 psql "$DATABASE_URL" -f prisma/migrations_manual/checks.sql   # เพิ่ม CHECK constraints ที่ Prisma ประกาศแบบ declarative ไม่ได้
 
 npm run dev                 # http://localhost:4000  (GET /health เช็คว่ารันติด)
@@ -60,7 +50,14 @@ cp .env.example .env        # DATABASE_URL เดียวกับ apps/api
 python src/main.py
 ```
 
-โมเดล WangchanBERTa จริงยังไม่ได้ fine-tune/ต่อเข้าไป — ดู `TODO` ใน `apps/nlp-worker/src/sentiment.py`
+`MODEL_PATH` ต้องชี้ไปที่โฟลเดอร์โมเดล fine-tuned (`my_final_sentiment_model` ~400MB — อยู่นอก repo ตั้งใจ)
+ถ้าไม่รัน worker นี้ `sentiment_score` ของคอมเมนต์/รีวิวจะเป็น `null` ตลอด และคำแนะนำนิยายจาก Neo4j ที่อิง sentiment จะว่าง
+
+รันใน Docker ได้ด้วย (profile `nlp` แยก เพราะต้องมีโฟลเดอร์โมเดล):
+
+```bash
+NLP_MODEL_DIR=/path/to/my_final_sentiment_model docker compose --profile app --profile nlp up -d
+```
 
 ### รันทั้งหมดจาก root (แนะนำ)
 
@@ -70,14 +67,38 @@ npm run dev:api          # apps/api
 npm run dev:web          # apps/web (คนละ terminal)
 ```
 
-## สิ่งที่ implement เป็นตัวอย่างไว้แล้ว (reference pattern)
+## งานเบื้องหลัง (Scheduler)
 
-- `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh` — bcrypt hash + JWT
-- `GET /api/v1/users/me` — ตัวอย่างการใช้ `requireAuth` middleware
-- `GET /api/v1/novels/search`, `GET /api/v1/novels/:novel_id` — Prisma query จริง พร้อม pagination/filter
+api รันงานตามเวลาใน process ของตัวเอง (`apps/api/src/lib/scheduler.ts`) ไม่ต้องตั้ง cron แยก:
 
-Endpoint ที่เหลือทั้งหมดถูกกำหนด route + auth middleware ไว้ครบตาม `API_Endpoints.md`
-แต่ controller ยัง return `501 Not Implemented` — เติม business logic ตามลำดับความสำคัญของ thesis ได้เลย
+| งาน | ค่า default | env |
+|---|---|---|
+| เผยแพร่ตอนที่ตั้งเวลาไว้ | ทุก 60 วิ | `SCHEDULE_PUBLISH_INTERVAL_SEC` |
+| ลบของในถังขยะที่เกิน 30 วัน | ทุก 1 ชม. | `SCHEDULE_TRASH_PURGE_INTERVAL_SEC` |
+| sync กราฟแนะนำนิยายเข้า Neo4j | ทุก 6 ชม. | `SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC` |
+
+ปิดได้ด้วย `SCHEDULER_ENABLED=false` (เช่น รัน api หลาย instance ให้เปิดแค่ตัวเดียว หรือจะใช้ cron ภายนอกยิง
+`/internal/*` แทน) — ปิดเองอัตโนมัติตอน `NODE_ENV=test`
+
+## ค่า env ที่เพิ่มภายหลัง (`apps/api/.env`, มีค่า default ทั้งหมด)
+
+| env | default | ความหมาย |
+|---|---|---|
+| `AUTH_RATE_LIMIT_PER_15MIN` | 20 | จำนวนครั้ง login/OTP/ลืมรหัสผ่าน ต่อบัญชีเป้าหมาย ต่อ 15 นาที |
+| `CHAPTER_PLATFORM_FEE_PERCENT` | 10 | ค่าธรรมเนียมแพลตฟอร์มจากการขายตอนติดเหรียญ |
+| `WITHDRAWAL_MIN_COINS` | 500 | ถอนรายได้ขั้นต่ำต่อครั้ง |
+| `COIN_TO_THB_RATE` | 1 | อัตราแลก coin → บาทตอนถอน |
+
+## การทดสอบ
+
+```bash
+# ต้องมี Postgres ที่ migrate + seed แล้วตาม DATABASE_URL ใน apps/api/.env
+npm test              # vitest ของ apps/api (integration ยิง HTTP จริง สร้าง/ลบข้อมูลทดสอบเอง)
+npm run typecheck     # ทั้ง api และ web
+npm run lint
+```
+
+CI (`.github/workflows/ci.yml`) รันทั้งหมดนี้บน Postgres 16 ทุก PR + `next build` ของ web
 
 ## เอกสารอ้างอิง
 
