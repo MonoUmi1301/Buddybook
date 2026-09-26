@@ -123,7 +123,10 @@ export async function middleware(request: NextRequest) {
     !request.cookies.get(HAS_INTERESTS_COOKIE)?.value &&
     !isOnboardingExempt(pathname)
   ) {
-    const redirectResponse = NextResponse.redirect(new URL("/onboarding", request.url));
+    const onboardingUrl = new URL("/onboarding", request.url);
+    // จำหน้าที่ตั้งใจจะไป — ผู้ใช้ที่ตอบ onboarding แล้วแค่ไม่มี cookie จะถูกส่งกลับไปหน้านั้น (ดู onboarding-sync)
+    if (pathname !== "/") onboardingUrl.searchParams.set("next", pathname + request.nextUrl.search);
+    const redirectResponse = NextResponse.redirect(onboardingUrl);
     if (response) {
       // คง Set-Cookie ของ access token ที่เพิ่ง refresh ไว้ด้วย ไม่งั้นจะเสียการ refresh ที่เพิ่งทำไป
       response.cookies.getAll().forEach((c) => redirectResponse.cookies.set(c));

@@ -10,7 +10,8 @@ import { callApi } from "@/lib/api/proxy";
 export default async function OnboardingInterestsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.has_interests) redirect("/");
+  // ตอบแล้วแต่ไม่มี cookie (เบราว์เซอร์ใหม่) — ไปตั้ง cookie ก่อน กัน redirect loop กับ middleware
+  if (user.has_interests) redirect("/api/v1/users/me/onboarding-sync");
 
   const result = await callApi({ method: "GET", path: "/admin/tags" });
   const tags: OnboardingTag[] =
