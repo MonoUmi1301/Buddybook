@@ -14,5 +14,8 @@ router.post("/topup/verify-slip", asyncHandler(walletController.verifyTopupSlip)
 router.post("/topup/checkout-session", asyncHandler(walletController.createCheckoutSession));
 // สถานะคำสั่งเติม coin จาก DB — webhook เป็นคนเปลี่ยนสถานะ ฝั่ง client แค่อ่าน
 router.get("/topup/orders/:order_id/status", asyncHandler(walletController.getTopupOrderStatus));
+// เพิ่มภายหลัง (ถอนรายได้นักเขียน)
+router.get("/withdrawals", asyncHandler(walletController.listWithdrawals));
+router.post("/withdrawals", asyncHandler(walletController.createWithdrawal));
 
 export default router;

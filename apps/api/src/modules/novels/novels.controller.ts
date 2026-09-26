@@ -237,6 +237,8 @@ const createChapterBodySchema = z
     content: z.string().optional(),
     status: z.enum(["draft", "published", "scheduled", "hidden"]),
     scheduled_publish_at: z.coerce.date().optional(),
+    // เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = ฟรี
+    price_coins: z.number().int().min(0).max(1000).optional(),
   })
   .refine((v) => v.status !== "scheduled" || (v.scheduled_publish_at && v.scheduled_publish_at > new Date()), {
     message: "scheduled_publish_at is required and must be in the future when status is scheduled",

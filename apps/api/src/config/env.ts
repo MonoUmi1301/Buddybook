@@ -74,6 +74,8 @@ const envSchema = z.object({
   SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC: z.coerce.number().int().positive().default(6 * 3600),
   // เพิ่มภายหลัง (auth hardening) — จำนวนครั้งต่อ IP ต่อ 15 นาทีของ endpoint login/register/OTP/ลืมรหัส
   AUTH_RATE_LIMIT_PER_15MIN: z.coerce.number().int().positive().default(20),
+  // เพิ่มภายหลัง (ตอนติดเหรียญ) — ค่าธรรมเนียมแพลตฟอร์ม (%) หักจากราคาตอนก่อนเข้ากระเป๋านักเขียน
+  CHAPTER_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(10),
   // เพิ่มภายหลัง (ถอนเงินนักเขียน) — ขั้นต่ำ coin ต่อการขอถอน 1 ครั้ง และอัตรา coin → บาท
   WITHDRAWAL_MIN_COINS: z.coerce.number().int().positive().default(500),
   COIN_TO_THB_RATE: z.coerce.number().positive().default(1),

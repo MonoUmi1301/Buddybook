@@ -5,6 +5,7 @@ import { getStripeClient } from "@/lib/stripe";
 import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
 import { resolveStripeSession } from "@/lib/payments/resolveStatus";
+import * as withdrawalsService from "@/modules/wallet/withdrawals.service";
 
 export async function listTransactions(req: Request, res: Response) {
   const result = await walletService.listTransactions(req.user!.user_id);
@@ -77,4 +78,56 @@ export async function stripeWebhook(req: Request, res: Response) {
 
   // ตอบ 200 เร็วที่สุดเสมอ (แม้ event type ที่เราไม่ได้ใช้) — Stripe จะ retry ซ้ำถ้าไม่ได้ 2xx กลับไป
   res.status(200).json({ received: true });
+}
+
+
+// ---------------------------------------------------------------------------
+// เพิ่มภายหลัง (ถอนรายได้นักเขียน) — ดู withdrawals.service.ts
+// ---------------------------------------------------------------------------
+
+export async function listWithdrawals(req: Request, res: Response) {
+  res.status(200).json(await withdrawalsService.listMyWithdrawals(req.user!.user_id));
+}
+
+const createWithdrawalSchema = z
+  .object({
+    amount_coins: z.number().int().positive().max(10_000_000),
+    payout_method: z.enum(["promptpay", "bank"]),
+    account_name: z.string().trim().min(1).max(100),
+    // PromptPay = เบอร์มือถือ 10 หลัก / เลขบัตรประชาชน 13 หลัก, บัญชีธนาคาร 10-15 หลัก
+    account_number: z
+      .string()
+      .transform((v) => v.replace(/[\s-]/g, ""))
+      .pipe(z.string().regex(/^\d{10,15}$/, "account_number must be 10-15 digits")),
+    bank_name: z.string().trim().min(1).max(100).optional(),
+  })
+  .refine((v) => v.payout_method !== "bank" || v.bank_name, {
+    message: "bank_name is required for bank transfers",
+    path: ["bank_name"],
+  });
+
+export async function createWithdrawal(req: Request, res: Response) {
+  const body = createWithdrawalSchema.parse(req.body);
+  res.status(201).json(await withdrawalsService.requestWithdrawal(req.user!.user_id, body));
+}
+
+const adminListWithdrawalsQuery = z.object({ status: z.enum(["pending", "paid", "rejected"]).optional() });
+
+export async function adminListWithdrawals(req: Request, res: Response) {
+  const { status } = adminListWithdrawalsQuery.parse(req.query);
+  res.status(200).json(await withdrawalsService.adminListWithdrawals(status));
+}
+
+const withdrawalIdParam = z.object({ withdrawal_id: z.string().uuid() });
+const processWithdrawalBody = z.object({
+  action: z.enum(["paid", "rejected"]),
+  note: z.string().trim().max(500).optional(),
+});
+
+export async function adminProcessWithdrawal(req: Request, res: Response) {
+  const { withdrawal_id } = withdrawalIdParam.parse(req.params);
+  const { action, note } = processWithdrawalBody.parse(req.body);
+  res
+    .status(200)
+    .json(await withdrawalsService.adminProcessWithdrawal(withdrawal_id, req.user!.user_id, action, note));
 }

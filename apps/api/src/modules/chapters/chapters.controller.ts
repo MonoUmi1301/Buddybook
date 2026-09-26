@@ -16,6 +16,8 @@ const updateChapterBodySchema = z
     content: z.string().optional(),
     status: z.enum(["draft", "published", "scheduled", "hidden"]).optional(),
     scheduled_publish_at: z.coerce.date().optional(),
+    // เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = ฟรี
+    price_coins: z.number().int().min(0).max(1000).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" })
   .refine((v) => v.status !== "scheduled" || (v.scheduled_publish_at && v.scheduled_publish_at > new Date()), {
@@ -65,6 +67,12 @@ export async function restoreVersion(req: Request, res: Response) {
   const { chapter_id, version_id } = restoreParamsSchema.parse(req.params);
   const chapter = await chaptersService.restoreChapterVersion(chapter_id, version_id, req.user!.user_id);
   res.status(200).json(chapter);
+}
+
+export async function purchase(req: Request, res: Response) {
+  const { chapter_id } = chapterIdParamSchema.parse(req.params);
+  const result = await chaptersService.purchaseChapter(req.user!.user_id, chapter_id);
+  res.status(result.already_owned ? 200 : 201).json(result);
 }
 
 export async function listComments(req: Request, res: Response) {

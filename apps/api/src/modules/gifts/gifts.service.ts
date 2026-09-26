@@ -64,7 +64,7 @@ const donationListSelect = {
 
 type DonationListRow = Prisma.DonationGetPayload<{ select: typeof donationListSelect }>;
 
-function displayName(user: { username: string; pen_name: string | null }) {
+export function displayName(user: { username: string; pen_name: string | null }) {
   return user.pen_name || user.username;
 }
 

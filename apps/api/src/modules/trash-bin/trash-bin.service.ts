@@ -24,7 +24,17 @@ export async function listNovelTrash(novel_id: string, user_id: string) {
     },
   });
 
-  return { items };
+  // snapshot ของตอนติดเหรียญมีรายชื่อผู้ซื้อ (ไว้คืนสิทธิ์ตอนกู้คืน) — ไม่ส่งให้หน้าเว็บ
+  return {
+    items: items.map((item) => {
+      const snap = item.content_snapshot;
+      if (snap && typeof snap === "object" && !Array.isArray(snap) && "purchases" in snap) {
+        const { purchases: _p, ...rest } = snap as Record<string, unknown>;
+        return { ...item, content_snapshot: rest };
+      }
+      return item;
+    }),
+  };
 }
 
 async function getOwnedTrashItem(trash_id: string, user_id: string) {
@@ -64,10 +74,28 @@ async function recreateFromSnapshot(
           scheduled_publish_at: snapshot.scheduled_publish_at
             ? new Date(snapshot.scheduled_publish_at as string)
             : null,
+          price_coins: typeof snapshot.price_coins === "number" ? snapshot.price_coins : 0,
           created_at: new Date(snapshot.created_at as string),
         },
         select: { chapter_id: true },
       });
+      // เพิ่มภายหลัง (ตอนติดเหรียญ) — คืนสิทธิ์ผู้อ่านที่ซื้อไว้แล้ว (ดู chapters.service.ts deleteChapter)
+      const purchases = Array.isArray(snapshot.purchases)
+        ? (snapshot.purchases as { purchase_id: string; user_id: string; price_coins: number; fee_coins: number; created_at: string }[])
+        : [];
+      if (purchases.length) {
+        await tx.chapterPurchase.createMany({
+          data: purchases.map((p) => ({
+            purchase_id: p.purchase_id,
+            user_id: p.user_id,
+            chapter_id: created.chapter_id,
+            price_coins: p.price_coins,
+            fee_coins: p.fee_coins,
+            created_at: new Date(p.created_at),
+          })),
+          skipDuplicates: true,
+        });
+      }
       return created.chapter_id;
     }
     case "character_node": {
