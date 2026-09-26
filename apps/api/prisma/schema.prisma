@@ -8,7 +8,7 @@
 //    ต้องรัน `CREATE EXTENSION IF NOT EXISTS pgcrypto;` ก่อน migrate ครั้งแรก
 // 2. Prisma ไม่รองรับ CHECK constraint แบบ declarative ในไฟล์นี้ (ยกเว้นผ่าน migration SQL ดิบ)
 //    รายการ CHECK ทั้งหมดที่ schema.prisma นี้ "ไม่ได้บังคับให้อัตโนมัติ" ให้ดูไฟล์
-//    `prisma/migrations_manual/checks.sql` ที่แนบมาคู่กัน (ต้องรันเพิ่มหลัง `prisma migrate dev`)
+//    migration `20260930100000_manual_check_constraints` (SQL ดิบ — รันอัตโนมัติพร้อม migrate)
 // 3. Enum ด้านล่างแปลงมาจาก VARCHAR + CHECK IN (...) ในเอกสารต้นฉบับ — Postgres จะสร้างเป็น
 //    native ENUM type แทน VARCHAR (ปลอดภัยกว่า/เร็วกว่า CHECK แต่ยังคง valid values เดิมทุกตัว)
 // 4. Neo4j (User/Novel/Tag nodes + INTERESTED_IN/HAS_TAG/READ) ไม่อยู่ในไฟล์นี้ เพราะเป็นคนละ
@@ -528,7 +528,7 @@ model CharacterEdge {
   source_node CharacterNode @relation("EdgeSource", fields: [source_node_id], references: [node_id], onDelete: Cascade)
   target_node CharacterNode @relation("EdgeTarget", fields: [target_node_id], references: [node_id], onDelete: Cascade)
 
-  // CHECK (source_node_id <> target_node_id) — ดู migrations_manual/checks.sql
+  // CHECK (source_node_id <> target_node_id) — ดู migration 20260930100000_manual_check_constraints
   @@map("character_edges")
 }
 
@@ -637,7 +637,7 @@ model Comment {
   parent_comment Comment?  @relation("CommentReplies", fields: [parent_comment_id], references: [comment_id], onDelete: Cascade)
   replies        Comment[] @relation("CommentReplies")
 
-  // CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migrations_manual/checks.sql
+  // CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migration 20260930100000_manual_check_constraints
   // เพิ่มภายหลัง (perf) — คอมเมนต์ตามตอน เรียงเวลา (GET /chapters/:id/comments, /novels/:id/comments)
   @@index([chapter_id, created_at])
   @@map("comments")
@@ -661,7 +661,7 @@ model Review {
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   user  User  @relation(fields: [user_id], references: [user_id])
 
-  // CHECK (rating BETWEEN 1 AND 5), CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migrations_manual/checks.sql
+  // CHECK (rating BETWEEN 1 AND 5), CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migration 20260930100000_manual_check_constraints
   @@unique([novel_id, user_id])
   @@map("reviews")
 }
@@ -709,7 +709,7 @@ model Donation {
   from_user User      @relation("DonationFrom", fields: [from_user_id], references: [user_id])
   to_user   User      @relation("DonationTo", fields: [to_user_id], references: [user_id])
 
-  // CHECK (amount > 0), quantity 1-99, net_amount + fee_amount = amount — ดู migrations_manual/checks.sql
+  // CHECK (amount > 0), quantity 1-99, net_amount + fee_amount = amount — ดู migration 20260930100000_manual_check_constraints
   @@unique([from_user_id, idempotency_key])
   @@index([to_user_id, created_at(sort: Desc)])
   @@index([from_user_id, created_at(sort: Desc)])

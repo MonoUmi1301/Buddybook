@@ -7,7 +7,6 @@
   - Dev DB the app actually uses: native Windows Postgres at `localhost:5432/buddybook` (`apps/api/.env`; the Docker api container reaches it via `host.docker.internal:5432`).
   - Port 5525 is the Docker `buddybook-postgres-1` container — no longer used by the app (holds only old mock/demo data).
   - Never pass the dev `DATABASE_URL` as `--shadow-database-url`; Prisma resets the shadow DB.
-  - `apps/api/prisma/migrations_manual/checks.sql` (CHECK constraints) must be applied by hand after `prisma migrate reset`.
 - Styling: Tailwind CSS
 
 ## Common Commands

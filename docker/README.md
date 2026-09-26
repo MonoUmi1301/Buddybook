@@ -87,9 +87,10 @@ swap=2GB
 ## ลำดับ setup (`apps/api/scripts/db-setup.mjs`)
 
 1. `prisma migrate deploy` — migration `prisma/migrations/0_init` (สร้างจาก schema.prisma ปัจจุบัน)
-2. `prisma/migrations_manual/checks.sql` — CHECK constraints (รันซ้ำได้)
-3. `prisma/seed.ts` — แท็ก/หมวดหมู่
-4. `prisma/seed-mock-novels.ts` — ข้อมูล mock
+   (รวม CHECK constraints — migration `20260930100000_manual_check_constraints`)
+2. `prisma/seed.ts` — แท็ก/หมวดหมู่
+3. `prisma/seed-mock-novels.ts` — ข้อมูล mock
+4. `prisma/seed-demo-library.ts` — ผู้ใช้เดโม My Library
 5. `POST /api/v1/internal/recommendations/sync` — สร้างกราฟ Neo4j จาก Postgres
 
 หยุดทันทีที่ขั้นไหนล้มเหลว

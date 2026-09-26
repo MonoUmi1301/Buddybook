@@ -49,7 +49,6 @@ jobs:
           psql "$PSQL_URL" -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
           npx prisma generate
           npx prisma migrate deploy
-          psql "$PSQL_URL" -f prisma/migrations_manual/checks.sql
           npx tsx prisma/seed.ts
       - run: npm run typecheck --workspace=apps/api
       - run: npm run lint --workspace=apps/api

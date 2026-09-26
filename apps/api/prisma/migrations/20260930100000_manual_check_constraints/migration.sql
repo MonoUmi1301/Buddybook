@@ -1,6 +1,8 @@
 -- ============================================================================
 -- BuddyBook — CHECK constraints ที่ Prisma schema.prisma แสดงไม่ได้แบบ declarative
--- รันไฟล์นี้ "หลัง" จาก `prisma migrate dev` ครั้งแรก (หรือใส่เป็น migration.sql เพิ่มเติม)
+-- เดิมอยู่ที่ prisma/migrations_manual/checks.sql (ต้องรันเองหลัง migrate) ย้ายมาเป็น migration
+-- ให้ migrate reset / deploy / CI ได้ครบอัตโนมัติ — DROP IF EXISTS ก่อน ADD ทุกตัว รันซ้ำบนฐานที่มีอยู่แล้วได้
+-- Prisma ไม่ติดตาม CHECK constraint จึงไม่นับเป็น drift
 -- อ้างอิงจาก BuddyBook_Data_Dictionary_and_Schema.md ทุกข้อ
 -- ============================================================================
 
