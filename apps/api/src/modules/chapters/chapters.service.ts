@@ -412,6 +412,7 @@ interface CommentNode {
   comment_id: string;
   user: { user_id: string; username: string; avatar_url: string | null };
   content: string;
+  sticker_id: string | null;
   sentiment_label: string | null;
   created_at: Date;
   replies: CommentNode[];
@@ -441,6 +442,7 @@ const commentRowSelect = {
   chapter_id: true,
   parent_comment_id: true,
   content: true,
+  sticker_id: true,
   sentiment_label: true,
   created_at: true,
   user: { select: { user_id: true, username: true, avatar_url: true } },
@@ -456,6 +458,7 @@ function buildCommentTree(rows: CommentRow[]): CommentNode[] {
       comment_id: row.comment_id,
       user: row.user,
       content: row.content,
+      sticker_id: row.sticker_id,
       sentiment_label: row.sentiment_label,
       created_at: row.created_at,
       replies: [],
@@ -510,6 +513,7 @@ export async function listNovelComments(novel_id: string, requester_id?: string)
 
 interface CreateCommentInput {
   content: string;
+  sticker_id?: string;
   parent_comment_id?: string;
 }
 
@@ -534,9 +538,10 @@ export async function createComment(chapter_id: string, user_id: string, input: 
       chapter_id,
       user_id,
       content: input.content,
+      sticker_id: input.sticker_id,
       parent_comment_id: input.parent_comment_id,
     },
-    select: { comment_id: true, content: true, sentiment_label: true, created_at: true },
+    select: { comment_id: true, content: true, sticker_id: true, sentiment_label: true, created_at: true },
   });
 
   return comment;

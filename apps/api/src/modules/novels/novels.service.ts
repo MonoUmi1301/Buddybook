@@ -641,6 +641,7 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
       is_anonymous: r.is_anonymous,
       rating: r.rating,
       comment_text: r.comment_text,
+      sticker_id: r.sticker_id,
       sentiment_label: r.sentiment_label,
       created_at: r.created_at,
     })),
@@ -650,6 +651,7 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
 interface CreateReviewInput {
   rating: number;
   comment_text?: string;
+  sticker_id?: string;
   is_anonymous?: boolean;
 }
 
@@ -666,9 +668,10 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
         user_id,
         rating: input.rating,
         comment_text: input.comment_text,
+        sticker_id: input.sticker_id,
         is_anonymous: input.is_anonymous ?? false,
       },
-      select: { review_id: true, rating: true, sentiment_label: true, is_anonymous: true, created_at: true },
+      select: { review_id: true, rating: true, sticker_id: true, sentiment_label: true, is_anonymous: true, created_at: true },
     });
 
     // สร้าง READ edge ทันที (sentiment_score เป็น null ก่อน — Phase NLP Worker จะเรียก

@@ -40,6 +40,7 @@ interface ReviewApiItem {
   is_anonymous: boolean;
   rating: number | null;
   comment_text: string | null;
+  sticker_id: string | null;
   created_at: string;
 }
 
@@ -149,6 +150,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
           avatarUrl: r.user.avatar_url ?? undefined,
           rating: r.rating ?? 0,
           comment: r.comment_text ?? "",
+          stickerId: r.sticker_id ?? null,
           createdAt: r.created_at,
           isAnonymous: r.user.username === null,
         }))

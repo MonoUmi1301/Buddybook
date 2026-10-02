@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
 import * as chaptersService from "@/modules/chapters/chapters.service";
+import { STICKER_IDS } from "@/lib/stickers";
 
 const chapterIdParamSchema = z.object({ chapter_id: z.string().uuid() });
 
@@ -81,10 +82,14 @@ export async function listComments(req: Request, res: Response) {
   res.status(200).json(result);
 }
 
-const createCommentBodySchema = z.object({
-  content: z.string().trim().min(1).max(5000),
-  parent_comment_id: z.string().uuid().optional(),
-});
+// เพิ่มภายหลัง — คอมเมนต์เป็นสติกเกอร์อย่างเดียวได้ (content ว่าง) แต่ต้องมีอย่างใดอย่างหนึ่ง
+const createCommentBodySchema = z
+  .object({
+    content: z.string().trim().max(5000).default(""),
+    sticker_id: z.enum(STICKER_IDS).optional(),
+    parent_comment_id: z.string().uuid().optional(),
+  })
+  .refine((v) => v.content.length > 0 || v.sticker_id, { message: "content or sticker_id is required" });
 
 export async function createComment(req: Request, res: Response) {
   const { chapter_id } = chapterIdParamSchema.parse(req.params);

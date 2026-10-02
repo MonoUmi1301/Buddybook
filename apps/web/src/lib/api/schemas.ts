@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COLLECTION_ICONS } from "@/lib/collectionIcons";
+import { STICKER_IDS } from "@/lib/stickers";
 
 /**
  * Zod schemas — validate request payload ฝั่ง Next.js "ก่อน" ส่งต่อไป Express Gateway
@@ -142,14 +143,18 @@ export const updateCollectionSchema = createCollectionSchema
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 export const collectionItemSchema = z.object({ novel_id: uuid });
 
-export const createCommentSchema = z.object({
-  content: z.string().trim().min(1).max(5000),
-  parent_comment_id: uuid.optional(),
-});
+export const createCommentSchema = z
+  .object({
+    content: z.string().trim().max(5000).default(""),
+    sticker_id: z.enum(STICKER_IDS).optional(),
+    parent_comment_id: uuid.optional(),
+  })
+  .refine((v) => v.content.length > 0 || v.sticker_id, { message: "content or sticker_id is required" });
 
 export const createReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment_text: z.string().trim().max(5000).optional(),
+  sticker_id: z.enum(STICKER_IDS).optional(),
   is_anonymous: z.boolean().optional(),
 });
 

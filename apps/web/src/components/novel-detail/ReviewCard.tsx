@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { formatThaiDate } from "@/lib/format";
 import { ReportButton } from "@/components/social/ReportButton";
+import { StickerImage } from "@/components/social/StickerPicker";
 
 export interface Review {
   id: string;
@@ -11,6 +12,7 @@ export interface Review {
   /** 0 = ไม่ได้ให้ดาว (rating เป็น null ใน DB) */
   rating: number;
   comment: string;
+  stickerId: string | null;
   createdAt: string;
   isAnonymous: boolean;
 }
@@ -53,6 +55,7 @@ export function ReviewCard({ review, isLoggedIn = false }: { review: Review; isL
       {review.comment && (
         <p className="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-neutral-700">{review.comment}</p>
       )}
+      <StickerImage id={review.stickerId} className="mt-3 h-28 w-28" />
     </article>
   );
 }

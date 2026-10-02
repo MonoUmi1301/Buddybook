@@ -7,6 +7,7 @@ import * as charactersService from "@/modules/characters/characters.service";
 import * as locationsService from "@/modules/locations/locations.service";
 import * as timelineService from "@/modules/timeline/timeline.service";
 import { ApiError } from "@/utils/ApiError";
+import { STICKER_IDS } from "@/lib/stickers";
 
 // เพิ่มภายหลัง (Phase M) — comma-joined string จาก query string เลี่ยงปัญหา array query-param
 // parsing ของ Express/URLSearchParams ที่ต้องใช้ ?x=1&x=2
@@ -474,6 +475,7 @@ export async function listReviews(req: Request, res: Response) {
 const createReviewBodySchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment_text: z.string().trim().max(5000).optional(),
+  sticker_id: z.enum(STICKER_IDS).optional(),
   is_anonymous: z.boolean().optional(),
 });
 

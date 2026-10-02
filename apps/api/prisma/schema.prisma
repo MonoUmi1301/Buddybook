@@ -628,6 +628,8 @@ model Comment {
   user_id           String          @db.Uuid
   parent_comment_id String?         @db.Uuid
   content           String          @db.Text
+  /// เพิ่มภายหลัง — สติกเกอร์ (id ตาม STICKER_IDS ใน src/lib/stickers.ts) คอมเมนต์ที่มีสติกเกอร์ content ว่างได้
+  sticker_id        String?         @db.VarChar(32)
   sentiment_label   SentimentLabel?
   sentiment_score   Float?
   created_at        DateTime        @default(now()) @db.Timestamptz(6)
@@ -650,6 +652,8 @@ model Review {
   user_id         String          @db.Uuid
   rating          Int?            @db.SmallInt
   comment_text    String?         @db.Text
+  /// เพิ่มภายหลัง — สติกเกอร์ (id ตาม STICKER_IDS ใน src/lib/stickers.ts)
+  sticker_id      String?         @db.VarChar(32)
   sentiment_label SentimentLabel?
   sentiment_score Float?
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนรีวิวเลือกไม่เปิดเผยตัวตนได้ (username/avatar จะไม่ถูกส่ง
