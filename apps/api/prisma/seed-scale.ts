@@ -382,7 +382,7 @@ async function insert(d: ReturnType<typeof generate>) {
 
     const U = d.users, N = d.novels;
     const it = d.interactions;
-    const statusOf = (x: Interaction) => {
+    const statusOf = (x: Interaction): "reading" | "up_next" | "completed" => {
       const total = d.chapterIdOf[x.novel].length;
       return x.chaptersRead >= total && N[x.novel].status === "completed" ? "completed" : x.latent < -1.2 ? "up_next" : "reading";
     };
