@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { GiftButton } from "@/components/gifts/GiftButton";
+import { ChapterUnlockPanel } from "@/components/reader/ChapterUnlockPanel";
 import type { GiftTarget } from "@/lib/gifts";
 
 type FontFamily = "sans" | "serif" | "reading";
@@ -73,8 +74,8 @@ interface ReaderContentProps {
   nextChapterId?: string;
   /** เพิ่มภายหลัง (Gift donations) — กล่อง "ชอบตอนนี้ไหม?" ท้ายตอน (ไม่ส่ง = นิยายปิดรับของขวัญ) */
   gift?: { target: GiftTarget; viewer: { user_id: string; name: string } | null };
-  /** เพิ่มภายหลัง (ตอนติดเหรียญ) — ตอนที่ยังไม่ได้ซื้อ: แสดง panel นี้แทนเนื้อหา */
-  lockedPanel?: ReactNode;
+  /** เพิ่มภายหลัง (ตอนติดเหรียญ) — ตอนที่ยังไม่ได้ซื้อ: แสดง paywall แทนเนื้อหา จนกว่าจะซื้อสำเร็จ */
+  paywall?: { chapterId: string; priceCoins: number; teaser: string; isLoggedIn: boolean };
 }
 
 /** เพิ่มภายหลัง (audit fix) — Toolbar ปรับฟอนต์/ขนาดตัวอักษร/ธีมตอนอ่าน แบบเดียวกับที่เจอในแอพอ่าน
@@ -99,8 +100,11 @@ export function ReaderContent({
   prevChapterId,
   nextChapterId,
   gift,
-  lockedPanel,
+  paywall,
 }: ReaderContentProps) {
+  // เนื้อหาที่ได้จาก POST /purchase — แสดงทันทีหลังซื้อโดยไม่ต้องรอโหลดหน้าใหม่
+  const [unlockedContent, setUnlockedContent] = useState<string | null>(null);
+  const showPaywall = Boolean(paywall) && unlockedContent === null;
   const [prefs, setPrefs] = useState<ReaderPrefs>(DEFAULT_PREFS);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -130,7 +134,7 @@ export function ReaderContent({
   const activeTheme = themeOptions.find((o) => o.value === prefs.theme)!;
 
   return (
-    <div className="relative -mx-4 px-4 pb-8 transition-colors sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8" ref={panelRef} style={{ backgroundColor: activeTheme.bg, color: activeTheme.text }}>
+    <div className="relative -mx-4 px-4 pb-8 transition-colors sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8" ref={panelRef} style={{ backgroundColor: activeTheme.bg, color: activeTheme.text, "--reader-bg": activeTheme.bg } as CSSProperties}>
       <div className="mx-auto w-full max-w-3xl pt-4">
         <nav className="mb-4 text-sm" style={{ color: activeTheme.muted }}>
           <Link href={`/novels/${novelId}`} className="hover:underline">
@@ -145,7 +149,9 @@ export function ReaderContent({
           โดยนักเขียน {authorUsername}
         </p>
 
-        {lockedPanel ?? (
+        {showPaywall && paywall ? (
+          <ChapterUnlockPanel {...paywall} onUnlocked={setUnlockedContent} />
+        ) : (
           <article
             className="prose prose-neutral mt-6 max-w-none transition-colors"
             style={{
@@ -153,7 +159,7 @@ export function ReaderContent({
               fontSize: `${activeSize.px}px`,
               color: activeTheme.text,
             }}
-            dangerouslySetInnerHTML={{ __html: content }}
+            dangerouslySetInnerHTML={{ __html: unlockedContent ?? content }}
           />
         )}
 
