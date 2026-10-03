@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { syncReadEdge } from "@/lib/graphSync";
+import { refreshReadEdgeSentiment, toPolarity } from "@/lib/sentiment";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 
 interface PendingQueueItem {
@@ -44,42 +44,45 @@ interface SentimentCallbackInput {
   target_type: "comment" | "review";
   target_id: string;
   sentiment_label: "pos" | "neg" | "neutral";
+  /** ความมั่นใจของ label ที่โมเดลทาย (0..1) */
   sentiment_score: number;
+  /** ขั้วความรู้สึก −1..1 — worker รุ่นใหม่ส่ง P(pos) − P(neg) มาเอง ถ้าไม่ส่งคำนวณจาก label+score */
+  sentiment_polarity?: number;
 }
 
 /** Reference implementation — POST /internal/nlp/sentiment-callback
- *  รีวิว (novel-scoped) sync READ{sentiment_score} เข้า Neo4j ทันทีที่รู้ค่าจริง — ปิด loop ของ
- *  Phase 6 recommendation system (คอมเมนต์เป็น chapter-scoped ไม่ได้ map เข้า READ edge ตาม
- *  schema ที่ recommendation_graph_import.cql กำหนดไว้ — sync เฉพาะรีวิวเท่านั้น) */
+ *  gap 2.1/2.2 — เก็บขั้วความรู้สึก (−1..1) แยกจากความมั่นใจ แล้วคำนวณ READ{sentiment_score} ของ
+ *  user→นิยายใหม่จากรีวิว+คอมเมนต์ทั้งหมดของเรื่องนั้น (เดิม sync เฉพาะรีวิว และใช้ความมั่นใจเป็นขั้ว) */
 export async function submitSentimentCallback(input: SentimentCallbackInput) {
+  const sentiment_polarity = input.sentiment_polarity ?? toPolarity(input.sentiment_label, input.sentiment_score);
+  const data = { sentiment_label: input.sentiment_label, sentiment_score: input.sentiment_score, sentiment_polarity };
+
+  let target_id: string;
+  let user_id: string;
+  let novel_id: string;
   if (input.target_type === "comment") {
     const updated = await prisma.comment.update({
       where: { comment_id: input.target_id },
-      data: { sentiment_label: input.sentiment_label, sentiment_score: input.sentiment_score },
-      select: { comment_id: true, sentiment_label: true, sentiment_score: true },
+      data,
+      select: { comment_id: true, user_id: true, chapter: { select: { novel_id: true } } },
     });
-    return {
-      target_id: updated.comment_id,
-      sentiment_label: updated.sentiment_label,
-      sentiment_score: updated.sentiment_score,
-    };
+    target_id = updated.comment_id;
+    user_id = updated.user_id;
+    novel_id = updated.chapter.novel_id;
+  } else {
+    const updated = await prisma.review.update({
+      where: { review_id: input.target_id },
+      data,
+      select: { review_id: true, user_id: true, novel_id: true },
+    });
+    target_id = updated.review_id;
+    user_id = updated.user_id;
+    novel_id = updated.novel_id;
   }
 
-  const updated = await prisma.review.update({
-    where: { review_id: input.target_id },
-    data: { sentiment_label: input.sentiment_label, sentiment_score: input.sentiment_score },
-    select: { review_id: true, sentiment_label: true, sentiment_score: true, user_id: true, novel_id: true },
-  });
+  refreshReadEdgeSentiment(user_id, novel_id).catch((err) => console.error("Neo4j refreshReadEdgeSentiment failed:", err));
 
-  syncReadEdge(updated.user_id, updated.novel_id, updated.sentiment_score).catch((err) =>
-    console.error("Neo4j syncReadEdge failed:", err)
-  );
-
-  return {
-    target_id: updated.review_id,
-    sentiment_label: updated.sentiment_label,
-    sentiment_score: updated.sentiment_score,
-  };
+  return { target_id, ...data };
 }
 
 /** Reference implementation — POST /internal/trash-bin/purge (Cron รายวัน) */

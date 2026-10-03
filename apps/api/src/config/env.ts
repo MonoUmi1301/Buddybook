@@ -72,6 +72,12 @@ const envSchema = z.object({
   SCHEDULE_PUBLISH_INTERVAL_SEC: z.coerce.number().int().positive().default(60),
   SCHEDULE_TRASH_PURGE_INTERVAL_SEC: z.coerce.number().int().positive().default(3600),
   SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC: z.coerce.number().int().positive().default(6 * 3600),
+  // เพิ่มภายหลัง (Recommendation v2, gap 2.3) — ดู modules/recommendations/ranking.ts
+  // λ ของ long-tail re-ranking (0 = ปิด) และสัดส่วน long-tail เป้าหมายใน top-k
+  RECS_LONG_TAIL_LAMBDA: z.coerce.number().min(0).max(1).default(0.3),
+  RECS_LONG_TAIL_TARGET: z.coerce.number().min(0).max(1).default(0.4),
+  // นิยายที่สร้างไม่เกินกี่วันนับเป็น "มาใหม่" (candidate กลุ่ม fresh)
+  RECS_FRESH_DAYS: z.coerce.number().int().positive().default(30),
   // เพิ่มภายหลัง (auth hardening) — จำนวนครั้งต่อ IP ต่อ 15 นาทีของ endpoint login/register/OTP/ลืมรหัส
   AUTH_RATE_LIMIT_PER_15MIN: z.coerce.number().int().positive().default(20),
   // เพิ่มภายหลัง (ตอนติดเหรียญ) — ค่าธรรมเนียมแพลตฟอร์ม (%) หักจากราคาตอนก่อนเข้ากระเป๋านักเขียน

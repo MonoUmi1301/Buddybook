@@ -80,3 +80,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m py_compile apps/nlp-worker/src/*.py
+      - run: python -m unittest discover -s apps/nlp-worker/tests

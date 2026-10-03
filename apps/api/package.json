@@ -11,6 +11,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run",
     "check:gift-assets": "tsx scripts/check-gift-assets.ts",
+    "eval:recs": "tsx scripts/eval-recs.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",

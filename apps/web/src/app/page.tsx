@@ -39,6 +39,17 @@ function toNovelSummary(n: ApiNovel): NovelSummary {
   };
 }
 
+type RecommendationReason = "interest" | "similar_readers" | "hidden_gem" | "fresh" | "popular";
+
+/** ป้ายเหตุผลบนการ์ด "เรื่องที่คุณอาจสนใจ" — ให้ผู้อ่านรู้ว่าทำไมถูกแนะนำ (ไม่ใช่แค่ยอดนิยม) */
+const RECOMMENDATION_REASON_TAGS: Record<RecommendationReason, NovelSummary["tags"][number]> = {
+  interest: { label: "ตรงแนวที่คุณชอบ", color: "violet" },
+  similar_readers: { label: "นักอ่านแนวเดียวกับคุณชอบ", color: "teal" },
+  hidden_gem: { label: "เพชรในตม", color: "emerald" },
+  fresh: { label: "มาใหม่", color: "sky" },
+  popular: { label: "ยอดนิยมในแนวนี้", color: "amber" },
+};
+
 interface HomeTag {
   tag_id: number;
   name: string;
@@ -121,12 +132,13 @@ export default async function HomePage() {
 
   let recommended: NovelSummary[] | null = null;
   if (recommendationsResult && !("error" in recommendationsResult) && recommendationsResult.status === 200) {
-    const data = recommendationsResult.json as { content_based: ApiNovel[]; collaborative: ApiNovel[]; underrated: ApiNovel[] };
-    const seen = new Set<string>();
-    recommended = [...data.content_based, ...data.collaborative, ...data.underrated]
-      .filter((n) => (seen.has(n.novel_id) ? false : (seen.add(n.novel_id), true)))
-      .slice(0, 6)
-      .map(toNovelSummary);
+    // Recommendation v2 — API จัดอันดับ + re-rank long-tail มาแล้ว (items) แสดงตามลำดับพร้อมป้ายเหตุผล
+    const data = recommendationsResult.json as { items?: (ApiNovel & { reason: RecommendationReason })[] };
+    recommended = (data.items ?? []).slice(0, 6).map((n) => {
+      const summary = toNovelSummary(n);
+      const badge = RECOMMENDATION_REASON_TAGS[n.reason];
+      return badge ? { ...summary, tags: [badge] } : summary;
+    });
   }
 
   // "ติดท็อป"/"ใหม่มาแรง" — ต่อกับ GET /novels/search จริง (sort=views/newest, ดู novels.service.ts)

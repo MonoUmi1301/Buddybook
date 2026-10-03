@@ -33,6 +33,17 @@ ALTER TABLE "reviews"
   ADD CONSTRAINT chk_reviews_sentiment_score_range
   CHECK (sentiment_score IS NULL OR (sentiment_score >= 0 AND sentiment_score <= 1));
 
+-- comments/reviews: sentiment_polarity (ขั้วความรู้สึก) ต้องอยู่ในช่วง -1..1 — gap 2.1
+ALTER TABLE "comments" DROP CONSTRAINT IF EXISTS chk_comments_sentiment_polarity_range;
+ALTER TABLE "comments"
+  ADD CONSTRAINT chk_comments_sentiment_polarity_range
+  CHECK (sentiment_polarity IS NULL OR (sentiment_polarity >= -1 AND sentiment_polarity <= 1));
+
+ALTER TABLE "reviews" DROP CONSTRAINT IF EXISTS chk_reviews_sentiment_polarity_range;
+ALTER TABLE "reviews"
+  ADD CONSTRAINT chk_reviews_sentiment_polarity_range
+  CHECK (sentiment_polarity IS NULL OR (sentiment_polarity >= -1 AND sentiment_polarity <= 1));
+
 -- character_edges: กันตัวละครลากเส้นหาตัวเอง
 ALTER TABLE "character_edges" DROP CONSTRAINT IF EXISTS chk_character_edges_no_self_loop;
 ALTER TABLE "character_edges"

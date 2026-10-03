@@ -18,6 +18,7 @@ const sentimentCallbackBodySchema = z.object({
   target_id: z.string().uuid(),
   sentiment_label: z.enum(["pos", "neg", "neutral"]),
   sentiment_score: z.number().min(0).max(1),
+  sentiment_polarity: z.number().min(-1).max(1).optional(),
 });
 
 export async function sentimentCallback(req: Request, res: Response) {

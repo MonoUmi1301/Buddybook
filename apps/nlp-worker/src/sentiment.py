@@ -13,7 +13,8 @@ SentimentLabel = str  # "pos" | "neg" | "neutral" — ตรงกับ enum Se
 @dataclass
 class SentimentResult:
     label: SentimentLabel
-    score: float  # 0.0 - 1.0 ตาม CHECK constraint chk_comments_sentiment_score_range
+    score: float  # 0.0 - 1.0 ความมั่นใจของ label ที่ทาย (CHECK chk_comments_sentiment_score_range)
+    polarity: float  # -1.0 - 1.0 = P(pos) - P(neg) — ขั้วความรู้สึกที่ระบบแนะนำใช้ (gap 2.1)
 
 
 class SentimentAnalyzer:
@@ -43,8 +44,22 @@ class SentimentAnalyzer:
         if self._pipe is None:
             raise RuntimeError("เรียก .load() ก่อนใช้ .analyze()")
 
-        raw = self._pipe(text)[0]
-        return SentimentResult(label=self._map_label(raw["label"]), score=float(raw["score"]))
+        # top_k=None ได้ความน่าจะเป็นครบทุกคลาส — ใช้ทั้ง label ที่ชนะ (ความมั่นใจ) และ P(pos) − P(neg) (ขั้ว)
+        scores = self._pipe(text, top_k=None)
+        if scores and isinstance(scores[0], list):  # บางเวอร์ชันของ transformers ห่อเป็น list ซ้อน
+            scores = scores[0]
+        return self.from_scores(scores)
+
+    @classmethod
+    def from_scores(cls, scores: list[dict]) -> SentimentResult:
+        """แปลงผลดิบ [{label, score}, ...] เป็นผลลัพธ์ — แยกเป็น pure function เพื่อทดสอบได้โดยไม่ต้องโหลดโมเดล"""
+        probs: dict[str, float] = {}
+        for s in scores:
+            mapped = cls._map_label(s["label"])
+            probs[mapped] = probs.get(mapped, 0.0) + float(s["score"])
+        best = max(probs, key=probs.get)
+        polarity = max(-1.0, min(1.0, probs.get("pos", 0.0) - probs.get("neg", 0.0)))
+        return SentimentResult(label=best, score=probs[best], polarity=polarity)
 
     @staticmethod
     def _map_label(raw_label: str) -> SentimentLabel:

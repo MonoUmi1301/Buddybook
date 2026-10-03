@@ -5,6 +5,7 @@ import { ApiError } from "@/utils/ApiError";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
+import { syncReadEdge } from "@/lib/graphSync";
 import type { ChapterStatus } from "@prisma/client";
 import { env } from "@/config/env";
 import { getBalance, ledgerTimestamp, lockWallets, WALLET_TX_OPTIONS } from "@/modules/wallet/wallet.service";
@@ -276,6 +277,10 @@ async function recordReadingProgress(user_id: string, novel_id: string, chapter_
       data: { status: "reading" },
     }),
   ]);
+  // gap 2.2 — READ edge เกิดตั้งแต่อ่าน ไม่ต้องรอรีวิว (Neo4j ล่มต้องไม่กระทบหน้าอ่าน)
+  syncReadEdge(user_id, novel_id, null, { last_chapter_number: chapter_number, last_read_at: now }).catch((err) =>
+    console.error("Neo4j syncReadEdge failed:", err)
+  );
 }
 
 interface UpdateChapterInput {

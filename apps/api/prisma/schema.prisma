@@ -628,6 +628,9 @@ model Comment {
   content           String          @db.Text
   sentiment_label   SentimentLabel?
   sentiment_score   Float?
+  /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 (บวก = ชอบ, ลบ = ไม่ชอบ) ที่ระบบแนะนำใช้จริง
+  /// sentiment_score ข้างบนเป็นแค่ "ความมั่นใจ" ของ label ที่โมเดลทาย (0..1) ไม่ใช่ขั้ว — ดู lib/sentiment.ts
+  sentiment_polarity Float?
   created_at        DateTime        @default(now()) @db.Timestamptz(6)
 
   chapter        Chapter   @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
@@ -650,6 +653,8 @@ model Review {
   comment_text    String?         @db.Text
   sentiment_label SentimentLabel?
   sentiment_score Float?
+  /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 ดูคำอธิบายที่ Comment.sentiment_polarity
+  sentiment_polarity Float?
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนรีวิวเลือกไม่เปิดเผยตัวตนได้ (username/avatar จะไม่ถูกส่ง
   /// ออกไปให้คนอื่นเห็นตอนอ่านรีวิว) ยังต้องเก็บ user_id จริงไว้เสมอ เพื่อคุม @@unique ด้านล่าง
   /// (รีวิวได้เรื่องละ 1 ครั้ง) และให้เจ้าของรีวิวแก้ไข/ลบของตัวเองได้ตามปกติ

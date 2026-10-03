@@ -1,124 +1,283 @@
+import neo4j from "neo4j-driver";
 import { NEO4J_READ_TIMEOUT_MS, withNeo4jSession } from "@/lib/neo4j";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
+import { env } from "@/config/env";
+import { isViewerAgeVerified } from "@/lib/contentRating";
+import {
+  type Candidate,
+  type CandidateSource,
+  type RecommendationReason,
+  longTailShare,
+  mergeCandidates,
+  primaryReason,
+  relevanceScore,
+  rerankLongTail,
+} from "@/modules/recommendations/ranking";
 
-interface GraphRow {
-  novel_id: string;
-}
+/** จำนวน candidate สูงสุดที่ดึงจากแต่ละแหล่ง (ก่อนจัดอันดับ) */
+const CANDIDATES_PER_SOURCE = 40;
+export const DEFAULT_RECOMMENDATION_LIMIT = 10;
 
-interface HydratedNovel {
+interface RecommendedNovel {
   novel_id: string;
   title: string;
   cover_image_url: string | null;
   view_count: number;
   author: { username: string; pen_name: string | null };
+  reason: RecommendationReason;
+  score: number;
+  is_long_tail: boolean;
 }
 
-async function hydrate(rows: GraphRow[]): Promise<HydratedNovel[]> {
-  if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.novel_id);
-
-  const novels = await prisma.novel.findMany({
-    where: { novel_id: { in: ids }, visibility: "published" },
-    select: {
-      novel_id: true,
-      title: true,
-      cover_image_url: true,
-      view_count: true,
-      author: { select: { username: true, pen_name: true } },
-    },
-  });
-  const novelMap = new Map(novels.map((n) => [n.novel_id, { ...n, view_count: Number(n.view_count) }]));
-
-  // รักษาลำดับตามที่ query จาก Neo4j คืนมา (ตัด id ที่ไม่พบใน Postgres ทิ้ง — เช่น unpublish ไปแล้ว)
-  return ids.map((id) => novelMap.get(id)).filter((n): n is HydratedNovel => Boolean(n));
+function blank(novel_id: string, source: CandidateSource): Candidate {
+  return {
+    novel_id,
+    sources: new Set([source]),
+    shared_tags: 0,
+    similar_supporters: 0,
+    avg_polarity: null,
+    view_count: 0,
+    created_at: new Date(0),
+  };
 }
 
-const EMPTY_RECOMMENDATIONS = { content_based: [], collaborative: [], underrated: [] } as const;
-
-/**
- * Reference implementation — GET /recommendations
- * รัน 3 กลยุทธ์ตาม recommendation_graph_import.cql (Q1/Q2/Q3) พร้อมกัน แล้ว hydrate ด้วยข้อมูล
- * เต็มจาก PostgreSQL (Neo4j เก็บแค่ id/title แบบ denormalized ตาม System Architecture doc)
- *
- * audit fix — Neo4j เป็น derived store แยกต่างหาก (ดู lib/neo4j.ts) ถ้าล่ม/ต่อไม่ได้ไม่ควรทำให้
- * endpoint นี้ 500 ทั้งที่ Postgres (source of truth) ยังปกติดี — degrade เป็นผลลัพธ์ว่างแทน ซึ่ง
- * หน้าแรกฝั่ง frontend มี empty-state ที่เป็นมิตรรองรับอยู่แล้ว (ไม่ต้องเพิ่ม UI ใหม่)
- */
-export async function getRecommendations(user_id: string) {
-  let graphRows: { contentBasedRows: GraphRow[]; collaborativeRows: GraphRow[]; underratedRows: GraphRow[] };
+/** candidate จาก Neo4j — interest / similar_readers / hidden_gem (ล่มแล้วคืน [] + degraded=true) */
+async function graphCandidates(user_id: string): Promise<{ candidates: Candidate[]; degraded: boolean }> {
   try {
-    // เปลี่ยนภายหลัง (perf) — เดิมรัน 3 query ต่อกันใน session เดียว (session รันพร้อมกันไม่ได้) ตอนนี้
-    // แยก session ต่อ query แล้วรันพร้อมกันจริง + timeout ต่อ query (เกินแล้ว catch ด้านล่าง degrade เป็นผลว่าง)
     const read = (cypher: string) =>
-      withNeo4jSession((session) => session.run(cypher, { user_id }, { timeout: NEO4J_READ_TIMEOUT_MS }));
-    // Q1 — Content-based: แท็กที่ user สนใจ ตรงกับนิยายที่ยังไม่เคยอ่าน
-    const contentBasedQuery = read(
+      withNeo4jSession((session) =>
+        session.run(cypher, { user_id, limit: neo4jInt(CANDIDATES_PER_SOURCE) }, { timeout: NEO4J_READ_TIMEOUT_MS })
+      );
+
+    // Q1 — Content-based: นับแท็กที่ตรงกับความสนใจ (เดิม LIMIT 10 ไม่จัดอันดับ ได้ลำดับสุ่มตามกราฟ)
+    const interestQ = read(
       `MATCH (u:User {user_id: $user_id})-[:INTERESTED_IN]->(t:Tag)<-[:HAS_TAG]-(n:Novel)
        WHERE NOT (u)-[:READ]->(n)
-       RETURN DISTINCT n.novel_id AS novel_id
-       LIMIT 10`
+       RETURN n.novel_id AS novel_id, count(DISTINCT t) AS shared
+       ORDER BY shared DESC
+       LIMIT $limit`
     );
 
-    // Q2 — Collaborative + Sentiment-weighted: หา user (a) ที่ให้คะแนนนิยายเรื่องเดียวกับเรา
-    // ใกล้เคียงกัน (±0.05) แล้วแนะนำเรื่องอื่นที่ a ให้คะแนนบวก (>0.5) และมีแท็กร่วมกับเรื่องที่
-    // อ่านด้วยกัน — เป็นหัวใจของระบบตาม Proposal_montira.docx (ลด popularity bias ด้วย sentiment)
-    const collaborativeQuery = read(
-      `MATCH (a:User)-[r1:READ]->(shared:Novel)<-[r2:READ]-(b:User {user_id: $user_id})
-       WHERE a <> b AND r1.sentiment_score IS NOT NULL AND r2.sentiment_score IS NOT NULL
-         AND abs(r1.sentiment_score - r2.sentiment_score) <= 0.05
-       MATCH (a)-[r3:READ]->(candidate:Novel)
-       WHERE r3.sentiment_score > 0.5
-         AND candidate <> shared
-         AND NOT (b)-[:READ]->(candidate)
-       MATCH (shared)-[:HAS_TAG]->(tag:Tag)<-[:HAS_TAG]-(candidate)
-       RETURN DISTINCT candidate.novel_id AS novel_id
-       LIMIT 10`
+    // Q2 — Collaborative + sentiment: ผู้อ่านที่มีขั้วความรู้สึกต่อเรื่องเดียวกันใกล้กัน (±0.3 บนสเกล −1..1)
+    // แล้วชอบเรื่องอื่น (ขั้ว > 0.3) ที่เรายังไม่อ่าน — นับจำนวนคนที่สนับสนุนเป็นความแรงของสัญญาณ
+    const collabQ = read(
+      `MATCH (me:User {user_id: $user_id})-[r1:READ]->(shared:Novel)<-[r2:READ]-(peer:User)
+       WHERE peer <> me AND r1.sentiment_score IS NOT NULL AND r2.sentiment_score IS NOT NULL
+         AND abs(r1.sentiment_score - r2.sentiment_score) <= 0.3
+       WITH me, collect(DISTINCT peer) AS peers
+       UNWIND peers AS peer
+       MATCH (peer)-[r3:READ]->(cand:Novel)
+       WHERE r3.sentiment_score > 0.3 AND NOT (me)-[:READ]->(cand)
+       RETURN cand.novel_id AS novel_id, count(DISTINCT peer) AS supporters
+       ORDER BY supporters DESC
+       LIMIT $limit`
     );
 
-    // Q3 — Popularity Bias Reduction: นิยายที่คะแนนความรู้สึกเฉลี่ยสูงแต่มีคนอ่านน้อย
-    // (ไม่นับเรื่องที่ user นี้อ่านไปแล้ว) — ตรงกับ "แก้ปัญหา popularity bias" ที่เป็นแก่นของ thesis
-    const underratedQuery = read(
-      `MATCH (u:User)-[r:READ]->(n:Novel)
+    // Q3 — Hidden gem: ขั้วความรู้สึกเฉลี่ยดี (≥ 0.3) เรียงจากคนอ่านน้อยก่อน (ลด popularity bias)
+    const gemQ = read(
+      `MATCH (:User)-[r:READ]->(n:Novel)
        WHERE r.sentiment_score IS NOT NULL
          AND NOT (:User {user_id: $user_id})-[:READ]->(n)
-       WITH n, count(r) AS read_count, avg(r.sentiment_score) AS avg_sentiment
-       WHERE avg_sentiment >= 0.5
-       RETURN n.novel_id AS novel_id
-       ORDER BY avg_sentiment DESC, read_count ASC
-       LIMIT 10`
+       WITH n, count(r) AS readers, avg(r.sentiment_score) AS avg_polarity
+       WHERE avg_polarity >= 0.3
+       RETURN n.novel_id AS novel_id, avg_polarity
+       ORDER BY readers ASC, avg_polarity DESC
+       LIMIT $limit`
     );
 
-    const [contentBased, collaborative, underrated] = await Promise.all([contentBasedQuery, collaborativeQuery, underratedQuery]);
-
-    graphRows = {
-      contentBasedRows: contentBased.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
-      collaborativeRows: collaborative.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
-      underratedRows: underrated.records.map((r) => ({ novel_id: r.get("novel_id") as string })),
-    };
+    const [interest, collab, gem] = await Promise.all([interestQ, collabQ, gemQ]);
+    const out: Candidate[] = [];
+    for (const r of interest.records) {
+      const c = blank(r.get("novel_id"), "interest");
+      c.shared_tags = toNum(r.get("shared"));
+      out.push(c);
+    }
+    for (const r of collab.records) {
+      const c = blank(r.get("novel_id"), "similar_readers");
+      c.similar_supporters = toNum(r.get("supporters"));
+      out.push(c);
+    }
+    for (const r of gem.records) {
+      const c = blank(r.get("novel_id"), "hidden_gem");
+      c.avg_polarity = toNum(r.get("avg_polarity"));
+      out.push(c);
+    }
+    return { candidates: out, degraded: false };
   } catch (err) {
-    console.error("Neo4j recommendations query failed, degrading to empty result:", err);
-    return EMPTY_RECOMMENDATIONS;
+    console.error("Neo4j recommendation candidates failed, falling back to Postgres only:", err);
+    return { candidates: [], degraded: true };
+  }
+}
+
+/** Cypher LIMIT ต้องเป็น integer — JS number ถูกส่งเข้า driver เป็น float */
+function neo4jInt(n: number) {
+  return neo4j.int(Math.trunc(n));
+}
+
+function toNum(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (v && typeof v === "object" && "toNumber" in v) return (v as { toNumber(): number }).toNumber();
+  return Number(v);
+}
+
+/**
+ * GET /recommendations — Recommendation v2 (gap 2.3)
+ * 1) candidate: Neo4j (interest / similar_readers / hidden_gem) + Postgres (fresh / popular fallback)
+ * 2) กรองใน Postgres (source of truth): เผยแพร่อยู่, ไม่ใช่ของตัวเอง, ยังไม่เคยอ่าน, เกตอายุ 18+
+ * 3) คำนวณแท็กที่ตรง + ขั้วความรู้สึกเฉลี่ยจาก Postgres ทุกตัว (Neo4j ล่มก็ยังจัดอันดับได้)
+ * 4) relevanceScore → rerankLongTail → เหตุผลบนการ์ด
+ */
+export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMMENDATION_LIMIT) {
+  const now = new Date();
+  const [interests, readRows, ageVerified, graph] = await Promise.all([
+    prisma.userInterest.findMany({ where: { user_id }, select: { tag_id: true } }),
+    prisma.readingProgress.findMany({ where: { user_id }, select: { novel_id: true } }),
+    isViewerAgeVerified(user_id),
+    graphCandidates(user_id),
+  ]);
+  const interestTagIds = interests.map((i) => i.tag_id);
+  const readIds = readRows.map((r) => r.novel_id);
+
+  const baseWhere: Prisma.NovelWhereInput = {
+    visibility: "published",
+    author_id: { not: user_id },
+    novel_id: { notIn: readIds },
+    author: { is_suspended: false },
+    ...(ageVerified ? {} : { content_rating: { not: "mature" } }),
+  };
+
+  // Q4 — มาใหม่ตรงแนว: นิยายที่เพิ่งสร้างไม่มีทางมี sentiment/ยอดวิว จึงต้องมีช่องทางเข้าเองโดยตรง
+  const freshSince = new Date(now.getTime() - env.RECS_FRESH_DAYS * 24 * 60 * 60 * 1000);
+  const fresh = await prisma.novel.findMany({
+    where: {
+      ...baseWhere,
+      created_at: { gte: freshSince },
+      ...(interestTagIds.length > 0 ? { novel_tags: { some: { tag_id: { in: interestTagIds } } } } : {}),
+    },
+    orderBy: { created_at: "desc" },
+    take: CANDIDATES_PER_SOURCE,
+    select: { novel_id: true },
+  });
+
+  let candidates = [...graph.candidates, ...fresh.map((n) => blank(n.novel_id, "fresh"))];
+
+  // Cold start (ยังไม่มีกราฟ/ความสนใจ หรือ Neo4j ล่ม) — เสริมด้วยนิยายยอดนิยมที่ตรงแนว ให้หน้าแรกไม่ว่าง
+  if (mergeCandidates(candidates).size < limit * 2) {
+    const popular = await prisma.novel.findMany({
+      where: {
+        ...baseWhere,
+        ...(interestTagIds.length > 0 ? { novel_tags: { some: { tag_id: { in: interestTagIds } } } } : {}),
+      },
+      orderBy: { view_count: "desc" },
+      take: CANDIDATES_PER_SOURCE,
+      select: { novel_id: true },
+    });
+    candidates = [...candidates, ...popular.map((n) => blank(n.novel_id, "popular"))];
   }
 
-  const { contentBasedRows, collaborativeRows, underratedRows } = graphRows;
-  const [content_based, collaborative, underrated] = await Promise.all([
-    hydrate(contentBasedRows),
-    hydrate(collaborativeRows),
-    hydrate(underratedRows),
-  ]);
+  const merged = mergeCandidates(candidates);
+  if (merged.size === 0) {
+    return { items: [], content_based: [], collaborative: [], underrated: [], meta: buildMeta([], graph.degraded) };
+  }
 
-  return { content_based, collaborative, underrated };
+  const ids = [...merged.keys()];
+  const [novels, polarity, threshold] = await Promise.all([
+    prisma.novel.findMany({
+      where: { ...baseWhere, novel_id: { in: ids, notIn: readIds } },
+      select: {
+        novel_id: true,
+        title: true,
+        cover_image_url: true,
+        view_count: true,
+        created_at: true,
+        author: { select: { username: true, pen_name: true } },
+        novel_tags: { select: { tag_id: true } },
+      },
+    }),
+    prisma.review.groupBy({
+      by: ["novel_id"],
+      where: { novel_id: { in: ids }, sentiment_polarity: { not: null } },
+      _avg: { sentiment_polarity: true },
+    }),
+    getHeadViewThreshold(),
+  ]);
+  const polarityByNovel = new Map(polarity.map((p) => [p.novel_id, p._avg.sentiment_polarity]));
+  const interestSet = new Set(interestTagIds);
+
+  const scored = novels.map((n) => {
+    const c = merged.get(n.novel_id)!;
+    c.view_count = Number(n.view_count);
+    c.created_at = n.created_at;
+    c.shared_tags = n.novel_tags.filter((t) => interestSet.has(t.tag_id)).length;
+    c.avg_polarity = polarityByNovel.get(n.novel_id) ?? c.avg_polarity;
+    return {
+      novel_id: n.novel_id,
+      score: relevanceScore(c, { interest_count: interestTagIds.length, now }),
+      long_tail: c.view_count < threshold,
+    };
+  });
+
+  const ranked = rerankLongTail(scored, {
+    k: limit,
+    lambda: env.RECS_LONG_TAIL_LAMBDA,
+    target_long_tail_share: env.RECS_LONG_TAIL_TARGET,
+  });
+
+  const novelMap = new Map(novels.map((n) => [n.novel_id, n]));
+  const items: RecommendedNovel[] = ranked.map((r) => {
+    const n = novelMap.get(r.novel_id)!;
+    return {
+      novel_id: n.novel_id,
+      title: n.title,
+      cover_image_url: n.cover_image_url,
+      view_count: Number(n.view_count),
+      author: n.author,
+      reason: primaryReason(merged.get(r.novel_id)!, now),
+      score: Math.round(r.score * 1000) / 1000,
+      is_long_tail: r.long_tail,
+    };
+  });
+
+  // คง 3 key เดิมไว้ให้ client เก่า (แยกตามแหล่งที่มา จากรายการที่จัดอันดับแล้ว)
+  const bySource = (s: CandidateSource) => items.filter((i) => merged.get(i.novel_id)!.sources.has(s));
+  return {
+    items,
+    content_based: bySource("interest"),
+    collaborative: bySource("similar_readers"),
+    underrated: bySource("hidden_gem"),
+    meta: buildMeta(ranked, graph.degraded),
+  };
+}
+
+function buildMeta(ranked: { long_tail: boolean }[], degraded: boolean) {
+  return {
+    long_tail_share: Math.round(longTailShare(ranked) * 100) / 100,
+    rerank_lambda: env.RECS_LONG_TAIL_LAMBDA,
+    graph_available: !degraded,
+  };
+}
+
+/** ยอดวิวต่ำสุดของกลุ่ม head (20% บนสุดของนิยายที่เผยแพร่) — ต่ำกว่านี้คือ long-tail */
+async function getHeadViewThreshold(): Promise<number> {
+  const rows = await prisma.$queryRaw<{ threshold: bigint | null }[]>`
+    SELECT percentile_disc(0.8) WITHIN GROUP (ORDER BY view_count) AS threshold
+    FROM novels WHERE visibility = 'published'`;
+  const t = rows[0]?.threshold;
+  // ทุกเรื่องยอดวิว 0 เท่ากัน → threshold 0 → ไม่มี long-tail เลย; ให้ทุกเรื่องนับเป็น long-tail แทน
+  return t === null || t === undefined || Number(t) === 0 ? 1 : Number(t);
 }
 
 /**
  * Reference implementation — POST /internal/recommendations/sync
  * รี-sync ข้อมูลทั้งหมดจาก PostgreSQL เข้า Neo4j ใหม่ทั้งกราฟ (ใช้ตอน backfill/seed ครั้งแรก
  * หรือซ่อม drift ระหว่างสอง store) endpoint ที่ mutation จริงเรียก sync เฉพาะจุดของตัวเองอยู่แล้ว
- * (ดู users.controller.ts setInterests, novels.service.ts createNovel/updateNovel/createReview)
- * อันนี้จึงเป็นแค่ fallback ให้ครบทั้งระบบ ไม่ต้องเรียกบ่อย
+ * gap 2.2 — READ edge มาจากประวัติการอ่าน + รีวิว + คอมเมนต์ (เดิมรีวิวอย่างเดียว) และ
+ * sentiment_score คือขั้วความรู้สึกรวม −1..1 (lib/sentiment.ts combinePolarity)
  */
 export async function fullResync() {
   const { syncUserNode, syncInterestedIn, syncNovelTags, syncReadEdge } = await import("@/lib/graphSync");
+  const { combinePolarity } = await import("@/lib/sentiment");
 
   const users = await prisma.user.findMany({ select: { user_id: true, username: true } });
   for (const u of users) await syncUserNode(u.user_id, u.username);
@@ -132,9 +291,9 @@ export async function fullResync() {
     list.push(i.tag.name);
     interestsByUser.set(i.user_id, list);
   }
+  const usernameById = new Map(users.map((u) => [u.user_id, u.username]));
   for (const [user_id, tagNames] of interestsByUser) {
-    const username = users.find((u) => u.user_id === user_id)?.username ?? "";
-    await syncInterestedIn(user_id, username, tagNames);
+    await syncInterestedIn(user_id, usernameById.get(user_id) ?? "", tagNames);
   }
 
   const novels = await prisma.novel.findMany({
@@ -148,17 +307,49 @@ export async function fullResync() {
       n.novel_tags.map((nt) => nt.tag.name)
     );
   }
+  const publishedIds = new Set(novels.map((n) => n.novel_id));
 
-  const reviews = await prisma.review.findMany({
-    select: { user_id: true, novel_id: true, sentiment_score: true },
-  });
-  for (const r of reviews) {
-    await syncReadEdge(r.user_id, r.novel_id, r.sentiment_score);
+  // รวม READ ต่อคู่ (user, novel) จาก 3 แหล่ง
+  const [progress, reviews, comments] = await Promise.all([
+    prisma.readingProgress.findMany({ select: { user_id: true, novel_id: true, last_chapter_number: true, last_read_at: true } }),
+    prisma.review.findMany({ select: { user_id: true, novel_id: true, sentiment_polarity: true } }),
+    prisma.comment.findMany({
+      where: { sentiment_polarity: { not: null } },
+      select: { user_id: true, sentiment_polarity: true, chapter: { select: { novel_id: true } } },
+    }),
+  ]);
+  interface Pair {
+    user_id: string;
+    novel_id: string;
+    review: number | null;
+    comments: number[];
+    progress?: { last_chapter_number: number; last_read_at: Date };
+  }
+  const pairs = new Map<string, Pair>();
+  const pair = (user_id: string, novel_id: string) => {
+    const key = `${user_id}:${novel_id}`;
+    let p = pairs.get(key);
+    if (!p) {
+      p = { user_id, novel_id, review: null, comments: [] };
+      pairs.set(key, p);
+    }
+    return p;
+  };
+  for (const p of progress) pair(p.user_id, p.novel_id).progress = { last_chapter_number: p.last_chapter_number, last_read_at: p.last_read_at };
+  for (const r of reviews) pair(r.user_id, r.novel_id).review = r.sentiment_polarity;
+  for (const c of comments) pair(c.user_id, c.chapter.novel_id).comments.push(c.sentiment_polarity as number);
+
+  let readEdges = 0;
+  for (const p of pairs.values()) {
+    if (!publishedIds.has(p.novel_id)) continue;
+    await syncReadEdge(p.user_id, p.novel_id, combinePolarity(p.review, p.comments), p.progress);
+    readEdges += 1;
   }
 
   return {
     users_synced: users.length,
     novels_synced: novels.length,
     reviews_synced: reviews.length,
+    read_edges_synced: readEdges,
   };
 }
