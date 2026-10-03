@@ -32,7 +32,7 @@ Base URL: `/api/v1` (Node.js/Express API Gateway) · Auth: `Authorization: Beare
 | GET | `/novels/:novel_id` (Public) | — | `{"novel_id","title","synopsis","status","legal_status","author":{},"tags":[]}` | 200 |
 | GET | `/novels/:novel_id` (ไม่พบ) | — | `{"error":"Novel not found"}` | 404 |
 | GET | `/novels/:novel_id/chapters` (Public) | — | `{"chapters":[{"chapter_id","chapter_number","title","status"}]}` | 200 |
-| GET | `/chapters/:chapter_id` (Public, published เท่านั้น) | — | `{"chapter_id","title","content","word_count","published_at","price_coins","locked"}` — ตอนติดเหรียญที่ยังไม่ได้ซื้อ: `content: null, locked: true` | 200 |
+| GET | `/chapters/:chapter_id` (Public, published เท่านั้น) | — | `{"chapter_id","title","content","word_count","published_at","price_coins","locked","teaser"}` — ตอนติดเหรียญที่ยังไม่ได้ซื้อ: `content: null, locked: true, teaser: "<ตัวอย่าง plain text ≤200 ตัวอักษร>"` (ตอนที่อ่านได้: `teaser: null`) | 200 |
 | GET | `/library` | — | `{"library":[{"library_id","novel":{},"added_at"}]}` | 200 |
 | POST | `/library` | `{"novel_id"}` | `{"library_id","novel_id","added_at"}` | 201 |
 | POST | `/library` (ซ้ำ) | `{"novel_id"}` | `{"error":"Novel already in library"}` | 409 |
@@ -149,7 +149,7 @@ Rate limit: `login`, `register/*`, `login/verify-2fa`, `password/*` จำกั
 |---|---|---|---|---|
 | POST/PATCH | `/novels/:novel_id/chapters` · `/chapters/:chapter_id` | เพิ่ม `"price_coins"` (0–1000, 0 = ฟรี) | — | — |
 | GET | `/novels/:novel_id/chapters` | — | แต่ละตอนมี `"price_coins","is_unlocked"` | 200 |
-| POST | `/chapters/:chapter_id/purchase` | — | `{"purchase_id","chapter_id","price_coins","balance_after","already_owned"}` | 201 (ซื้อใหม่) / 200 (ซื้อแล้ว) |
+| POST | `/chapters/:chapter_id/purchase` | — | `{"purchase_id","chapter_id","price_coins","balance_after","already_owned","content"}` (`content` = เนื้อหาที่ปลดล็อกแล้ว) | 201 (ซื้อใหม่) / 200 (ซื้อแล้ว) |
 | POST | `/chapters/:chapter_id/purchase` (coin ไม่พอ) | — | `{"error","details":{"balance","required","missing"}}` | 422 |
 
 นักเขียนได้ `price − ค่าธรรมเนียม CHAPTER_PLATFORM_FEE_PERCENT` (ledger `chapter_purchase` / `chapter_sale`)

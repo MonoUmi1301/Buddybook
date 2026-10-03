@@ -155,13 +155,13 @@ describe("paid chapters", () => {
   it("hides the content of an unpurchased chapter", async () => {
     const res = await api("GET", `/chapters/${chapterId}`, readerToken);
     expect(res.status).toBe(200);
-    expect(res.json).toMatchObject({ locked: true, content: null, price_coins: PRICE });
+    expect(res.json).toMatchObject({ locked: true, content: null, teaser: "เนื้อหาลับ", price_coins: PRICE });
 
     const anon = await api("GET", `/chapters/${chapterId}`);
     expect(anon.json.content).toBeNull();
 
     const owner = await api("GET", `/chapters/${chapterId}`, authorToken);
-    expect(owner.json).toMatchObject({ locked: false, content: "<p>เนื้อหาลับ</p>" });
+    expect(owner.json).toMatchObject({ locked: false, content: "<p>เนื้อหาลับ</p>", teaser: null });
 
     const list = await api("GET", `/novels/${novelId}/chapters`, readerToken);
     const row = list.json.chapters.find((c: { chapter_id: string }) => c.chapter_id === chapterId);
@@ -185,6 +185,9 @@ describe("paid chapters", () => {
     ]);
     expect([a.status, b.status].sort()).toEqual([200, 201]);
     expect([a.json.already_owned, b.json.already_owned].sort()).toEqual([false, true]);
+    // ทั้งคนที่ซื้อจริงและคนที่ได้ already_owned ต้องได้เนื้อหาไปแสดงทันที
+    expect(a.json.content).toBe("<p>เนื้อหาลับ</p>");
+    expect(b.json.content).toBe("<p>เนื้อหาลับ</p>");
 
     const { net } = splitGiftFee(PRICE, env.CHAPTER_PLATFORM_FEE_PERCENT);
     expect(await getBalance(readerId)).toBe(readerBefore - PRICE);
@@ -207,6 +210,25 @@ describe("paid chapters", () => {
     expect(restore.status).toBe(200);
     const res = await api("GET", `/chapters/${chapterId}`, readerToken);
     expect(res.json).toMatchObject({ locked: false, price_coins: PRICE });
+  });
+
+  it("lets the author read their own paid chapter for free and refuses to sell it to them", async () => {
+    const authorBefore = await getBalance(authorId);
+    const res = await api("GET", `/chapters/${chapterId}`, authorToken);
+    expect(res.json).toMatchObject({ locked: false, content: "<p>เนื้อหาลับ</p>" });
+    expect((await api("POST", `/chapters/${chapterId}/purchase`, authorToken)).status).toBe(422);
+    expect(await getBalance(authorId)).toBe(authorBefore);
+  });
+
+  it("rejects a purchase that exceeds the remaining balance", async () => {
+    const pricey = await createChapter(1000);
+    const before = await getBalance(readerId);
+    expect(before).toBeLessThan(1000);
+    const res = await api("POST", `/chapters/${pricey}/purchase`, readerToken);
+    expect(res.status).toBe(422);
+    expect(res.json.details).toMatchObject({ balance: before, required: 1000, missing: 1000 - before });
+    expect(await getBalance(readerId)).toBe(before);
+    expect(await prisma.chapterPurchase.count({ where: { chapter_id: pricey } })).toBe(0);
   });
 
   it("refuses to sell a free chapter", async () => {
