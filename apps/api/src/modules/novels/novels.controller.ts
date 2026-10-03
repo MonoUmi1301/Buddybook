@@ -7,6 +7,7 @@ import * as charactersService from "@/modules/characters/characters.service";
 import * as locationsService from "@/modules/locations/locations.service";
 import * as timelineService from "@/modules/timeline/timeline.service";
 import { ApiError } from "@/utils/ApiError";
+import { STICKER_IDS } from "@/lib/stickers";
 
 // เพิ่มภายหลัง (Phase M) — comma-joined string จาก query string เลี่ยงปัญหา array query-param
 // parsing ของ Express/URLSearchParams ที่ต้องใช้ ?x=1&x=2
@@ -110,6 +111,8 @@ const createNovelBodySchema = z
   .object({
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
+    // เพิ่มภายหลัง — "แนะนำนิยาย" คำเกริ่นนำยาว แยกจาก synopsis
+    introduction: z.string().max(20000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: z.enum(["original", "fan-fiction", "translation"]),
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -159,6 +162,8 @@ const updateNovelBodySchema = z
   .object({
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
+    // null = ล้างค่า (ผู้เขียนลบข้อความในช่องแนะนำนิยายทิ้ง)
+    introduction: z.string().max(20000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: z.enum(["ongoing", "completed", "hiatus"]).optional(),
     visibility: z.enum(["published", "private", "pending_review"]).optional(),
@@ -470,6 +475,7 @@ export async function listReviews(req: Request, res: Response) {
 const createReviewBodySchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment_text: z.string().trim().max(5000).optional(),
+  sticker_id: z.enum(STICKER_IDS).optional(),
   is_anonymous: z.boolean().optional(),
 });
 

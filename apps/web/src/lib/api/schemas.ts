@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { COLLECTION_ICONS } from "@/lib/collectionIcons";
+import { STICKER_IDS } from "@/lib/stickers";
 
 /**
  * Zod schemas — validate request payload ฝั่ง Next.js "ก่อน" ส่งต่อไป Express Gateway
@@ -26,23 +27,24 @@ export const passwordSchema = z
 
 export const registerSchema = z.object({
   username: z.string().trim().min(3).max(50),
-  email: z.string().trim().email().max(255),
+  email: z.string().trim().toLowerCase().email().max(255),
   password: passwordSchema,
 });
 
 export const loginSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
 });
 
 export const verifyRegisterOtpSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().toLowerCase().email(),
   otp: z.string().trim().length(6),
 });
 
 // เพิ่มภายหลัง (audit fix — 2FA) — ยืนยันขั้นที่สองตอนล็อกอิน (รหัสจากแอป Authenticator)
 export const verifyLogin2faSchema = z.object({
-  challenge_token: z.string().min(1),
+  // ไม่ส่งมา = ล็อกอินผ่าน OAuth (challenge อยู่ใน httpOnly cookie bb_oauth_2fa — ดู lib/api/oauth.ts)
+  challenge_token: z.string().min(1).optional(),
   code: z.string().trim().length(6),
 });
 
@@ -141,14 +143,18 @@ export const updateCollectionSchema = createCollectionSchema
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 export const collectionItemSchema = z.object({ novel_id: uuid });
 
-export const createCommentSchema = z.object({
-  content: z.string().trim().min(1).max(5000),
-  parent_comment_id: uuid.optional(),
-});
+export const createCommentSchema = z
+  .object({
+    content: z.string().trim().max(5000).default(""),
+    sticker_id: z.enum(STICKER_IDS).optional(),
+    parent_comment_id: uuid.optional(),
+  })
+  .refine((v) => v.content.length > 0 || v.sticker_id, { message: "content or sticker_id is required" });
 
 export const createReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   comment_text: z.string().trim().max(5000).optional(),
+  sticker_id: z.enum(STICKER_IDS).optional(),
   is_anonymous: z.boolean().optional(),
 });
 
@@ -223,6 +229,7 @@ export const createNovelSchema = z
   .object({
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
+    introduction: z.string().max(20000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: legalStatusEnum,
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -264,6 +271,7 @@ export const updateNovelSchema = z
   .object({
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
+    introduction: z.string().max(20000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: novelStatusEnum.optional(),
     visibility: visibilityEnum.optional(),

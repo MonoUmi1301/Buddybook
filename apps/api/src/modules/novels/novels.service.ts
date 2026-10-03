@@ -163,6 +163,7 @@ export async function searchNovels({
 interface CreateNovelInput {
   title: string;
   synopsis?: string;
+  introduction?: string;
   cover_image_url?: string;
   legal_status: "original" | "fan-fiction" | "translation";
   tag_ids: number[];
@@ -256,6 +257,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
       author_id,
       title: input.title,
       synopsis: input.synopsis,
+      introduction: input.introduction,
       cover_image_url: input.cover_image_url,
       legal_status: LEGAL_STATUS_MAP[input.legal_status],
       // audit fix — เดิมพึ่ง default ของ schema.prisma (visibility @default(published)) ทำให้นิยาย
@@ -289,6 +291,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
 interface UpdateNovelInput {
   title?: string;
   synopsis?: string;
+  introduction?: string | null;
   cover_image_url?: string;
   status?: NovelStatus;
   visibility?: Visibility;
@@ -362,6 +365,7 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
         novel_id: true,
         title: true,
         synopsis: true,
+        introduction: true,
         cover_image_url: true,
         status: true,
         visibility: true,
@@ -637,6 +641,7 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
       is_anonymous: r.is_anonymous,
       rating: r.rating,
       comment_text: r.comment_text,
+      sticker_id: r.sticker_id,
       sentiment_label: r.sentiment_label,
       created_at: r.created_at,
     })),
@@ -646,6 +651,7 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
 interface CreateReviewInput {
   rating: number;
   comment_text?: string;
+  sticker_id?: string;
   is_anonymous?: boolean;
 }
 
@@ -662,9 +668,10 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
         user_id,
         rating: input.rating,
         comment_text: input.comment_text,
+        sticker_id: input.sticker_id,
         is_anonymous: input.is_anonymous ?? false,
       },
-      select: { review_id: true, rating: true, sentiment_label: true, is_anonymous: true, created_at: true },
+      select: { review_id: true, rating: true, sticker_id: true, sentiment_label: true, is_anonymous: true, created_at: true },
     });
 
     // สร้าง READ edge ทันที (sentiment_score เป็น null ก่อน — Phase NLP Worker จะเรียก
@@ -754,6 +761,7 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
       novel_id: true,
       title: true,
       synopsis: true,
+      introduction: true,
       cover_image_url: true,
       status: true,
       legal_status: true,

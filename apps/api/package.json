@@ -16,7 +16,8 @@
     "prisma:studio": "prisma studio",
     "dev:dockerdb": "tsx watch --env-file=../../docker/host.docker.env src/server.ts",
     "db:setup": "node scripts/db-setup.mjs",
-    "db:setup:dockerdb": "node --env-file=../../docker/host.docker.env scripts/db-setup.mjs"
+    "db:setup:dockerdb": "node --env-file=../../docker/host.docker.env scripts/db-setup.mjs",
+    "db:seed:scale": "tsx prisma/seed-scale.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EyeOff, Star } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { SelectedStickerPreview, StickerPicker } from "@/components/social/StickerPicker";
+import type { StickerId } from "@/lib/stickers";
 import { cn } from "@/lib/cn";
 
 /** ฟอร์มเขียนรีวิว — POST /api/v1/novels/:novelId/reviews (409 ถ้ารีวิวซ้ำ) */
@@ -12,6 +14,7 @@ export function ReviewForm({ novelId }: { novelId: string }) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [commentText, setCommentText] = useState("");
+  const [stickerId, setStickerId] = useState<StickerId | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +31,12 @@ export function ReviewForm({ novelId }: { novelId: string }) {
       const res = await fetch(`/api/v1/novels/${novelId}/reviews`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, comment_text: commentText.trim() || undefined, is_anonymous: isAnonymous }),
+        body: JSON.stringify({
+          rating,
+          comment_text: commentText.trim() || undefined,
+          sticker_id: stickerId ?? undefined,
+          is_anonymous: isAnonymous,
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -81,6 +89,10 @@ export function ReviewForm({ novelId }: { novelId: string }) {
         placeholder="เล่าความรู้สึกของคุณเกี่ยวกับนิยายเรื่องนี้ (ไม่บังคับ)"
         className="mt-3 w-full resize-none rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-primary-400 focus:outline-none"
       />
+      <div className="mt-2 flex items-start gap-3">
+        <StickerPicker value={stickerId} onChange={setStickerId} />
+        <SelectedStickerPreview id={stickerId} onRemove={() => setStickerId(null)} />
+      </div>
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
       <div className="mt-3 flex items-center justify-between gap-3">
         <label className="flex cursor-pointer items-center gap-1.5 text-xs text-neutral-500">
