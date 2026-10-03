@@ -49,3 +49,7 @@ coverage/
 
 # NLP worker model folder (mounted into the nlp-worker container, ~400MB)
 apps/nlp-worker/model/
+
+# Playwright (e2e/)
+test-results/
+playwright-report/

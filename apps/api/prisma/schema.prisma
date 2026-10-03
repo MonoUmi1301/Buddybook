@@ -351,6 +351,12 @@ model Novel {
   /// [{x,y}], width}] เป็น JSONB คอลัมน์เดียวต่อนิยาย เหมือน plot_notes/theme_notes
   map_drawings Json? @db.JsonB
 
+  /// gap 2.4 — ลบนิยายแบบ soft delete (ถังขยะ 30 วัน) ตาม Userflow "หน้านิยายที่ถูกลบ → กู้คืน/ลบถาวร"
+  /// ตอนย้ายลงถังขยะ visibility ถูกตั้งเป็น private (endpoint สาธารณะทุกตัวที่กรอง published จึงซ่อนให้เอง)
+  /// และจำค่าเดิมไว้ใน visibility_before_delete เพื่อกู้คืนกลับ — scheduler ลบถาวรเมื่อครบ 30 วัน
+  deleted_at               DateTime?   @db.Timestamptz(6)
+  visibility_before_delete Visibility?
+
   author           User              @relation("NovelAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   primary_tag      Tag?              @relation("NovelPrimaryTag", fields: [primary_tag_id], references: [tag_id])
   secondary_tag    Tag?              @relation("NovelSecondaryTag", fields: [secondary_tag_id], references: [tag_id])
@@ -372,6 +378,7 @@ model Novel {
 
   @@index([author_id])
   @@index([status, visibility])
+  @@index([deleted_at])
   @@map("novels")
 }
 

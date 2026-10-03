@@ -27,7 +27,8 @@
     "docker:reset": "docker compose --profile app down -v",
     "docker:rebuild": "docker compose --profile app up -d --build --renew-anon-volumes api web",
     "stripe:listen": "node scripts/stripe-listen.mjs",
-    "test": "npm test --workspace=apps/api"
+    "test": "npm test --workspace=apps/api",
+    "test:e2e": "playwright test -c e2e"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

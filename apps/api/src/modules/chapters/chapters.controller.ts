@@ -43,12 +43,20 @@ const autosaveBodySchema = z.object({
   // audit fix — เดิม autosave อัปเดตแค่ content ทำให้แก้ชื่อตอนแล้วรอ autosave (ไม่กด "บันทึกร่าง")
   // ชื่อตอนจริงในฐานข้อมูลไม่ถูกอัปเดตทั้งที่ UI ขึ้น "บันทึกแล้ว"
   title: z.string().trim().min(1).max(255).optional(),
+  // gap 2.5 — updated_at ของตอนที่ editor เห็นล่าสุด (ตรวจการแก้ไขชนกันข้ามแท็บ — ดู service)
+  base_updated_at: z.coerce.date().optional(),
 });
 
 export async function autosave(req: Request, res: Response) {
   const { chapter_id } = chapterIdParamSchema.parse(req.params);
-  const { content_snapshot, title } = autosaveBodySchema.parse(req.body);
-  const version = await chaptersService.autosaveChapter(chapter_id, req.user!.user_id, content_snapshot, title);
+  const { content_snapshot, title, base_updated_at } = autosaveBodySchema.parse(req.body);
+  const version = await chaptersService.autosaveChapter(
+    chapter_id,
+    req.user!.user_id,
+    content_snapshot,
+    title,
+    base_updated_at
+  );
   res.status(200).json(version);
 }
 

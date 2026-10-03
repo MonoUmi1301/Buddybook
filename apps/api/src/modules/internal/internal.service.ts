@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { refreshReadEdgeSentiment, toPolarity } from "@/lib/sentiment";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
+import { purgeExpiredNovels } from "@/modules/novels/novels.service";
 
 interface PendingQueueItem {
   target_type: "comment" | "review";
@@ -90,7 +91,9 @@ export async function purgeExpiredTrash() {
   const result = await prisma.trashBin.deleteMany({
     where: { auto_delete_at: { lte: new Date() }, restored_at: null },
   });
-  return { purged_count: result.count };
+  // gap 2.4 — นิยายทั้งเรื่องที่อยู่ในถังขยะครบ 30 วัน
+  const { purged_novels } = await purgeExpiredNovels();
+  return { purged_count: result.count, purged_novels };
 }
 
 /** เพิ่มภายหลัง (Phase B) — POST /internal/chapters/publish-scheduled (Cron ทุก ๆ กี่นาทีก็ได้)

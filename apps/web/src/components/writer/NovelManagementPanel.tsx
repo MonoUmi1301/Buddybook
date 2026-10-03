@@ -135,13 +135,15 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
     setError(null);
     try {
       const res = await fetch(`/api/v1/novels/${novel.novel_id}`, { method: "DELETE" });
-      if (!res.ok && res.status !== 204) {
+      if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         setError(json.error ?? "ลบนิยายไม่สำเร็จ");
         setDeletingNovel(false);
+        setPendingDeleteNovel(false);
         return;
       }
-      router.push("/write");
+      // gap 2.4 — ย้ายลงถังขยะแล้ว พาไปหน้านิยายที่ถูกลบ ให้เห็นว่ากู้คืนได้
+      router.push("/write/trash");
       router.refresh();
     } catch {
       setError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง");
@@ -339,7 +341,8 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
           <div className="w-full max-w-sm rounded-card bg-white p-6 text-center shadow-xl">
             <h2 className="text-h3 text-neutral-900">ลบนิยายเรื่องนี้ใช่ไหม?</h2>
             <p className="mt-2 text-sm text-neutral-500">
-              &quot;{novel.title}&quot; และทุกตอนในเรื่องจะถูกลบถาวรทันที ไม่สามารถกู้คืนได้
+              &quot;{novel.title}&quot; จะถูกย้ายไปที่ถังขยะ กู้คืนได้ภายใน 30 วันที่หน้า &quot;นิยายที่ถูกลบ&quot;
+              หลังจากนั้นจะถูกลบถาวรอัตโนมัติ
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Button variant="outline" onClick={() => setPendingDeleteNovel(false)}>
@@ -351,7 +354,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
                 onClick={handleDeleteNovel}
                 loading={deletingNovel}
               >
-                ยืนยันลบถาวร
+                ย้ายไปถังขยะ
               </Button>
             </div>
           </div>

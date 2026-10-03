@@ -7,6 +7,8 @@ const router = Router();
 
 // --- Implemented (public — personalized เมื่อแนบ Bearer token ที่ valid) ---
 router.get("/search", attachUserIfPresent, asyncHandler(novelsController.search));
+// gap 2.4 — ถังขยะระดับนิยาย (ต้องอยู่ก่อน "/:novel_id")
+router.get("/trash", requireAuth, asyncHandler(novelsController.listTrash));
 router.get("/:novel_id", attachUserIfPresent, asyncHandler(novelsController.getById));
 router.get("/:novel_id/chapters", attachUserIfPresent, asyncHandler(novelsController.listChapters));
 // เพิ่มภายหลัง (perf) — คอมเมนต์ทุกตอนในครั้งเดียว (หน้านิยายเคยยิงทีละตอน = N+1)
@@ -20,6 +22,8 @@ router.delete("/:novel_id/like", requireAuth, asyncHandler(novelsController.unli
 router.post("/", requireAuth, asyncHandler(novelsController.create));
 router.patch("/:novel_id", requireAuth, asyncHandler(novelsController.update));
 router.delete("/:novel_id", requireAuth, asyncHandler(novelsController.remove));
+router.post("/:novel_id/restore", requireAuth, asyncHandler(novelsController.restore));
+router.delete("/:novel_id/permanent", requireAuth, asyncHandler(novelsController.removePermanently));
 
 router.post("/:novel_id/chapters", requireAuth, asyncHandler(novelsController.createChapterForNovel));
 

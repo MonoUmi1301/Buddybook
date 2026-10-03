@@ -339,6 +339,8 @@ export const autosaveChapterSchema = z.object({
   // UI ขึ้น "บันทึกแล้ว" ทั้งที่ชื่อตอนจริงในฐานข้อมูลยังเป็นค่าเดิม — เพิ่ม title (optional) ให้ autosave
   // อัปเดตด้วยถ้ามีการแก้ไข
   title: z.string().trim().min(1).max(255).optional(),
+  // gap 2.5 — updated_at ที่ editor เห็นล่าสุด (backend ตอบ 409 ถ้าถูกแก้จากที่อื่นหลังจากนั้น)
+  base_updated_at: z.string().datetime({ offset: true }).optional(),
 });
 
 export const createCharacterSchema = z.object({

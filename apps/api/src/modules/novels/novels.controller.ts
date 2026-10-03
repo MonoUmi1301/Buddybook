@@ -206,9 +206,25 @@ export async function update(req: Request, res: Response) {
   res.status(200).json(novel);
 }
 
+/** gap 2.4 — ย้ายลงถังขยะ (เดิมลบถาวร 204) ตอบข้อมูลวันลบอัตโนมัติให้หน้าเว็บแสดง */
 export async function remove(req: Request, res: Response) {
   const { novel_id } = novelIdParamSchema.parse(req.params);
-  await novelsService.deleteNovel(novel_id, req.user!.user_id);
+  const result = await novelsService.deleteNovel(novel_id, req.user!.user_id);
+  res.status(200).json(result);
+}
+
+export async function listTrash(req: Request, res: Response) {
+  res.status(200).json(await novelsService.listTrashedNovels(req.user!.user_id));
+}
+
+export async function restore(req: Request, res: Response) {
+  const { novel_id } = novelIdParamSchema.parse(req.params);
+  res.status(200).json(await novelsService.restoreNovel(novel_id, req.user!.user_id));
+}
+
+export async function removePermanently(req: Request, res: Response) {
+  const { novel_id } = novelIdParamSchema.parse(req.params);
+  await novelsService.permanentlyDeleteNovel(novel_id, req.user!.user_id);
   res.status(204).send();
 }
 

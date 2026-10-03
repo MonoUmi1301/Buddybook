@@ -369,10 +369,20 @@ export async function autosaveChapter(
   chapter_id: string,
   user_id: string,
   content_snapshot: string,
-  title?: string
+  title?: string,
+  base_updated_at?: Date
 ) {
   const chapter = await getChapterWithNovel(chapter_id);
   if (chapter.novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
+
+  // gap 2.5 — กันเขียนทับข้ามแท็บ/อุปกรณ์: client ส่ง updated_at ที่ตัวเองเห็นล่าสุดมา ถ้าตอนนี้ถูกบันทึก
+  // จากที่อื่นหลังจากนั้น (อีกแท็บ, กู้คืนเวอร์ชัน) ตอบ 409 ให้ผู้ใช้เลือกเองแทนการทับเงียบ ๆ
+  if (base_updated_at && chapter.updated_at && chapter.updated_at.getTime() > base_updated_at.getTime()) {
+    throw new ApiError(409, "ตอนนี้ถูกแก้ไขจากที่อื่นหลังจากที่คุณเปิดไว้", {
+      code: "EDIT_CONFLICT",
+      server_updated_at: chapter.updated_at,
+    });
+  }
 
   const latest = await prisma.chapterVersion.findFirst({
     where: { chapter_id },
@@ -381,7 +391,7 @@ export async function autosaveChapter(
   });
   const version_number = (latest?.version_number ?? 0) + 1;
 
-  const [version] = await prisma.$transaction([
+  const [version, updated] = await prisma.$transaction([
     prisma.chapterVersion.create({
       data: { chapter_id, content_snapshot, version_number, edited_by: user_id, is_autosave: true },
       select: { version_id: true, version_number: true, is_autosave: true, created_at: true },
@@ -394,10 +404,11 @@ export async function autosaveChapter(
         ...(title !== undefined ? { title } : {}),
         updated_at: new Date(),
       },
+      select: { updated_at: true },
     }),
   ]);
 
-  return version;
+  return { ...version, chapter_updated_at: updated.updated_at };
 }
 
 export async function listChapterVersions(chapter_id: string, user_id: string) {
