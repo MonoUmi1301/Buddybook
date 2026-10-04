@@ -61,12 +61,15 @@ function AccordionImage({ src }: { src: string }) {
  * - เมาส์: ขยายเมื่อ hover หรือ focus, คลิกแผงที่ขยายอยู่ = เปิด
  * - จอสัมผัส: แตะครั้งแรก = ขยาย, แตะซ้ำ = เปิด (ไม่มีอะไรพึ่ง hover อย่างเดียว)
  * - ต่ำกว่า 768px: เรียงแนวตั้ง (ยืดความสูงแทนความกว้าง) ไม่ล้นจอแนวนอน
+ * - แผงที่ขยายกว้างได้สูงสุด 420px (300px ต่ำกว่า lg) แต่หดลงให้พอดีคอลัมน์เสมอ: กว้างไม่เกิน
+ *   100% − (จำนวนแผงที่หุบ × (ความกว้างแผงหุบ + gap)) — เดิมเป็นความกว้างตายตัว แผงทั้งชุดเลยกว้างกว่า
+ *   คอลัมน์ตั้งแต่ 768–1366px แล้วล้นไปทับข้อความ hero ด้านซ้าย (84 = 72+12, 64 = 56+8 ต้องตรงกับค่าข้างล่าง)
  */
 export function ImageAccordion({
   items,
   defaultIndex = 0,
   height = "h-[460px]",
-  expandedWidth = "w-[420px]",
+  expandedWidth = "w-[min(420px,calc(100%_-_var(--acc-rest)_*_84px))]",
   collapsedWidth = "w-[72px]",
   onActivate,
   className,
@@ -101,6 +104,7 @@ export function ImageAccordion({
         "max-md:h-auto max-md:flex-col",
         className
       )}
+      style={{ "--acc-rest": items.length - 1 } as React.CSSProperties}
     >
       {items.map((item, index) => {
         const isActive = index === active;
@@ -119,7 +123,7 @@ export function ImageAccordion({
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2",
               "h-full",
               isActive
-                ? cn(expandedWidth, "max-lg:w-[300px] max-md:h-[260px] max-md:w-full")
+                ? cn(expandedWidth, "max-lg:w-[min(300px,calc(100%_-_var(--acc-rest)_*_64px))] max-md:h-[260px] max-md:w-full")
                 : cn(collapsedWidth, "max-lg:w-[56px] max-md:h-[56px] max-md:w-full")
             )}
           >
