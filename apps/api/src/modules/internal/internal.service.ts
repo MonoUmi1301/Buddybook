@@ -16,7 +16,8 @@ interface PendingQueueItem {
 export async function getPendingQueue(limit = 20): Promise<{ items: PendingQueueItem[] }> {
   const [comments, reviews] = await Promise.all([
     prisma.comment.findMany({
-      where: { sentiment_label: null },
+      // คอมเมนต์สติกเกอร์อย่างเดียว (content ว่าง) ไม่มีข้อความให้ NLP วิเคราะห์
+      where: { sentiment_label: null, content: { not: "" } },
       orderBy: { created_at: "asc" },
       take: limit,
       select: { comment_id: true, content: true },

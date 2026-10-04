@@ -90,7 +90,7 @@
    (ถ้าจะใช้ softmax ทั้ง 3 คลาส ให้ใช้ `P(pos) − P(neg)` ซึ่งดีกว่า)
 2. Neo4j `READ.sentiment_score` ใช้ polarity แทน แล้วปรับ threshold ใน Q2/Q3 (เช่น `> 0.3`)
 3. Migration + backfill จากข้อมูลเดิม (`label` + `score` ที่มีอยู่แล้วพอคำนวณได้) แล้วสั่ง `fullResync`
-4. แก้ CHECK constraint ใน `migrations_manual/checks.sql`
+4. เพิ่ม CHECK constraint ของคอลัมน์ใหม่ใน migration (`20261003090000_sentiment_polarity`)
 
 ### 2.2 กราฟ `READ` สร้างจาก "รีวิว" เท่านั้น ไม่ได้มาจาก "การอ่าน"
 - `syncReadEdge` ถูกเรียกแค่ตอนสร้างรีวิวและตอน sentiment callback ของรีวิว

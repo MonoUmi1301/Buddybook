@@ -53,3 +53,6 @@ apps/nlp-worker/model/
 # Playwright (e2e/)
 test-results/
 playwright-report/
+
+# pg_dump ของ dev DB — ข้อมูล ห้าม commit
+backups/

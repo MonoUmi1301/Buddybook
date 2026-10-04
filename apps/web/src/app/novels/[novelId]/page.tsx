@@ -6,7 +6,6 @@ import { Tabs } from "@/components/ui/Tabs";
 import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
 import { NovelHero, type NovelDetailData } from "@/components/novel-detail/NovelHero";
 import { NovelOverview } from "@/components/novel-detail/NovelOverview";
-import { CharacterIntro } from "@/components/novel-detail/CharacterIntro";
 import { ChapterListCard, type ChapterListItem } from "@/components/novel-detail/ChapterListCard";
 import { ReviewsPanel } from "@/components/novel-detail/ReviewsPanel";
 import type { Review } from "@/components/novel-detail/ReviewCard";
@@ -41,6 +40,7 @@ interface ReviewApiItem {
   is_anonymous: boolean;
   rating: number | null;
   comment_text: string | null;
+  sticker_id: string | null;
   created_at: string;
 }
 
@@ -150,6 +150,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
           avatarUrl: r.user.avatar_url ?? undefined,
           rating: r.rating ?? 0,
           comment: r.comment_text ?? "",
+          stickerId: r.sticker_id ?? null,
           createdAt: r.created_at,
           isAnonymous: r.user.username === null,
         }))
@@ -245,19 +246,17 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
                   id: "synopsis",
                   label: "เรื่องย่อ",
                   content: (
-                    <div className="space-y-4">
-                      <NovelOverview novel={novel} lastPublishedAt={lastPublishedAt} totalCharacters={totalCharacters} />
-                      {novel.character_nodes.length > 0 && (
-                        <CharacterIntro
-                          characters={novel.character_nodes.map((c) => ({
-                            id: c.node_id,
-                            name: c.character_name,
-                            role: c.character_role ? characterRoleLabel[c.character_role] : "ตัวละคร",
-                            avatarUrl: c.avatar_url ?? undefined,
-                          }))}
-                        />
-                      )}
-                    </div>
+                    <NovelOverview
+                      novel={novel}
+                      characters={novel.character_nodes.map((c) => ({
+                        id: c.node_id,
+                        name: c.character_name,
+                        role: c.character_role ? characterRoleLabel[c.character_role] : "ตัวละคร",
+                        avatarUrl: c.avatar_url ?? undefined,
+                      }))}
+                      lastPublishedAt={lastPublishedAt}
+                      totalCharacters={totalCharacters}
+                    />
                   ),
                 },
                 {

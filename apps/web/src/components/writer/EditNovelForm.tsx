@@ -40,6 +40,7 @@ const statusOptions: { value: "ongoing" | "completed" | "hiatus"; label: string 
 export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormProps) {
   const [title, setTitle] = useState(novel.title);
   const [synopsis, setSynopsis] = useState(novel.synopsis ?? "");
+  const [introduction, setIntroduction] = useState(novel.introduction ?? "");
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(novel.cover_image_url);
   const [primaryTagId, setPrimaryTagId] = useState<number | null>(novel.primary_tag?.tag_id ?? null);
   const [secondaryTagId, setSecondaryTagId] = useState<number | null>(novel.secondary_tag?.tag_id ?? null);
@@ -106,6 +107,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         body: JSON.stringify({
           title: title.trim(),
           synopsis: synopsis.trim() || undefined,
+          introduction: introduction.trim() || null,
           cover_image_url: coverImageUrl ?? undefined,
           tag_ids: Array.from(tagValue.selectedIds),
           tag_names: tagValue.newNames,
@@ -135,6 +137,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         ...novel,
         title: title.trim(),
         synopsis: synopsis.trim() || null,
+        introduction: introduction.trim() || null,
         cover_image_url: coverImageUrl,
         content_rating: contentRating,
         status,
@@ -174,6 +177,15 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
       <Input label="ชื่อเรื่อง" value={title} onChange={(e) => setTitle(e.target.value)} required />
 
       <Textarea label="เรื่องย่อ" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} rows={5} />
+
+      <Textarea
+        label="แนะนำนิยาย (คำเกริ่นนำยาว)"
+        hint="รายละเอียดเพิ่มเติม/คำโปรโมตฉบับยาว แสดงต่อท้ายเรื่องย่อในหน้านิยาย (ไม่บังคับ)"
+        value={introduction}
+        onChange={(e) => setIntroduction(e.target.value)}
+        rows={8}
+        maxLength={20000}
+      />
 
       {mainGenreTags.length > 0 && (
         <div className="grid grid-cols-2 gap-4">

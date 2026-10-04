@@ -1,7 +1,8 @@
 /**
  * BuddyBook — ข้อมูลจำลอง (mockup) ครบชุดสำหรับ dev/demo
  *
- * สร้าง: ผู้ใช้ (นักเขียน 4 + นักอ่าน 5), ความสนใจ, นิยาย, ตอน, แท็ก, world-building,
+ * สร้าง: ผู้ใช้ (นักเขียน 5 + นักอ่าน 5), ความสนใจ, นิยาย (ออริจินัล 8 + แฟนฟิค 3), ตอน, แท็ก,
+ *        แนะนำนิยาย (introduction), ตัวละคร/ความสัมพันธ์ (ทุกเรื่อง), world-building,
  *        รีวิว, คอมเมนต์, ถูกใจ, ชั้นหนังสือ
  *
  * ต้องรัน seed.ts หลักก่อน (อ้างอิงแท็ก genre/pairing/freeform ตามชื่อ)
@@ -12,6 +13,9 @@
  * - บัญชี mock เป็นแค่เจ้าของข้อมูล ไม่ได้ตั้งใจให้ login — ไม่มีรหัสผ่าน ใช้ oauth_id ปลอม
  *   เพื่อให้ผ่าน CHECK chk_users_has_login_method เท่านั้น
  * - ข้อมูลใน Neo4j ไม่ถูกสร้างที่นี่ ถ้าหน้าแนะนำดึงจาก graph ต้องรัน sync แยก
+ * - introduction คั่นย่อหน้าด้วย "\n\n" — ฝั่ง UI ควรแสดงด้วย whitespace-pre-line
+ * - แฟนฟิคจากผลงานภายนอก (JJK / Harry Potter) เป็นเนื้อหาที่เขียนขึ้นใหม่ทั้งหมด ตั้งอยู่ในช่วงที่
+ *   ตัวละครเป็นผู้ใหญ่แล้ว (AU / หลังเรื่องหลัก) ปกใช้ placeholder จาก picsum ไม่ใช้ภาพจากต้นฉบับ
  */
 import {
   PrismaClient,
@@ -45,6 +49,7 @@ function countWords(html: string): number {
   return n;
 }
 const toHtml = (paragraphs: string[]) => paragraphs.map((p) => `<p>${p}</p>`).join("");
+const intro = (...paragraphs: string[]) => paragraphs.join("\n\n");
 
 // ---------------------------------------------------------------------------
 // ผู้ใช้จำลอง
@@ -57,13 +62,14 @@ const authors: MockUser[] = [
   { key: "khun", username: "khunkrabi", pen_name: "ขุนกระบี่", bio: "สายกำลังภายในและไซไฟ อัปทุกวันอาทิตย์", age_verified: true },
   { key: "pim", username: "pimwarin_writes", pen_name: "พิมพ์วรินทร์", bio: "โรแมนติกคอมเมดี้ ฟีลกู้ดเป็นหลัก ดราม่านิดหน่อยพอให้คิดถึง", age_verified: true },
   { key: "tawan", username: "tawan_yamkham", pen_name: "ตะวันยามค่ำ", bio: "เรื่องผี ไสยศาสตร์ และประวัติศาสตร์ไทย", age_verified: true },
+  { key: "ploy", username: "ploy_fic", pen_name: "พลอยฟิคกลางดึก", bio: "เขียนแฟนฟิคอนิเมะ/หนัง ชอบ AU ที่ให้ตัวละครได้ตอนจบที่ดีกว่าเดิม", age_verified: true },
 ];
 
 const readers: MockUser[] = [
   { key: "sunny", username: "sunny_reads", pen_name: "ซันนี่เล่าต่อ", bio: "นักอ่านที่เผลอมาเขียนแฟนฟิค", age_verified: true },
   { key: "nong", username: "nongmew99", age_verified: false },
   { key: "book", username: "bookworm_bkk", age_verified: true },
-  { key: "fah", username: "fah_ploy", age_verified: true },
+  { key: "fah", username: "fah_ploy", pen_name: "ฟ้าหลังฝน", bio: "สายวาย สายพีเรียด บางทีก็เขียนแฟนฟิคเอง", age_verified: true },
   { key: "tonkla", username: "tonkla.reader", age_verified: false },
 ];
 
@@ -88,6 +94,8 @@ type MockNovel = {
   author: string;
   title: string;
   synopsis: string;
+  /** แนะนำนิยาย (คำเกริ่นนำยาว) — แสดงในแท็บเรื่องย่อ ส่วน "แนะนำเรื่อง" */
+  introduction?: string;
   status: NovelStatus;
   legal_status?: LegalStatus;
   visibility?: Visibility;
@@ -114,6 +122,9 @@ type MockNovel = {
   theme_notes?: Record<string, string>;
 };
 
+const FANDOM_JJK = "Jujutsu Kaisen (มหาเวทย์ผนึกมาร)";
+const FANDOM_HP = "Harry Potter (แฮร์รี่ พอตเตอร์)";
+
 const novels: MockNovel[] = [
   {
     key: "cloud-library",
@@ -121,6 +132,11 @@ const novels: MockNovel[] = [
     title: "ผู้พิทักษ์หอสมุดแห่งเมืองเมฆ",
     synopsis:
       "หลินดา เด็กฝึกงานประจำหอสมุดลอยฟ้าที่ไม่มีเวทมนตร์แม้แต่นิดเดียว ต้องออกตามหาหนังสือต้องห้ามที่หายไปจากชั้นลึกสุด ก่อนที่ตัวอักษรในหนังสือทุกเล่มของเมืองเมฆจะค่อย ๆ จางหาย",
+    introduction: intro(
+      "ในเมืองที่ทุกคนร่ายเวทได้ ความสามารถเดียวของหลินดาคือจำได้ว่าหนังสือทุกเล่มวางอยู่ตรงไหน ฟังดูไม่เท่เลย จนกระทั่งหนังสือเล่มหนึ่งหายไป และพาถ้อยคำของทั้งเมืองหายตามไปด้วย",
+      "เรื่องนี้คือแฟนตาซีอบอุ่นปนปริศนา ว่าด้วยมิตรภาพของคนที่โลกบอกว่า \"ไม่เก่งพอ\" หอสมุดบนเมฆ บันไดลับที่ทอดลงไปในความมืด และความลับที่บรรณารักษ์ใหญ่ซ่อนไว้ในถ้วยชามาหลายสิบปี",
+      "เหมาะกับคนที่ชอบบรรยากาศห้องสมุดเก่า ฝนตกเบา ๆ และเรื่องที่ค่อย ๆ เปิดเผยทีละชั้น อัปเดตทุกวันพุธค่ะ"
+    ),
     status: "ongoing",
     genreMain: "แฟนตาซี",
     genreSub: "โรงเรียนเวทมนตร์",
@@ -200,6 +216,11 @@ const novels: MockNovel[] = [
     title: "ตำนานกระบี่ไร้เงา",
     synopsis:
       "สิบปีหลังสำนักกระบี่ธาราถูกเผาวอด ศิษย์คนสุดท้ายที่รอดชีวิตกลับสู่ยุทธภพพร้อมกระบี่ที่ไม่ทอดเงา เพื่อทวงความยุติธรรมจากพันธมิตรเก้าสำนัก แต่ยิ่งสืบลึก เขายิ่งพบว่าคนที่ต้องแก้แค้นอาจเป็นคนที่เขาเคยเรียกว่าพี่ชาย",
+    introduction: intro(
+      "กำลังภายในสายดั้งเดิม ฉากต่อสู้จัดเต็ม แต่แกนกลางของเรื่องคือคำถามง่าย ๆ ข้อเดียว — ถ้าความแค้นคือสิ่งเดียวที่ทำให้เรามีชีวิตรอดมาสิบปี เมื่อแก้แค้นสำเร็จแล้วเราจะเหลืออะไร",
+      "ติดตามเซียวหลานกับหงอิ๋ง นักข่าวกรองชุดแดงที่รู้ความลับของทุกสำนัก ตั้งแต่โรงเตี๊ยมริมทางหลวงไปจนถึงยอดเขาเก้าสำนักที่หิมะไม่เคยละลาย",
+      "จบบริบูรณ์แล้ว อ่านรวดเดียวได้ยาว ๆ ครับ"
+    ),
     status: "completed",
     content_rating: "teen",
     genreMain: "แฟนตาซี",
@@ -247,6 +268,11 @@ const novels: MockNovel[] = [
     title: "สัญญารักร้อยวันของคุณชายรอง",
     synopsis:
       "แพรวา นักบัญชีที่ติดหนี้ร้านดอกไม้ของแม่หกแสน ได้รับข้อเสนอแปลกประหลาดจากคุณชายรองของตระกูลใหญ่ แกล้งเป็นคู่หมั้นกันแค่ร้อยวันเพื่อหนีการคลุมถุงชน สัญญาชัดเจน ห้ามรักจริง แต่ใครจะไปรู้ว่าข้อที่ยากที่สุดคือข้อสุดท้าย",
+    introduction: intro(
+      "สัญญาสิบข้อ ร้อยวัน กับคนสองคนที่มั่นใจมากว่าจะไม่มีวันผิดข้อสิบ",
+      "โรแมนติกคอมเมดี้ฟีลกู้ด ไม่มีนางร้ายตบตี ไม่มีพระเอกเย็นชาเกินเหตุ มีแค่นักบัญชีที่นับทุกอย่างเป็นตัวเลข กับคุณชายที่แอบเติมน้ำตาลในกาแฟดำเมื่อไม่มีใครเห็น",
+      "อ่านเพลิน ๆ ก่อนนอน ยิ้มตามได้ทุกตอน ดราม่านิดหน่อยพอให้คิดถึงค่ะ"
+    ),
     status: "ongoing",
     genreMain: "โรแมนติก",
     genreSub: "สัญญาหมั้นหมาย",
@@ -278,6 +304,15 @@ const novels: MockNovel[] = [
         ],
       },
     ],
+    characters: [
+      { key: "praewa", name: "แพรวา", role: "protagonist", description: "นักบัญชีสาย detail ติดหนี้ร้านดอกไม้ของแม่หกแสน", x: 0, y: 0 },
+      { key: "pakin", name: "ภาคิน", role: "protagonist", description: "คุณชายรองผู้ร่างสัญญาหมั้นสิบข้อด้วยตัวเอง", x: 240, y: 0 },
+      { key: "mother", name: "คุณหญิงแม่", role: "supporting", description: "แม่ของภาคิน ถามคำถามเดียวก็รู้ทุกอย่าง", x: 120, y: 200 },
+    ],
+    characterEdges: [
+      { from: "praewa", to: "pakin", type: "love", label: "คู่หมั้นตามสัญญา" },
+      { from: "mother", to: "pakin", type: "family", label: "แม่ลูก" },
+    ],
   },
   {
     key: "room-404",
@@ -285,6 +320,11 @@ const novels: MockNovel[] = [
     title: "คดีฆาตกรรมห้อง 404",
     synopsis:
       "หอพักนักศึกษาเก่าแก่ที่ไม่มีห้อง 404 อยู่ในแผนผัง แต่ศพของรุ่นพี่ปีสี่กลับถูกพบในห้องหมายเลขนั้น ตำรวจสรุปว่าเป็นอุบัติเหตุ มีเพียงนักศึกษานิติวิทยาศาสตร์ปีสองกับเพื่อนร่วมห้องจอมขี้เกียจที่ไม่เชื่อ",
+    introduction: intro(
+      "ทุกคนในหอเจ็ดรู้ว่าไม่มีห้อง 404 และไม่มีใครเคยถามว่าทำไม — จนกระทั่งมีคนตายอยู่ในนั้น",
+      "สืบสวนแบบไขปริศนาทีละเบาะแส ผู้อ่านได้ข้อมูลเท่ากับตัวละครเสมอ ลองเดาคนร้ายไปพร้อมกับใบพลูและกาย คู่หูที่คนหนึ่งจดทุกอย่าง อีกคนนอนทั้งวันแต่ดันจำได้ทุกอย่าง",
+      "มีฉากตึงเครียดและการตายของตัวละคร ไม่มีภาพรุนแรงโจ่งแจ้งค่ะ"
+    ),
     status: "ongoing",
     content_rating: "teen",
     genreMain: "สืบสวน & ระทึกขวัญ",
@@ -314,6 +354,15 @@ const novels: MockNovel[] = [
         paragraphs: ["ยามเล่าว่าคืนนั้นเห็นไฟในห้องที่ไม่มีเลขติดอยู่... (ยังเขียนไม่เสร็จ)"],
       },
     ],
+    characters: [
+      { key: "baiplu", name: "ใบพลู", role: "protagonist", description: "นักศึกษานิติวิทยาศาสตร์ปีสอง จดทุกอย่างลงสมุด", x: 0, y: 0 },
+      { key: "guy", name: "กาย", role: "supporting", description: "เพื่อนร่วมห้องจอมขี้เกียจ ความจำดีเกินหน้าตา", x: 240, y: 40 },
+      { key: "tonkla", name: "พี่ต้นกล้า", role: "supporting", description: "ประธานชมรมถ่ายภาพ ผู้เสียชีวิตในห้อง 404", x: 100, y: 220 },
+    ],
+    characterEdges: [
+      { from: "baiplu", to: "guy", type: "friend", label: "คู่หูสืบคดี" },
+      { from: "baiplu", to: "tonkla", type: "secret", label: "เบาะแสจากฟิล์ม" },
+    ],
   },
   {
     key: "bang-luang-house",
@@ -321,6 +370,11 @@ const novels: MockNovel[] = [
     title: "บ้านไม้หลังคลองบางหลวง",
     synopsis:
       "หลังแม่เสียชีวิต นิลได้รับมรดกเป็นบ้านไม้ริมคลองที่เธอไม่เคยรู้ว่ามีอยู่ ในห้องใต้หลังคามีหิ้งบูชาที่ถูกตอกตะปูปิดไว้ และทุกคืนตีสาม จะมีเสียงคนเคาะจากข้างในนั้นสามครั้ง",
+    introduction: intro(
+      "บ้านไม้ริมคลอง หิ้งบูชาที่ถูกตอกตะปูปิด และเสียงเคาะตีสามที่นับได้แค่สาม — จนคืนที่มันนับต่อ",
+      "สยองขวัญแบบไทย ๆ ที่ค่อย ๆ บีบ ไม่เน้นตุ้งแช่ แต่เน้นความเงียบก่อนเสียงถัดไป เบื้องหลังผีคือเรื่องของแม่ลูก และสิ่งที่คนรุ่นก่อนเลือกจะไม่เล่า",
+      "ตอนนี้พักการอัปเดตชั่วคราว ขอโทษผู้อ่านทุกคนที่รอ กลับมาแน่นอนครับ"
+    ),
     status: "hiatus",
     content_rating: "mature",
     genreMain: "สยองขวัญ",
@@ -345,6 +399,15 @@ const novels: MockNovel[] = [
         ],
       },
     ],
+    characters: [
+      { key: "nil", name: "นิล", role: "protagonist", description: "ทายาทบ้านไม้ริมคลองที่ไม่เคยรู้ว่าแม่มีบ้านหลังนี้", x: 0, y: 0 },
+      { key: "aunt", name: "ป้าข้างบ้าน", role: "supporting", description: "เพื่อนบ้านที่รู้เรื่องบ้านหลังนี้มากกว่าที่ยอมเล่า", x: 240, y: 20 },
+      { key: "chan", name: "คุณจันทร์", role: "supporting", description: "แม่ของนิล ผู้ทิ้งความลับไว้ในห้องใต้หลังคา", x: 100, y: 220 },
+    ],
+    characterEdges: [
+      { from: "chan", to: "nil", type: "family", label: "แม่ลูก" },
+      { from: "aunt", to: "chan", type: "secret", label: "รู้ความลับของหิ้ง" },
+    ],
   },
   {
     key: "kepler-signal",
@@ -352,6 +415,10 @@ const novels: MockNovel[] = [
     title: "สัญญาณสุดท้ายจากสถานีเคปเลอร์",
     synopsis:
       "เรื่องสั้นจบในตอน: ลูกเรือสามคนสุดท้ายของสถานีวิจัยที่ขอบระบบสุริยะได้รับสัญญาณที่ส่งมาจากโลก ปัญหาคือข้อความนั้นลงวันที่ไว้ในอีกสี่สิบปีข้างหน้า (แปลและเรียบเรียงจากต้นฉบับภาษาอังกฤษของผู้เขียนเอง)",
+    introduction: intro(
+      "เจ็ดคำจากอนาคต กับคนสามคนที่ต้องตัดสินใจโดยไม่มีใครบอกว่าถูกหรือผิด",
+      "ไซไฟเรื่องสั้นจบในตอนเดียว อ่านราวสิบห้านาที เหมาะกับคนที่ชอบเรื่องหักมุมเงียบ ๆ ตอนท้าย"
+    ),
     status: "completed",
     format: "one_shot",
     is_translated: true,
@@ -373,6 +440,15 @@ const novels: MockNovel[] = [
         ],
       },
     ],
+    characters: [
+      { key: "mira", name: "มิรา", role: "protagonist", description: "วิศวกรสื่อสาร คนแรกที่อ่านสัญญาณ", x: 0, y: 0 },
+      { key: "decha", name: "ผู้บัญชาการเดชา", role: "supporting", description: "หัวหน้าสถานีที่เชื่อในระบบมากกว่าลางสังหรณ์", x: 240, y: 0 },
+      { key: "phupha", name: "ภูผา", role: "supporting", description: "นักชีววิทยาอายุน้อยที่สุดในสถานี", x: 120, y: 200 },
+    ],
+    characterEdges: [
+      { from: "decha", to: "mira", type: "mentor", label: "ผู้บังคับบัญชา" },
+      { from: "mira", to: "phupha", type: "friend", label: "เพื่อนร่วมสถานี" },
+    ],
   },
   {
     key: "two-cats-cafe",
@@ -380,6 +456,10 @@ const novels: MockNovel[] = [
     title: "ร้านกาแฟสองแมวกับเรื่องธรรมดาของเรา",
     synopsis:
       "ออมกลับมาเปิดร้านกาแฟเล็ก ๆ ที่บ้านเกิดหลังลาออกจากงานในกรุงเทพฯ ลูกค้าประจำคนแรกคือเจน ครูศิลปะโรงเรียนประถมที่มาสั่งลาเต้แก้วเดิมทุกเช้า พร้อมแมวส้มที่ไม่ยอมบอกว่าเป็นของใคร",
+    introduction: intro(
+      "ไม่มีเรื่องใหญ่โต ไม่มีดราม่าระดับชาติ มีแค่ร้านกาแฟเล็ก ๆ ลาเต้หวานน้อยแก้วเดิมทุกเช้า และแมวสองตัวที่ตัดสินใจแทนมนุษย์ว่าร้านนี้ควรชื่ออะไร",
+      "สโลว์ไลฟ์ GL ละมุน ๆ เหมาะกับวันที่เหนื่อยแล้วอยากอ่านอะไรที่ใจดีกับเรา"
+    ),
     status: "ongoing",
     genreMain: "ชีวิตประจำวัน & ดราม่า",
     genreSub: "สโลว์ไลฟ์",
@@ -411,6 +491,16 @@ const novels: MockNovel[] = [
         ],
       },
     ],
+    characters: [
+      { key: "om", name: "ออม", role: "protagonist", description: "เจ้าของร้านกาแฟที่ลาออกจากงานในกรุงเทพฯ", x: 0, y: 0 },
+      { key: "jen", name: "เจน", role: "protagonist", description: "ครูศิลปะประถม ลูกค้าประจำลาเต้หวานน้อย", x: 240, y: 0 },
+      { key: "somo", name: "ส้มโอ", role: "supporting", description: "แมวส้มผู้ยึดเก้าอี้ริมหน้าต่าง", x: 60, y: 200 },
+      { key: "than", name: "ถ่าน", role: "supporting", description: "แมวดำตาเหลือง ขี้อายที่สุดในซอย", x: 200, y: 200 },
+    ],
+    characterEdges: [
+      { from: "om", to: "jen", type: "love", label: "คนที่รอทุกเช้าวันพุธ" },
+      { from: "somo", to: "than", type: "friend", label: "คู่หูแมว" },
+    ],
   },
   {
     key: "wrong-reign",
@@ -418,6 +508,11 @@ const novels: MockNovel[] = [
     title: "เสด็จกลับมาในรัชกาลที่ผิดเพี้ยน",
     synopsis:
       "อาจารย์ประวัติศาสตร์หนุ่มลืมตาตื่นในร่างขุนนางชั้นผู้น้อยของกรุงศรีอยุธยา ในรัชกาลที่ไม่เคยมีบันทึกไว้ในพงศาวดารฉบับใด ความรู้ทั้งหมดที่เขามีจึงไร้ค่า เหลือเพียงสัญชาตญาณ และองครักษ์หน้านิ่งที่คอยจับตาเขาอยู่ตลอดเวลา",
+    introduction: intro(
+      "สอนประวัติศาสตร์อยุธยามาสิบปี แต่พอได้ไปอยู่จริง กลับไม่รู้จักแม้แต่พระนามของพระเจ้าแผ่นดิน",
+      "พีเรียดวาย ข้ามภพ รายละเอียดยุคแน่น เคมีระหว่างภูมิกับแก้วค่อย ๆ ก่อตัวจากความระแวงไปสู่ความไว้ใจ ไม่เร่งไม่รีบ",
+      "ผู้เขียนอ้างอิงวัฒนธรรมจริงแต่ตัวรัชกาลเป็นเรื่องแต่งทั้งหมดครับ"
+    ),
     status: "ongoing",
     content_rating: "teen",
     genreMain: "ประวัติศาสตร์",
@@ -449,6 +544,15 @@ const novels: MockNovel[] = [
         ],
       },
     ],
+    characters: [
+      { key: "phum", name: "ภูมิ", role: "protagonist", description: "อาจารย์ประวัติศาสตร์ที่ตื่นมาในร่างท่านหมื่น", x: 0, y: 0 },
+      { key: "kaew", name: "แก้ว", role: "protagonist", description: "องครักษ์หน้านิ่ง ผู้ปกป้องร่างท่านหมื่นมาทั้งชีวิต", x: 240, y: 0 },
+      { key: "muen", name: "ท่านหมื่นคนเดิม", role: "supporting", description: "เจ้าของร่างเดิม ตายไปในคืนที่ไม่มีใครรู้ความจริง", x: 120, y: 220 },
+    ],
+    characterEdges: [
+      { from: "phum", to: "kaew", type: "love", label: "จากระแวงสู่ไว้ใจ" },
+      { from: "kaew", to: "muen", type: "secret", label: "คำสาบานเก่า" },
+    ],
   },
   {
     key: "sword-fanfic",
@@ -456,6 +560,10 @@ const novels: MockNovel[] = [
     title: "ตำนานกระบี่ไร้เงา: บันทึกนอกพงศาวดารของหงอิ๋ง",
     synopsis:
       "แฟนฟิคเล่าเรื่องจากมุมของหงอิ๋ง ช่วงสามปีที่หายไประหว่างเล่มหนึ่งกับเล่มสอง เธอไปทำอะไรมา และทำไมถึงรู้เรื่องของเซียวหลานมากกว่าที่ควรจะรู้",
+    introduction: intro(
+      "แฟนฟิคจากนิยายในเว็บเราเอง ได้รับอนุญาตจากคุณขุนกระบี่แล้ว 🙏",
+      "เล่าชีวิตหงอิ๋งก่อนจะเป็นหงอิ๋งแห่งหอข่าวกรอง ใครอ่านเรื่องหลักจบแล้วจะเข้าใจฉากโรงเตี๊ยมมากขึ้นแน่นอน"
+    ),
     status: "ongoing",
     legal_status: "fan_fiction",
     visibility: "pending_review",
@@ -477,6 +585,160 @@ const novels: MockNovel[] = [
         ],
       },
     ],
+    characters: [
+      { key: "hong", name: "หงอิ๋ง", role: "protagonist", description: "นักข่าวกรองชุดแดง ในช่วงก่อนเรื่องหลัก", x: 0, y: 0 },
+      { key: "master", name: "อาจารย์หอข่าวกรอง", role: "supporting", description: "ชายผู้ทำให้หงอิ๋งได้ยินชื่อสำนักธาราเป็นครั้งแรก", x: 240, y: 60 },
+    ],
+    characterEdges: [{ from: "master", to: "hong", type: "mentor", label: "อาจารย์ / ศิษย์" }],
+  },
+
+  // -------------------------------------------------------------------------
+  // แฟนฟิคจากอนิเมะ / หนัง (ผลงานภายนอก) — เนื้อหาเขียนใหม่ทั้งหมด ตัวละครเป็นผู้ใหญ่
+  // -------------------------------------------------------------------------
+  {
+    key: "jjk-gojo-geto",
+    author: "ploy",
+    title: "ฤดูใบไม้ผลิที่เราไม่ได้แยกทาง",
+    synopsis:
+      "AU ที่เกะโท สุงุรุ ไม่ได้เดินจากไปในฤดูร้อนปีนั้น สิบปีต่อมา เขากับโกโจ ซาโตรุ ในวัยยี่สิบแปด เป็นอาจารย์ประจำวิทยาลัยไสยเวทย์โตเกียวด้วยกัน ทุกอย่างดูเหมือนจะดี จนกระทั่งภารกิจหนึ่งพาเกะโทกลับไปยังหมู่บ้านที่เขาเกือบเลือกทางผิดเมื่อสิบปีก่อน",
+    introduction: intro(
+      "ถ้าวันนั้นมีใครสักคนคว้ามือเขาไว้ทัน — แฟนฟิคเรื่องนี้เกิดจากคำถามเดียวนั้นค่ะ",
+      "โกะเกะ (โกโจ × เกะโท) AU หลังเรื่องหลัก ทั้งคู่เป็นผู้ใหญ่ ทำงานเป็นอาจารย์ด้วยกัน มีโชโกะเป็นเพื่อนที่เบื่อทั้งคู่เท่า ๆ กัน โทนเรื่องละมุนปนเจ็บ ไม่ได้หวานอย่างเดียว เพราะบาดแผลเก่าไม่ได้หายไปเองแค่เพราะเราไม่ได้แยกทาง",
+      "⚠️ มีการพูดถึงเหตุการณ์และความสูญเสียในเนื้อเรื่องหลัก (spoiler ถึงอาร์คอดีต) ไม่มีฉากโจ่งแจ้ง",
+      "แฟนฟิคไม่แสวงหากำไร ตัวละครและโลกเป็นของผู้สร้างต้นฉบับ"
+    ),
+    status: "ongoing",
+    legal_status: "fan_fiction",
+    content_rating: "teen",
+    allow_donations: false,
+    genreMain: "โรแมนติก",
+    genreSub: "ดราม่า",
+    pairing: "ชายรักชาย (BL)",
+    freeform: ["#ดราม่าตับพัง"],
+    fandom: FANDOM_JJK,
+    view_count: 38650,
+    createdDaysAgo: 45,
+    chapters: [
+      {
+        title: "ห้องพักอาจารย์ชั้นสอง",
+        paragraphs: [
+          "ห้องพักอาจารย์ของวิทยาลัยไสยเวทย์มีโต๊ะสองตัวที่หันหน้าชนกัน ตัวหนึ่งเรียบร้อยจนเหมือนไม่มีใครใช้ อีกตัวมีกล่องขนมหวานวางซ้อนกันสูงเกือบถึงโคมไฟ",
+          "\"นายกินของหวานเป็นมื้อเช้าอีกแล้ว\" เกะโทพูดโดยไม่เงยหน้าจากรายงานภารกิจ โกโจยิ้มจนตาหยีหลังแว่นดำ \"ก็นายไม่ยอมทำข้าวเช้าให้ฉันนี่นา\"",
+          "สิบปีแล้วที่ทั้งคู่เถียงกันเรื่องเดิมทุกเช้า และสิบปีแล้วที่เกะโทยังไม่เคยบอกใครว่า เขาตื่นเช้ากว่าเดิมครึ่งชั่วโมงเพียงเพื่อจะได้ยินเสียงเถียงนี้",
+        ],
+      },
+      {
+        title: "ใบสั่งภารกิจสีเหลือง",
+        paragraphs: [
+          "ใบสั่งภารกิจระบุชื่อหมู่บ้านบนภูเขาทางเหนือ เกะโทอ่านมันซ้ำสามรอบ ทั้งที่ตัวอักษรไม่ได้เปลี่ยนไปจากรอบแรกเลย",
+          "โชโกะวางแก้วกาแฟลงข้างมือเขา \"จะให้ฉันบอกซาโตรุไหม\" เธอถาม เขาส่ายหน้า แต่ก่อนที่เขาจะพับกระดาษเก็บ ประตูห้องก็เปิดออก และใครบางคนที่ควรจะอยู่ในภารกิจอีกฝั่งของเมืองก็ยืนพิงกรอบประตูอยู่ตรงนั้น",
+          "\"ฉันไปด้วย\" โกโจพูดง่าย ๆ ราวกับกำลังสั่งขนม \"ไม่ต้องเถียง รอบนี้ฉันไม่ปล่อยให้นายไปคนเดียวแล้ว\"",
+        ],
+      },
+      {
+        title: "ทางขึ้นเขาที่จำได้",
+        paragraphs: [
+          "ถนนดินขึ้นหมู่บ้านยังเป็นเหมือนเดิม ต้นสนแถวเดิม ลมหนาวแบบเดิม มีเพียงคนที่เดินอยู่ข้างเขาเท่านั้นที่ต่างออกไป",
+          "\"รู้ไหม\" โกโจพูดขึ้นกลางทาง \"ถ้าวันนั้นนายไปจริง ๆ ฉันคงเป็นคนที่แข็งแกร่งที่สุด แต่ก็คงเหงาที่สุดด้วย\" เกะโทหยุดเดิน และเป็นครั้งแรกในสิบปีที่เขาไม่รู้จะตอบอะไร",
+        ],
+      },
+      {
+        title: "สิ่งที่รออยู่ในหมู่บ้าน",
+        status: "scheduled",
+        scheduledInDays: 2,
+        paragraphs: [
+          "หมู่บ้านเงียบเกินไป ไม่มีเสียงไก่ ไม่มีควันไฟจากครัว มีเพียงพลังคำสาปที่หนาแน่นจนอากาศหนักอึ้ง และเงาของใครบางคนที่ยืนรออยู่ปลายถนนราวกับรู้ว่าพวกเขาจะมา",
+        ],
+      },
+    ],
+    characters: [
+      { key: "gojo", name: "โกโจ ซาโตรุ", role: "protagonist", description: "จอมไสยเวทย์ที่แข็งแกร่งที่สุด อาจารย์วิทยาลัยไสยเวทย์ วัย 28 กินของหวานเป็นมื้อเช้า", x: 0, y: 0 },
+      { key: "geto", name: "เกะโท สุงุรุ", role: "protagonist", description: "ผู้ใช้วิชาควบคุมคำสาป ใน AU นี้ไม่ได้แยกทาง เป็นอาจารย์คู่กับโกโจ วัย 28", x: 260, y: 0 },
+      { key: "shoko", name: "อิเอริ โชโกะ", role: "supporting", description: "แพทย์ประจำวิทยาลัย เพื่อนเก่าที่เหนื่อยกับทั้งคู่เท่า ๆ กัน", x: 130, y: 200 },
+      { key: "shadow", name: "เงาปลายถนน", role: "antagonist", description: "ตัวตนปริศนาที่รออยู่ในหมู่บ้านบนภูเขา (ตัวละครออริจินัลของฟิค)", x: 130, y: 380 },
+    ],
+    characterEdges: [
+      { from: "gojo", to: "geto", type: "love", label: "คู่หูที่ไม่ได้แยกทาง" },
+      { from: "shoko", to: "gojo", type: "friend", label: "เพื่อนร่วมรุ่น" },
+      { from: "shoko", to: "geto", type: "friend", label: "เพื่อนร่วมรุ่น" },
+      { from: "shadow", to: "geto", type: "rival", label: "อดีตที่ตามมาทวง" },
+    ],
+    plot_notes: { premise: "AU: เกะโทไม่ได้แปรพักตร์", conflict: "ภารกิจพากลับไปหมู่บ้านเดิม" },
+    theme_notes: { mainTheme: "การเลือกทางใหม่ไม่ได้ลบบาดแผลเก่า", symbol: "โต๊ะสองตัวที่หันหน้าชนกัน" },
+  },
+  {
+    key: "hp-drarry-auror",
+    author: "fah",
+    title: "คู่หูมือปราบมารที่ไม่มีใครอยากจับคู่",
+    synopsis:
+      "แปดปีหลังสงครามพ่อมด แฮร์รี่ พอตเตอร์ มือปราบมารดาวรุ่ง ถูกสั่งให้จับคู่ทำคดีกับเดรโก มัลฟอย ผู้เชี่ยวชาญวัตถุต้องสาปคนใหม่ของกระทรวง คดีแรกคือภาพเหมือนในงานประมูลที่ทำให้เจ้าของใหม่หายตัวไปทีละคน และร่องรอยทุกอย่างชี้กลับไปที่คฤหาสน์มัลฟอย",
+    introduction: intro(
+      "สองคนที่เกลียดกันมาตั้งแต่เด็ก ตอนนี้อายุยี่สิบหกแล้ว และต้องนั่งโต๊ะติดกันทุกวันจันทร์ถึงศุกร์",
+      "ดรารี่ (แฮร์รี่ × เดรโก) สืบสวนปนโรแมนติก หลังเรื่องหลัก ทั้งคู่เป็นผู้ใหญ่และทำงานในกระทรวงเวทมนตร์ เน้นคดีวัตถุต้องสาป การทำงานเป็นทีม และการเรียนรู้ที่จะมองคนตรงหน้าใหม่ ไม่ใช่ศัตรูในความทรงจำ มีรอนกับเฮอร์ไมโอนี่มาช่วยป่วนเป็นระยะ",
+      "Slow burn มาก ๆ ใครอยากได้ฉากหวานเร็ว ๆ ขออภัยค่ะ 😂 แฟนฟิคไม่แสวงหากำไร ตัวละครและโลกเป็นของผู้สร้างต้นฉบับ"
+    ),
+    status: "ongoing",
+    legal_status: "fan_fiction",
+    content_rating: "teen",
+    allow_donations: false,
+    genreMain: "สืบสวน & ระทึกขวัญ",
+    genreSub: "ไขคดี/ฆาตกรรม",
+    pairing: "ชายรักชาย (BL)",
+    freeform: ["#ลึกลับ", "#ทีมเวิร์ก", "#คอมเมดี้"],
+    fandom: FANDOM_HP,
+    view_count: 44120,
+    createdDaysAgo: 70,
+    chapters: [
+      {
+        title: "คำสั่งจากหัวหน้าแผนก",
+        paragraphs: [
+          "\"ไม่\" แฮร์รี่พูดทันทีที่อ่านชื่อบนแฟ้ม หัวหน้าแผนกมือปราบมารไม่แม้แต่จะเงยหน้า \"ไม่ได้ถามความเห็นนะพอตเตอร์ นี่คือคำสั่ง\"",
+          "ที่โต๊ะฝั่งตรงข้าม เดรโก มัลฟอย จัดขนนกบนโต๊ะให้ตรงกันเป๊ะทุกด้าม เขาดูไม่แปลกใจเลยสักนิด \"ถ้านายจะอาละวาด ช่วยอาละวาดให้เสร็จก่อนสิบโมง ฉันมีเอกสารต้องอ่าน\"",
+          "แปดปีหลังสงคราม แฮร์รี่คิดว่าตัวเองโตพอจะไม่หงุดหงิดกับน้ำเสียงนั้นแล้ว เขาคิดผิด",
+        ],
+      },
+      {
+        title: "ภาพเหมือนที่ไม่ยอมหลับตา",
+        paragraphs: [
+          "ภาพเหมือนสีน้ำมันแขวนอยู่ในห้องหลักฐาน ชายในภาพนั่งนิ่งบนเก้าอี้หนัง ดวงตาติดตามทุกคนที่เดินผ่าน เจ้าของสามคนล่าสุดของมันหายตัวไปภายในหนึ่งสัปดาห์หลังซื้อ",
+          "เดรโกเดินวนรอบกรอบภาพโดยไม่แตะต้อง \"นี่ไม่ใช่คาถาธรรมดา\" เขาพึมพำ \"คนวาดตั้งใจให้มันหิว\" แฮร์รี่อยากเถียง แต่สิ่งที่เดรโกพูดต่อทำให้เขาเงียบ \"และฉันจำลายเซ็นบนกรอบนี้ได้ มันเคยแขวนอยู่ในห้องโถงบ้านฉัน\"",
+        ],
+      },
+      {
+        title: "ชาเย็นชืดที่โต๊ะทำงาน",
+        paragraphs: [
+          "เลยสี่ทุ่มแล้ว สำนักงานว่างเปล่า เหลือแค่ตะเกียงสองดวงกับกองเอกสารประมูลย้อนหลังสิบปี แฮร์รี่วางชาถ้วยหนึ่งลงข้างมือเดรโกโดยไม่พูดอะไร",
+          "เดรโกมองถ้วยชานานกว่าที่ควร \"ใส่นมก่อนชา\" เขาว่า \"ผิดวิธี\" แต่ก็ยกขึ้นดื่มจนหมด และแฮร์รี่ก็แกล้งทำเป็นไม่เห็นว่ามุมปากอีกฝ่ายยกขึ้นเล็กน้อย",
+        ],
+      },
+      {
+        title: "(ร่าง) คฤหาสน์มัลฟอยตอนเที่ยงคืน",
+        status: "draft",
+        paragraphs: ["เดรโกไม่ได้กลับบ้านหลังนี้มาห้าปี... (ยังเขียนไม่เสร็จ)"],
+      },
+    ],
+    characters: [
+      { key: "harry", name: "แฮร์รี่ พอตเตอร์", role: "protagonist", description: "มือปราบมารดาวรุ่ง วัย 26 ใจร้อนแต่ใจดีเกินไปเสมอ", x: 0, y: 0 },
+      { key: "draco", name: "เดรโก มัลฟอย", role: "protagonist", description: "ผู้เชี่ยวชาญวัตถุต้องสาปของกระทรวง วัย 26 เป๊ะทุกเรื่องยกเว้นเรื่องตัวเอง", x: 260, y: 0 },
+      { key: "hermione", name: "เฮอร์ไมโอนี่ เกรนเจอร์", role: "supporting", description: "เจ้าหน้าที่ฝ่ายกฎหมายเวทมนตร์ ผู้แอบจัดคู่ให้ทั้งสองคนตั้งแต่แรก", x: 40, y: 220 },
+      { key: "ron", name: "รอน วีสลีย์", role: "supporting", description: "มือปราบมารรุ่นเดียวกับแฮร์รี่ ยังไม่ยอมรับเรื่องนี้เต็มร้อย", x: 220, y: 220 },
+      { key: "portrait", name: "ชายในภาพเหมือน", role: "antagonist", description: "ภาพเหมือนต้องสาปที่ดูดเจ้าของหายไปทีละคน (ตัวละครออริจินัลของฟิค)", x: 130, y: 400 },
+    ],
+    characterEdges: [
+      { from: "harry", to: "draco", type: "love", label: "คู่หูจำใจ (slow burn)" },
+      { from: "harry", to: "ron", type: "friend", label: "เพื่อนสนิท" },
+      { from: "hermione", to: "harry", type: "friend", label: "เพื่อนสนิท" },
+      { from: "portrait", to: "draco", type: "secret", label: "เคยแขวนในคฤหาสน์มัลฟอย" },
+    ],
+    locations: [
+      { key: "office", name: "แผนกมือปราบมาร กระทรวงเวทมนตร์", description: "โต๊ะสองตัวติดกันที่ไม่มีใครอยากนั่ง", icon: "tower", category: "สถานที่สำคัญ", x: 160, y: 120, chapterIndex: 0 },
+      { key: "evidence", name: "ห้องหลักฐานชั้นใต้ดิน", description: "ที่เก็บภาพเหมือนต้องสาป", icon: "cave", category: "อันตราย", x: 380, y: 200, chapterIndex: 1 },
+      { key: "manor", name: "คฤหาสน์มัลฟอย", description: "บ้านที่เดรโกไม่ได้กลับมาห้าปี", icon: "castle", category: "ที่พักอาศัย", x: 220, y: 380 },
+    ],
+    locationRoads: [
+      ["office", "evidence"],
+      ["office", "manor"],
+    ],
   },
 ];
 
@@ -496,6 +758,11 @@ const reviews: { novel: string; user: string; rating: number; text: string; labe
   { novel: "wrong-reign", user: "fah", rating: 5, text: "เคมีภูมิกับแก้วดีมาก รายละเอียดยุคก็แน่น", label: "pos", score: 0.94 },
   { novel: "two-cats-cafe", user: "tonkla", rating: 5, text: "อ่านแล้วอยากไปนั่งร้านกาแฟต่างจังหวัด", label: "pos", score: 0.88 },
   { novel: "kepler-signal", user: "nong", rating: 4, text: "สั้นแต่หักมุมดี", label: "pos", score: 0.75 },
+  { novel: "jjk-gojo-geto", user: "fah", rating: 5, text: "โกะเกะที่ได้ตอนจบดี ๆ คือสิ่งที่ใจต้องการ ฉากโต๊ะหันหน้าชนกันทำร้องไห้", label: "pos", score: 0.96 },
+  { novel: "jjk-gojo-geto", user: "sunny", rating: 5, text: "เขียนคาแรกเตอร์โกโจได้เหมือนมาก กวนแต่อบอุ่น", label: "pos", score: 0.92 },
+  { novel: "jjk-gojo-geto", user: "tonkla", rating: 3, text: "สนุกแต่ต้องอ่านเรื่องหลักมาก่อนถึงจะอิน", label: "neutral", score: 0.55 },
+  { novel: "hp-drarry-auror", user: "nong", rating: 5, text: "slow burn จริงอะไรจริง แต่ชอบคดีภาพเหมือนมาก", label: "pos", score: 0.9 },
+  { novel: "hp-drarry-auror", user: "book", rating: 4, text: "ปมคดีดีเกินแฟนฟิค เดรโกเขียนได้มีมิติ", label: "pos", score: 0.84 },
 ];
 
 // chapterIndex = ลำดับตอน (0-based), replyTo = index ของคอมเมนต์ก่อนหน้าในอาร์เรย์นี้
@@ -511,6 +778,11 @@ const comments: { novel: string; chapterIndex: number; user: string; text: strin
   { novel: "bang-luang-house", chapterIndex: 1, user: "book", text: "เสียงที่สี่คืออะไร ไม่นะ", label: "neg", score: 0.3 },
   { novel: "wrong-reign", chapterIndex: 2, user: "fah", text: "ประโยคสุดท้ายของแก้ว", label: "pos", score: 0.92 },
   { novel: "two-cats-cafe", chapterIndex: 2, user: "sunny", text: "รอวันพุธด้วยคนค่ะ", label: "pos", score: 0.84 },
+  { novel: "jjk-gojo-geto", chapterIndex: 0, user: "fah", text: "ตื่นเช้าครึ่งชั่วโมงเพื่อฟังเสียงเถียง ใจบางมาก", label: "pos", score: 0.9 },
+  { novel: "jjk-gojo-geto", chapterIndex: 1, user: "sunny", text: "\"รอบนี้ฉันไม่ปล่อยให้นายไปคนเดียวแล้ว\" ตายตรงนี้เลย", label: "pos", score: 0.95 },
+  { novel: "jjk-gojo-geto", chapterIndex: 1, user: "ploy", text: "ขอบคุณที่อ่านนะคะ ตอนหน้าเตรียมทิชชู่ไว้ด้วย", label: "pos", score: 0.7, replyTo: 12 },
+  { novel: "hp-drarry-auror", chapterIndex: 1, user: "book", text: "ภาพเหมือนเคยอยู่บ้านมัลฟอย ปมมาแล้ว", label: "neutral", score: 0.58 },
+  { novel: "hp-drarry-auror", chapterIndex: 2, user: "nong", text: "ใส่นมก่อนชาผิดวิธี แต่ก็กินหมด 5555", label: "pos", score: 0.88 },
 ];
 
 const likes: Record<string, string[]> = {
@@ -522,14 +794,16 @@ const likes: Record<string, string[]> = {
   "bang-luang-house": ["fah"],
   "kepler-signal": ["nong", "book"],
   "room-404": ["tonkla"],
+  "jjk-gojo-geto": ["fah", "sunny", "tonkla", "nong"],
+  "hp-drarry-auror": ["nong", "book", "sunny", "ploy"],
 };
 
 const library: Record<string, string[]> = {
-  book: ["shadowless-sword", "cloud-library", "room-404"],
-  fah: ["wrong-reign", "bang-luang-house", "shadowless-sword"],
-  nong: ["hundred-day-contract", "cloud-library"],
+  book: ["shadowless-sword", "cloud-library", "room-404", "hp-drarry-auror"],
+  fah: ["wrong-reign", "bang-luang-house", "shadowless-sword", "jjk-gojo-geto"],
+  nong: ["hundred-day-contract", "cloud-library", "hp-drarry-auror"],
   tonkla: ["two-cats-cafe", "room-404", "kepler-signal"],
-  sunny: ["shadowless-sword", "two-cats-cafe"],
+  sunny: ["shadowless-sword", "two-cats-cafe", "jjk-gojo-geto"],
 };
 
 const interests: Record<string, string[]> = {
@@ -623,6 +897,7 @@ async function main() {
         author_id: userId.get(n.author)!,
         title: n.title,
         synopsis: n.synopsis,
+        introduction: n.introduction ?? null,
         cover_image_url: `https://picsum.photos/seed/buddybook-${n.key}/400/600`,
         status: n.status,
         legal_status: n.legal_status ?? "original",
@@ -678,7 +953,7 @@ async function main() {
     }
     chapterIds.set(n.key, ids);
 
-    // --- world-building (เฉพาะเรื่องที่กำหนดไว้) ---
+    // --- world-building ---
     if (n.characters?.length) {
       const nodeId = new Map<string, string>();
       for (const ch of n.characters) {
@@ -793,8 +1068,9 @@ async function main() {
   }
 
   const chapterTotal = [...chapterIds.values()].reduce((s, a) => s + a.length, 0);
+  const fanfics = novels.filter((n) => n.legal_status === "fan_fiction").length;
   console.log(
-    `Mock data: ${authors.length + readers.length} users, ${novels.length} novels, ${chapterTotal} chapters, ` +
+    `Mock data: ${authors.length + readers.length} users, ${novels.length} novels (${fanfics} fan fiction), ${chapterTotal} chapters, ` +
       `${reviews.length} reviews, ${comments.length} comments`
   );
 }

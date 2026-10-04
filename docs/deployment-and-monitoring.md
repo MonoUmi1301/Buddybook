@@ -9,7 +9,7 @@
 git clone <repo> && cd Buddybook
 cp apps/api/.env.example apps/api/.env      # ตั้ง JWT_*, INTERNAL_SERVICE_TOKEN, NEO4J_PASSWORD, APP_URL, CORS_ORIGIN
 npm run docker:up                            # build + รัน api/web/postgres/neo4j
-npm run docker:setup                         # migrate + checks.sql + seed
+npm run docker:setup                         # migrate (รวม CHECK constraints) + seed
 NLP_MODEL_DIR=/srv/models/my_final_sentiment_model docker compose --profile app --profile nlp up -d
 ```
 

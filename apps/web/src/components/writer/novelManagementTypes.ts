@@ -2,6 +2,7 @@ export interface ManagedNovel {
   novel_id: string;
   title: string;
   synopsis: string | null;
+  introduction: string | null;
   cover_image_url: string | null;
   status: "ongoing" | "completed" | "hiatus";
   visibility: "published" | "private" | "pending_review";

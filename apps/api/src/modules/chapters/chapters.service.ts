@@ -23,6 +23,23 @@ export function computeWordCount(content?: string | null): number {
   return stripHtml(content).replace(/\s+/g, "").length;
 }
 
+const TEASER_MAX_CHARS = 200;
+const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", nbsp: " " };
+
+/** เพิ่มภายหลัง (ตอนติดเหรียญ) — ตัวอย่างสั้น ๆ ของตอนที่ยังไม่ได้ซื้อ เป็น plain text (ไม่ใช่ HTML)
+ *  ตัดที่ช่องว่างใกล้ TEASER_MAX_CHARS ที่สุดถ้ามี กันตัดกลางคำภาษาอังกฤษ */
+export function buildTeaser(content?: string | null): string {
+  if (!content) return "";
+  const text = stripHtml(content)
+    .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_m, name: string) => HTML_ENTITIES[name])
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text.length <= TEASER_MAX_CHARS) return text;
+  const cut = text.slice(0, TEASER_MAX_CHARS);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > TEASER_MAX_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
 async function assertNovelOwner(novel_id: string, user_id: string) {
   const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true } });
   if (!novel) throw ApiError.notFound("Novel not found");
@@ -164,8 +181,8 @@ export async function getChapterById(chapter_id: string, requester_id?: string, 
   // เพิ่มภายหลัง (ตอนติดเหรียญ) — ยังไม่ได้ซื้อ: ส่งข้อมูลตอนกลับไปได้ (ชื่อ/ราคา) แต่ไม่ส่งเนื้อหา
   const locked = chapter.price_coins > 0 && !isOwner && !(await hasPurchased(requester_id, chapter_id));
   if (locked) {
-    const { novel: _n, content: _c, ...meta } = chapter;
-    return { ...meta, content: null, locked: true };
+    const { novel: _n, content, ...meta } = chapter;
+    return { ...meta, content: null, teaser: buildTeaser(content), locked: true };
   }
 
   // gap 3.1 — นับยอดวิว (ทั้งผู้อ่านที่ล็อกอินและไม่ล็อกอิน) ไม่นับเจ้าของ/ตอนที่ยังล็อกอยู่
@@ -183,7 +200,7 @@ export async function getChapterById(chapter_id: string, requester_id?: string, 
   }
 
   const { novel: _novel, ...rest } = chapter;
-  return { ...rest, locked: false };
+  return { ...rest, teaser: null, locked: false };
 }
 
 async function hasPurchased(user_id: string | undefined, chapter_id: string) {
@@ -197,7 +214,8 @@ async function hasPurchased(user_id: string | undefined, chapter_id: string) {
 
 /** เพิ่มภายหลัง (ตอนติดเหรียญ) — POST /chapters/:chapter_id/purchase
  *  หัก coin ผู้อ่าน → เข้ากระเป๋านักเขียนหลังหักค่าธรรมเนียม (CHAPTER_PLATFORM_FEE_PERCENT) ใน transaction
- *  เดียวกับ lockWallets (pattern เดียวกับ gifts.service.ts sendGift) — ซื้อซ้ำ = idempotent คืนรายการเดิม */
+ *  เดียวกับ lockWallets (pattern เดียวกับ gifts.service.ts sendGift) — ซื้อซ้ำ = idempotent คืนรายการเดิม
+ *  ตอบกลับพร้อม content ของตอน (ผู้ซื้อมีสิทธิ์อ่านแล้ว) */
 export async function purchaseChapter(user_id: string, chapter_id: string) {
   const chapter = await getChapterWithNovel(chapter_id);
   const isOwner = assertNovelVisible(chapter.novel, user_id, "Chapter not found");
@@ -222,7 +240,13 @@ export async function purchaseChapter(user_id: string, chapter_id: string) {
       select: { purchase_id: true, price_coins: true, created_at: true },
     });
     if (existing) {
-      return { ...existing, chapter_id, balance_after: await getBalance(user_id, tx), already_owned: true };
+      return {
+        ...existing,
+        chapter_id,
+        balance_after: await getBalance(user_id, tx),
+        already_owned: true,
+        content: chapter.content,
+      };
     }
 
     const balance = await getBalance(user_id, tx);
@@ -265,7 +289,8 @@ export async function purchaseChapter(user_id: string, chapter_id: string) {
       });
     }
 
-    return { ...purchase, chapter_id, balance_after, already_owned: false };
+    // คืนเนื้อหาไปด้วยเลย ให้หน้าอ่านแสดงตอนที่เพิ่งปลดล็อกได้ทันทีโดยไม่ต้องโหลดหน้าใหม่
+    return { ...purchase, chapter_id, balance_after, already_owned: false, content: chapter.content };
   }, WALLET_TX_OPTIONS);
 }
 
@@ -444,6 +469,7 @@ interface CommentNode {
   comment_id: string;
   user: { user_id: string; username: string; avatar_url: string | null };
   content: string;
+  sticker_id: string | null;
   sentiment_label: string | null;
   created_at: Date;
   replies: CommentNode[];
@@ -473,6 +499,7 @@ const commentRowSelect = {
   chapter_id: true,
   parent_comment_id: true,
   content: true,
+  sticker_id: true,
   sentiment_label: true,
   created_at: true,
   user: { select: { user_id: true, username: true, avatar_url: true } },
@@ -488,6 +515,7 @@ function buildCommentTree(rows: CommentRow[]): CommentNode[] {
       comment_id: row.comment_id,
       user: row.user,
       content: row.content,
+      sticker_id: row.sticker_id,
       sentiment_label: row.sentiment_label,
       created_at: row.created_at,
       replies: [],
@@ -542,6 +570,7 @@ export async function listNovelComments(novel_id: string, requester_id?: string)
 
 interface CreateCommentInput {
   content: string;
+  sticker_id?: string;
   parent_comment_id?: string;
 }
 
@@ -566,9 +595,10 @@ export async function createComment(chapter_id: string, user_id: string, input: 
       chapter_id,
       user_id,
       content: input.content,
+      sticker_id: input.sticker_id,
       parent_comment_id: input.parent_comment_id,
     },
-    select: { comment_id: true, content: true, sentiment_label: true, created_at: true },
+    select: { comment_id: true, content: true, sticker_id: true, sentiment_label: true, created_at: true },
   });
 
   return comment;

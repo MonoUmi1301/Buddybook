@@ -25,8 +25,7 @@ cp .env.example .env
 
 npm install                 # ติดตั้งจาก root ก็ได้ (npm workspaces): npm install ที่ root
 npm run prisma:generate     # generate Prisma Client
-npm run prisma:migrate      # สร้างตารางทั้งหมดใน Postgres
-psql "$DATABASE_URL" -f prisma/migrations_manual/checks.sql   # เพิ่ม CHECK constraints ที่ Prisma ประกาศแบบ declarative ไม่ได้
+npm run prisma:migrate      # สร้างตารางทั้งหมดใน Postgres (รวม CHECK constraints)
 
 npm run dev                 # http://localhost:4000  (GET /health เช็คว่ารันติด)
 ```
@@ -117,7 +116,7 @@ npm run openapi --workspace=apps/api        # เขียน docs/openapi.json 
 
 ## เอกสารอ้างอิง
 
-- Schema: `apps/api/prisma/schema.prisma` (18 models, 12 enums) + `apps/api/prisma/migrations_manual/checks.sql`
+- Schema: `apps/api/prisma/schema.prisma` (18 models, 12 enums) + CHECK constraints ใน migration `20260930100000_manual_check_constraints`
 - API contract: `API_Endpoints.md` (74 endpoints, 5 กลุ่ม)
 - Business logic / ER / DFD / Use Case ทั้งหมด: โฟลเดอร์ `buddybook_real`
 - OpenAPI: `GET /api/v1/openapi.json` (Swagger UI: `/api/v1/docs`) — สร้างจาก router จริง

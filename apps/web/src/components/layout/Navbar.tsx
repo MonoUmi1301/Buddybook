@@ -34,7 +34,7 @@ interface NavbarProps {
 
 const iconLinkClasses = (isDark: boolean) =>
   cn(
-    "inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150",
+    "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors duration-150",
     isDark ? "text-zinc-100 hover:bg-white/10" : "text-brand-brown hover:bg-neutral-100"
   );
 
@@ -72,10 +72,12 @@ export function Navbar({ theme, user = null }: NavbarProps) {
         isDark ? "border-surface-border bg-surface" : "border-neutral-200 bg-white"
       )}
     >
+      {/* จอแคบ: ต่ำกว่า sm ระยะห่างแคบลง + โลโก้เล็กลง, ต่ำกว่า md ซ่อนปุ่มสมัครสมาชิก (หน้า login มีลิงก์ไปสมัครอยู่แล้ว)
+          ไม่งั้นแถวไอคอนด้านขวาล้นจอ ทำให้ทุกหน้าเลื่อนซ้ายขวาได้บนมือถือ */}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-6">
-          <Link href="/">
-            <Logo variant={effectiveTheme} />
+        <div className="flex shrink-0 items-center gap-6">
+          <Link href="/" className="shrink-0">
+            <Logo variant={effectiveTheme} responsive />
           </Link>
           <nav className="hidden items-center gap-2 sm:flex">
             {modeButtons.map((mode) => {
@@ -103,24 +105,21 @@ export function Navbar({ theme, user = null }: NavbarProps) {
           </nav>
         </div>
 
-        {/* มือถือ (≤ 390px) ไอคอนครบ 5 ตัวล้นจอ ~4px — ลดช่องไฟเฉพาะจอเล็ก desktop เท่าเดิม */}
-        <div className="flex items-center gap-0.5 sm:gap-1.5">
-          {/* ผู้ใช้ที่ยังไม่ล็อกอินบนมือถือ: เหลือแค่ค้นหา + ปุ่ม "เข้าสู่ระบบ" — เขียน/ชั้นหนังสือต้องล็อกอินอยู่แล้ว
-              และหน้าเข้าสู่ระบบมีลิงก์สมัครสมาชิก (เดิมแถบล้นจอ 390px และปุ่มตัดเป็น 2 บรรทัด) */}
-          <Link href="/write" aria-label="สร้างผลงาน" className={cn(iconLinkClasses(isDark), !user && "max-sm:hidden")}>
+        <div className="flex shrink-0 items-center sm:gap-1.5">
+          <Link href="/write" aria-label="สร้างผลงาน" className={iconLinkClasses(isDark)}>
             <PenLine className="h-5 w-5" />
           </Link>
           <Link href="/search" aria-label="ค้นหา" className={iconLinkClasses(isDark)}>
             <Search className="h-5 w-5" />
           </Link>
-          <Link href="/library" aria-label="ชั้นหนังสือ" className={cn(iconLinkClasses(isDark), !user && "max-sm:hidden")}>
+          <Link href="/library" aria-label="ชั้นหนังสือ" className={iconLinkClasses(isDark)}>
             <Library className="h-5 w-5" />
           </Link>
 
           {user ? (
             <>
               <NotificationPanel theme={effectiveTheme} />
-              <div className="ml-0.5 sm:ml-1.5">
+              <div className="ml-1 sm:ml-1.5">
                 <UserMenu
                   user={{
                     userId: user.user_id,
@@ -133,20 +132,19 @@ export function Navbar({ theme, user = null }: NavbarProps) {
               </div>
             </>
           ) : (
-            <div className="ml-2 flex items-center gap-2">
+            <div className="ml-1.5 flex items-center gap-2 sm:ml-2">
               <Link
                 href="/login"
                 className={cn(
                   "whitespace-nowrap text-sm font-medium transition-colors",
-                  "max-sm:inline-flex max-sm:h-9 max-sm:items-center max-sm:rounded-pill max-sm:bg-primary-500 max-sm:px-4 max-sm:text-white",
-                  isDark ? "sm:text-zinc-200 sm:hover:text-white" : "sm:text-neutral-700 sm:hover:text-brand-brown"
+                  isDark ? "text-zinc-200 hover:text-white" : "text-neutral-700 hover:text-brand-brown"
                 )}
               >
                 เข้าสู่ระบบ
               </Link>
               <Link
                 href="/register"
-                className="inline-flex h-9 items-center whitespace-nowrap rounded-pill bg-primary-500 px-4 text-sm font-medium text-white transition-colors hover:bg-primary-600 max-sm:hidden"
+                className="hidden h-9 items-center rounded-pill bg-primary-500 px-4 text-sm font-medium text-white transition-colors hover:bg-primary-600 md:inline-flex"
               >
                 สมัครสมาชิก
               </Link>

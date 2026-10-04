@@ -72,5 +72,7 @@ export async function exchangeFacebookCode(code: string): Promise<OAuthProfile> 
     email: profile.email ?? `facebook_${profile.id}@facebook.buddybook.local`,
     name: profile.name ?? "Facebook User",
     picture: profile.picture?.data?.url ?? null,
+    // Graph API ไม่รับประกันว่าอีเมลยืนยันแล้ว — ถือว่ายังไม่ยืนยัน (ไม่ใช้ผูกกับบัญชีเดิม)
+    email_verified: false,
   };
 }

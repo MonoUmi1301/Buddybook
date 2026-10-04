@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/api/session";
+import { appUrl } from "@/lib/api/config";
 
 /**
  * เพิ่มภายหลัง (bug fix) — GET /api/v1/users/me/onboarding-sync
@@ -11,13 +12,13 @@ import { getCurrentUser } from "@/lib/api/session";
  */
 export async function GET(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.redirect(new URL("/login", request.url));
-  if (!user.has_interests) return NextResponse.redirect(new URL("/onboarding/interests", request.url));
+  if (!user) return NextResponse.redirect(appUrl("/login"));
+  if (!user.has_interests) return NextResponse.redirect(appUrl("/onboarding/interests"));
 
   // next ต้องเป็น path ในเว็บเดียวกันเท่านั้น (กัน open redirect เช่น "//evil.com")
   const next = new URL(request.url).searchParams.get("next");
   const target = next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
-  const response = NextResponse.redirect(new URL(target, request.url));
+  const response = NextResponse.redirect(appUrl(target));
   response.cookies.set("bb_has_interests", "1", {
     path: "/",
     maxAge: 60 * 60 * 24 * 365,

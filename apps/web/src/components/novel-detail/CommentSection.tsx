@@ -2,16 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Smile } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { ReportButton } from "@/components/social/ReportButton";
+import { SelectedStickerPreview, StickerImage, StickerPicker } from "@/components/social/StickerPicker";
+import type { StickerId } from "@/lib/stickers";
 
 export interface CommentNode {
   comment_id: string;
   user: { user_id: string; username: string; avatar_url: string | null };
   content: string;
+  sticker_id: string | null;
   sentiment_label: "pos" | "neg" | "neutral" | null;
   created_at: string;
   replies: CommentNode[];
@@ -33,7 +35,8 @@ function CommentRow({ node, depth = 0, isLoggedIn }: { node: CommentNode; depth?
             <p className="text-sm font-medium text-neutral-800">{node.user.username}</p>
             <ReportButton targetType="comment" targetId={node.comment_id} isLoggedIn={isLoggedIn} variant="icon" />
           </div>
-          <p className="text-sm text-neutral-600">{node.content}</p>
+          {node.content && <p className="text-sm text-neutral-600">{node.content}</p>}
+          <StickerImage id={node.sticker_id} className="mt-1 h-28 w-28" />
         </div>
         {node.replies.length > 0 && (
           <ul>
@@ -55,19 +58,20 @@ export function CommentSection({ chapterId, comments: initialComments, isLoggedI
   const [comments, setComments] = useState(initialComments);
   const [sort, setSort] = useState<"top" | "latest">("top");
   const [value, setValue] = useState("");
+  const [stickerId, setStickerId] = useState<StickerId | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const totalCount = comments.reduce((sum, c) => sum + 1 + c.replies.length, 0);
   const sorted = sort === "latest" ? [...comments].reverse() : comments;
 
   async function handleSubmit() {
-    if (!value.trim()) return;
+    if (!value.trim() && !stickerId) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/v1/chapters/${chapterId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: value.trim() }),
+        body: JSON.stringify({ content: value.trim(), sticker_id: stickerId ?? undefined }),
       });
       const json = await res.json();
       if (res.ok) {
@@ -77,12 +81,14 @@ export function CommentSection({ chapterId, comments: initialComments, isLoggedI
             comment_id: json.comment_id,
             user: { user_id: "", username: "คุณ", avatar_url: null },
             content: json.content,
+            sticker_id: json.sticker_id ?? null,
             sentiment_label: null,
             created_at: json.created_at,
             replies: [],
           },
         ]);
         setValue("");
+        setStickerId(null);
         router.refresh();
       }
     } finally {
@@ -96,6 +102,7 @@ export function CommentSection({ chapterId, comments: initialComments, isLoggedI
 
       {isLoggedIn && (
         <div className="rounded-card border border-neutral-200 bg-white p-4">
+          <SelectedStickerPreview id={stickerId} onRemove={() => setStickerId(null)} />
           <textarea
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -104,10 +111,8 @@ export function CommentSection({ chapterId, comments: initialComments, isLoggedI
             className="w-full resize-none border-0 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none"
           />
           <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
-            <button type="button" aria-label="อีโมจิ" className="text-2xl leading-none">
-              <Smile className="h-6 w-6 text-neutral-400 hover:text-neutral-600" />
-            </button>
-            <Button variant="primary" disabled={!value.trim()} loading={submitting} onClick={handleSubmit}>
+            <StickerPicker value={stickerId} onChange={setStickerId} />
+            <Button variant="primary" disabled={!value.trim() && !stickerId} loading={submitting} onClick={handleSubmit}>
               ส่งคอมเมนต์
             </Button>
           </div>

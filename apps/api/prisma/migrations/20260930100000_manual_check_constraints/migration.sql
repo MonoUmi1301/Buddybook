@@ -1,6 +1,8 @@
 -- ============================================================================
 -- BuddyBook — CHECK constraints ที่ Prisma schema.prisma แสดงไม่ได้แบบ declarative
--- รันไฟล์นี้ "หลัง" จาก `prisma migrate dev` ครั้งแรก (หรือใส่เป็น migration.sql เพิ่มเติม)
+-- เดิมอยู่ที่ prisma/migrations_manual/checks.sql (ต้องรันเองหลัง migrate) ย้ายมาเป็น migration
+-- ให้ migrate reset / deploy / CI ได้ครบอัตโนมัติ — DROP IF EXISTS ก่อน ADD ทุกตัว รันซ้ำบนฐานที่มีอยู่แล้วได้
+-- Prisma ไม่ติดตาม CHECK constraint จึงไม่นับเป็น drift
 -- อ้างอิงจาก BuddyBook_Data_Dictionary_and_Schema.md ทุกข้อ
 -- ============================================================================
 
@@ -32,17 +34,6 @@ ALTER TABLE "reviews" DROP CONSTRAINT IF EXISTS chk_reviews_sentiment_score_rang
 ALTER TABLE "reviews"
   ADD CONSTRAINT chk_reviews_sentiment_score_range
   CHECK (sentiment_score IS NULL OR (sentiment_score >= 0 AND sentiment_score <= 1));
-
--- comments/reviews: sentiment_polarity (ขั้วความรู้สึก) ต้องอยู่ในช่วง -1..1 — gap 2.1
-ALTER TABLE "comments" DROP CONSTRAINT IF EXISTS chk_comments_sentiment_polarity_range;
-ALTER TABLE "comments"
-  ADD CONSTRAINT chk_comments_sentiment_polarity_range
-  CHECK (sentiment_polarity IS NULL OR (sentiment_polarity >= -1 AND sentiment_polarity <= 1));
-
-ALTER TABLE "reviews" DROP CONSTRAINT IF EXISTS chk_reviews_sentiment_polarity_range;
-ALTER TABLE "reviews"
-  ADD CONSTRAINT chk_reviews_sentiment_polarity_range
-  CHECK (sentiment_polarity IS NULL OR (sentiment_polarity >= -1 AND sentiment_polarity <= 1));
 
 -- character_edges: กันตัวละครลากเส้นหาตัวเอง
 ALTER TABLE "character_edges" DROP CONSTRAINT IF EXISTS chk_character_edges_no_self_loop;

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
+import { StickerImage } from "@/components/social/StickerPicker";
 import type { CommentNode } from "@/components/novel-detail/CommentSection";
 
 export interface ChapterCommentGroup {
@@ -25,7 +26,8 @@ function CommentRow({ node }: { node: CommentNode }) {
       <div className="flex-1">
         <div className="rounded-lg bg-neutral-50 px-4 py-2.5">
           <p className="text-sm font-medium text-neutral-800">{node.user.username}</p>
-          <p className="text-sm text-neutral-600">{node.content}</p>
+          {node.content && <p className="text-sm text-neutral-600">{node.content}</p>}
+          <StickerImage id={node.sticker_id} className="mt-1 h-28 w-28" />
         </div>
         {node.replies.length > 0 && (
           <ul className="ml-10 mt-3 space-y-3">

@@ -52,6 +52,7 @@ describe("OAuth login with a verified birthday", () => {
       email,
       name: "Teen",
       picture: null,
+      email_verified: true,
       birthdate: { year: new Date().getFullYear() - 15, month: 1, day: 1 },
     });
     const user = await prisma.user.findUniqueOrThrow({ where: { user_id: login.user.user_id } });
