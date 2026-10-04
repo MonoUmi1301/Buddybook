@@ -75,15 +75,15 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
       <main className="flex-1">
         <GiftDraftBanner />
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between border-b border-neutral-200 pb-6">
-            <div className="flex items-center gap-3">
-              <Coins className="h-9 w-9 text-amber-400" />
+          <div className="flex items-center justify-between gap-4 border-b border-neutral-200 pb-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <Coins className="h-9 w-9 shrink-0 text-amber-400" />
               <div>
                 <h1 className="text-h3 text-neutral-900">เติม coin เข้าระบบ</h1>
                 <p className="text-sm text-neutral-500">จ่ายด้วยบัตร ยืนยันอัตโนมัติภายในไม่กี่วินาที</p>
               </div>
             </div>
-            <div className="text-right">
+            <div className="shrink-0 whitespace-nowrap text-right">
               <p className="text-sm text-neutral-500">coin ของฉัน</p>
               <p className="flex items-center justify-end gap-1 text-xl font-bold text-neutral-900">
                 {balance.toLocaleString()} <span className="text-sm font-medium text-neutral-500">coin</span>
