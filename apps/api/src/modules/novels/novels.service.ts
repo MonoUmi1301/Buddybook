@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
-import { syncNovelTags, syncReadEdge } from "@/lib/graphSync";
+import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
 import type { ContentRating, LegalStatus, NovelFormat, NovelStatus, TagCategory, Visibility } from "@prisma/client";
@@ -78,7 +78,8 @@ export async function searchNovels({
   const ratingGate = await buildContentRatingGate(scopedToOwn, requester_id);
 
   const where = {
-    ...(scopedToOwn ? { author_id: requester_id } : { visibility: "published" as Visibility }),
+    // gap 2.4 — นิยายในถังขยะไม่โผล่ใน Dashboard ของเจ้าของ (ดูได้ที่ GET /novels/trash แทน)
+    ...(scopedToOwn ? { author_id: requester_id, deleted_at: null } : { visibility: "published" as Visibility }),
     ...(status ? { status } : {}),
     ...(legal_status ? { legal_status: LEGAL_STATUS_MAP[legal_status] } : {}),
     ...(q ? buildTextSearchClause(q, field) : {}),
@@ -316,9 +317,11 @@ interface UpdateNovelInput {
 
 /** Reference implementation — PATCH /novels/:novel_id (เจ้าของเท่านั้นที่แก้ได้) */
 export async function updateNovel(novel_id: string, user_id: string, input: UpdateNovelInput) {
-  const existing = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true } });
+  const existing = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true, deleted_at: true } });
   if (!existing) throw ApiError.notFound("Novel not found");
   if (existing.author_id !== user_id) throw ApiError.forbidden("Forbidden");
+  // gap 2.4 — แก้ไขนิยายในถังขยะไม่ได้ (เช่นตั้ง visibility=published กลับเอง) ต้องกู้คืนก่อน
+  if (existing.deleted_at) throw ApiError.conflict("นิยายเรื่องนี้อยู่ในถังขยะ กู้คืนก่อนจึงจะแก้ไขได้");
   await assertValidCategoryHierarchy(input.primary_tag_id, input.secondary_tag_id);
 
   const { tag_ids, tag_names, pairing_tag_ids, pairing_tag_names, fandom_tag_ids, fandom_tag_names, ...rest } = input;
@@ -722,12 +725,117 @@ export async function listNovelDonors(novel_id: string, viewer_id?: string) {
 /** Reference implementation — DELETE /novels/:novel_id
  *  ลบถาวรจริง (ไม่ใช่ trash bin — TrashContentType ไม่มีค่า "novel" ตาม data dictionary
  *  การลบนิยายทั้งเรื่องเป็น hard delete พร้อม cascade ลบ chapters/world-building ที่ผูกอยู่ทั้งหมด) */
-export async function deleteNovel(novel_id: string, user_id: string) {
-  const existing = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true } });
-  if (!existing) throw ApiError.notFound("Novel not found");
-  if (existing.author_id !== user_id) throw ApiError.forbidden("Forbidden");
+/** ระยะเวลาที่นิยายอยู่ในถังขยะก่อนถูกลบถาวรอัตโนมัติ — เท่ากับถังขยะระดับตอน (trash_bin) */
+export const NOVEL_TRASH_RETENTION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
+async function getOwnedNovel(novel_id: string, user_id: string) {
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, visibility: true, deleted_at: true, visibility_before_delete: true },
+  });
+  if (!novel) throw ApiError.notFound("Novel not found");
+  if (novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
+  return novel;
+}
+
+/** นิยายที่มีผู้อ่านจ่ายเงินซื้อตอนแล้วลบไม่ได้ — การลบ (แม้ชั่วคราว) ทำให้ผู้ซื้อเข้าอ่านสิ่งที่จ่ายไปแล้วไม่ได้ */
+async function assertNoChapterSales(novel_id: string) {
+  const sold = await prisma.chapterPurchase.count({ where: { chapter: { novel_id } } });
+  if (sold > 0) {
+    throw ApiError.conflict(
+      "นิยายเรื่องนี้มีผู้อ่านซื้อตอนไปแล้ว จึงลบไม่ได้เพื่อคุ้มครองสิทธิ์ผู้ซื้อ — ซ่อนตอนที่ไม่ต้องการ หรือติดต่อทีมงาน"
+    );
+  }
+}
+
+/** DELETE /novels/:novel_id — gap 2.4: ย้ายลงถังขยะ (soft delete 30 วัน) แทนการลบถาวรทันทีแบบเดิม */
+export async function deleteNovel(novel_id: string, user_id: string) {
+  const novel = await getOwnedNovel(novel_id, user_id);
+  if (novel.deleted_at) throw ApiError.conflict("นิยายเรื่องนี้อยู่ในถังขยะอยู่แล้ว");
+  await assertNoChapterSales(novel_id);
+
+  const deleted_at = new Date();
+  const updated = await prisma.novel.update({
+    where: { novel_id },
+    data: { deleted_at, visibility_before_delete: novel.visibility, visibility: "private", updated_at: deleted_at },
+    select: { novel_id: true, deleted_at: true },
+  });
+  // เอาออกจากกราฟแนะนำทันที (กู้คืนแล้วค่อย sync กลับ) — Neo4j ล่มต้องไม่ทำให้การลบล้ม
+  deleteNovelGraphNode(novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
+
+  return {
+    novel_id: updated.novel_id,
+    deleted_at: updated.deleted_at,
+    auto_delete_at: new Date(deleted_at.getTime() + NOVEL_TRASH_RETENTION_DAYS * DAY_MS),
+  };
+}
+
+/** GET /novels/trash — นิยายของฉันที่อยู่ในถังขยะ (Userflow: "หน้านิยายที่ถูกลบ") */
+export async function listTrashedNovels(user_id: string) {
+  const novels = await prisma.novel.findMany({
+    where: { author_id: user_id, deleted_at: { not: null } },
+    orderBy: { deleted_at: "desc" },
+    select: {
+      novel_id: true,
+      title: true,
+      cover_image_url: true,
+      deleted_at: true,
+      _count: { select: { chapters: true } },
+    },
+  });
+  return {
+    retention_days: NOVEL_TRASH_RETENTION_DAYS,
+    novels: novels.map(({ _count, deleted_at, ...n }) => ({
+      ...n,
+      chapter_count: _count.chapters,
+      deleted_at,
+      auto_delete_at: new Date(deleted_at!.getTime() + NOVEL_TRASH_RETENTION_DAYS * DAY_MS),
+    })),
+  };
+}
+
+/** POST /novels/:novel_id/restore — กู้คืนจากถังขยะ กลับเป็น visibility เดิมก่อนลบ */
+export async function restoreNovel(novel_id: string, user_id: string) {
+  const novel = await getOwnedNovel(novel_id, user_id);
+  if (!novel.deleted_at) throw ApiError.conflict("นิยายเรื่องนี้ไม่ได้อยู่ในถังขยะ");
+
+  const restored = await prisma.novel.update({
+    where: { novel_id },
+    data: {
+      deleted_at: null,
+      visibility: novel.visibility_before_delete ?? "private",
+      visibility_before_delete: null,
+      updated_at: new Date(),
+    },
+    select: { novel_id: true, title: true, visibility: true, novel_tags: { select: { tag: { select: { name: true } } } } },
+  });
+  if (restored.visibility === "published") {
+    syncNovelTags(
+      restored.novel_id,
+      restored.title,
+      restored.novel_tags.map((t) => t.tag.name)
+    ).catch((err) => console.error("Neo4j syncNovelTags failed:", err));
+  }
+  return { novel_id: restored.novel_id, visibility: restored.visibility };
+}
+
+/** DELETE /novels/:novel_id/permanent — ลบถาวร (ต้องอยู่ในถังขยะก่อน กันกดพลาดจากหน้าอื่น) กู้คืนไม่ได้อีก */
+export async function permanentlyDeleteNovel(novel_id: string, user_id: string) {
+  const novel = await getOwnedNovel(novel_id, user_id);
+  if (!novel.deleted_at) throw ApiError.conflict("ต้องย้ายนิยายลงถังขยะก่อนจึงจะลบถาวรได้");
+  await assertNoChapterSales(novel_id);
   await prisma.novel.delete({ where: { novel_id } });
+  deleteNovelGraphNode(novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
+}
+
+/** scheduler — ลบถาวรนิยายที่อยู่ในถังขยะครบ 30 วัน (ข้ามเรื่องที่มีการซื้อตอน ซึ่งไม่ควรเข้าถังขยะได้ตั้งแต่แรก) */
+export async function purgeExpiredNovels(now = new Date()) {
+  const cutoff = new Date(now.getTime() - NOVEL_TRASH_RETENTION_DAYS * DAY_MS);
+  const result = await prisma.novel.deleteMany({
+    where: { deleted_at: { lte: cutoff }, chapters: { none: { purchases: { some: {} } } } },
+  });
+  return { purged_novels: result.count };
 }
 
 /** Reference implementation — GET /novels/:novel_id/print-preview (เจ้าของเท่านั้น ตาม
@@ -788,10 +896,12 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
         take: 8,
       },
       _count: { select: { novel_likes: true } },
+      deleted_at: true,
     },
   });
 
-  if (!novel) throw ApiError.notFound("Novel not found");
+  // gap 2.4 — นิยายในถังขยะไม่มีหน้ารายละเอียด (เจ้าของจัดการผ่าน GET /novels/trash)
+  if (!novel || novel.deleted_at) throw ApiError.notFound("Novel not found");
 
   const isOwner = assertNovelVisible({ visibility: novel.visibility, author_id: novel.author.user_id }, viewer_id);
   if (novel.content_rating === "mature" && !isOwner && !(await isViewerAgeVerified(viewer_id))) {
@@ -804,7 +914,7 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
     ? Boolean(await prisma.novelLike.findUnique({ where: { user_id_novel_id: { user_id: viewer_id, novel_id } } }))
     : false;
 
-  const { novel_tags, view_count, _count, ...rest } = novel;
+  const { novel_tags, view_count, _count, deleted_at: _deleted, ...rest } = novel;
   return {
     ...rest,
     view_count: Number(view_count),

@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
 import type { OAuthProfile } from "@/lib/oauthProfile";
+import { pickGoogleBirthday, type BirthDate } from "@/lib/ageVerification";
+
+const BIRTHDAY_SCOPE = "https://www.googleapis.com/auth/user.birthday.read";
 
 /** เช่นเดียวกับ Cloudinary/SlipOK — ฟีเจอร์ Google login ทั้งหมด gate ตัวเองด้วยอันนี้
  *  ไม่บังคับให้ตั้งค่าตอน boot เพราะยังไม่มีทุกโปรเจกต์ที่ต้องใช้ */
@@ -49,7 +52,7 @@ export function buildGoogleAuthUrl(state: string): string {
     client_id: env.GOOGLE_CLIENT_ID,
     redirect_uri: REDIRECT_URI(),
     response_type: "code",
-    scope: "openid email profile",
+    scope: env.GOOGLE_OAUTH_REQUEST_BIRTHDAY ? `openid email profile ${BIRTHDAY_SCOPE}` : "openid email profile",
     state,
     prompt: "select_account",
   });
@@ -103,6 +106,8 @@ export async function exchangeGoogleCode(code: string): Promise<OAuthProfile> {
     throw ApiError.unauthorized("Could not fetch Google profile");
   }
 
+  const birthdate = env.GOOGLE_OAUTH_REQUEST_BIRTHDAY ? await fetchGoogleBirthday(tokenJson.access_token) : null;
+
   return {
     provider: "google",
     sub: profile.sub,
@@ -111,5 +116,19 @@ export async function exchangeGoogleCode(code: string): Promise<OAuthProfile> {
     picture: profile.picture,
     // userinfo คืน email_verified มาเสมอ — เชื่อเฉพาะ true ตรง ๆ เท่านั้น
     email_verified: profile.email_verified === true,
+    birthdate,
   };
+}
+
+/** gap 3.4 — วันเกิดจาก People API; ผู้ใช้ไม่ให้สิทธิ์/ไม่ได้ตั้งปีเกิด/เรียกไม่สำเร็จ = null (ล็อกอินต่อได้ปกติ) */
+async function fetchGoogleBirthday(accessToken: string): Promise<BirthDate | null> {
+  try {
+    const res = await fetch("https://people.googleapis.com/v1/people/me?personFields=birthdays", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    return pickGoogleBirthday((await res.json()) as Parameters<typeof pickGoogleBirthday>[0]);
+  } catch {
+    return null;
+  }
 }

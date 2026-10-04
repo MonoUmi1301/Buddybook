@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { cn } from "@/lib/cn";
+import { errorText } from "@/lib/formatApiError";
 
 interface AddCharacterModalProps {
   onClose: () => void;
@@ -48,8 +49,8 @@ export function AddCharacterModal({ onClose, onSubmit }: AddCharacterModalProps)
     try {
       await onSubmit({ name: trimmed, avatarUrl: avatarUrl ?? undefined });
       onClose();
-    } catch {
-      setError("เพิ่มตัวละครไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } catch (e) {
+      setError(errorText(e, "เพิ่มตัวละครไม่สำเร็จ ลองใหม่อีกครั้ง"));
     } finally {
       setSubmitting(false);
     }

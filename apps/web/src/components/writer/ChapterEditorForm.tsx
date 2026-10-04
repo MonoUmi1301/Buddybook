@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamicImport from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Loader2, Check } from "lucide-react";
+import { ChevronRight, Loader2, Check, CloudOff, HardDrive } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PublishChoiceModal, type PublishChoice } from "@/components/writer/PublishChoiceModal";
 import { formatApiError } from "@/lib/formatApiError";
 import { countCharacters, estimatePageCount } from "@/lib/textStats";
+import { type LocalDraft, chapterDraftKey, clearDraft, readDraft, writeDraft } from "@/lib/draftStore";
 
 // Quill แตะ DOM ตรง ๆ ตอน construct — โหลดแบบ ssr:false (ทำได้เฉพาะใน Client Component)
 // ตาม pattern มาตรฐานของ Next.js App Router
@@ -29,19 +30,32 @@ interface ChapterEditorFormProps {
   initialStatus?: "draft" | "published" | "scheduled" | "hidden";
   /** เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = อ่านฟรี */
   initialPriceCoins?: number;
+  /** gap 2.5 — updated_at ของตอนบนเซิร์ฟเวอร์ตอนเปิดหน้า (ใช้ตรวจการแก้ไขชนกันข้ามแท็บ) */
+  initialUpdatedAt?: string | null;
 }
 
 const MAX_CHAPTER_PRICE = 1000;
 
-type SaveStatus = "idle" | "saving" | "saved" | "error";
+type SaveStatus = "idle" | "local" | "saving" | "saved" | "offline" | "conflict" | "error";
 
 const AUTOSAVE_INTERVAL_MS = 30_000;
+/** เขียนร่างลงเครื่องหลังหยุดพิมพ์เท่านี้ (ms) — ถี่กว่า auto-save เซิร์ฟเวอร์มาก แต่ไม่ถึงกับทุกตัวอักษร */
+const LOCAL_DRAFT_DEBOUNCE_MS = 800;
+/** fetch keepalive ส่ง body ได้ไม่เกิน ~64KB — ใหญ่กว่านี้พึ่งร่างในเครื่องอย่างเดียวตอนปิดแท็บ */
+const KEEPALIVE_MAX_BODY = 60_000;
 
 /**
  * หน้าตอนเขียนนิยาย — ชื่อตอน + Quill editor + auto-save ทุก 30 วิ
  * ตาม BuddyBook_Swimlane_UseCases.md UC1: พิมพ์ -> debounce 30 วิ -> PATCH /chapters/:id/autosave
  * -> INSERT chapter_versions(is_autosave=true) ก่อนจะมี chapter_id จริง (ยังไม่ได้กด "บันทึกร่าง"
  * ครั้งแรก) จะยัง autosave ไม่ได้ เพราะยังไม่มีแถวใน DB ให้ผูก — ต้องสร้างก่อนอย่างน้อยหนึ่งครั้ง
+ *
+ * gap 2.5 (KPI-3: ไม่มีงานหายแม้เน็ตหลุด/ปิดเบราว์เซอร์ทันที):
+ *   - ทุกการพิมพ์เขียนร่างลง localStorage (debounce 0.8 วิ) รวมถึงตอนที่ยังไม่เคยบันทึก
+ *   - แท็บถูกซ่อน/ปิด (visibilitychange/pagehide) → เขียนร่างทันที + ยิง autosave แบบ keepalive
+ *   - ออฟไลน์ → แสดงสถานะ "บันทึกไว้ในเครื่อง" แล้วซิงก์ทันทีเมื่อกลับมาออนไลน์
+ *   - เปิดหน้าใหม่แล้วพบร่างในเครื่องที่ต่างจากเซิร์ฟเวอร์ → ถามว่าจะกู้คืนหรือไม่
+ *   - ส่ง base_updated_at ไปกับ autosave — ถูกแก้จากแท็บอื่นแล้วได้ 409 ให้ผู้ใช้เลือก ไม่ทับเงียบ ๆ
  */
 export function ChapterEditorForm({
   novelId,
@@ -52,6 +66,7 @@ export function ChapterEditorForm({
   initialContent = "",
   initialStatus = "draft",
   initialPriceCoins = 0,
+  initialUpdatedAt = null,
 }: ChapterEditorFormProps) {
   const router = useRouter();
   const [chapterId, setChapterId] = useState(initialChapterId);
@@ -71,8 +86,77 @@ export function ChapterEditorForm({
   // audit fix — กัน autosave request ซ้อนกัน (request ช้าจากรอบก่อนยังไม่ตอบ แต่ timer รอบถัดไปยิงซ้ำ
   // ไปแล้ว) ไม่มี sequencing เดิม ทำให้ response อาจแซงกันจนเซฟทับด้วยเนื้อหาเก่ากว่าได้
   const autosaveInFlightRef = useRef(false);
+  const baseUpdatedAtRef = useRef<string | null>(initialUpdatedAt);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recoverableDraft, setRecoverableDraft] = useState<LocalDraft | null>(null);
+  // Quill รับแค่ defaultValue ตอน mount — เปลี่ยน key เพื่อ remount พร้อมเนื้อหาที่กู้คืน
+  const [editorSeed, setEditorSeed] = useState({ key: 0, value: initialContent });
   contentRef.current = content;
   titleRef.current = title;
+  const draftKeyRef = useRef(chapterDraftKey(novelId, chapterId, chapterNumber));
+  draftKeyRef.current = chapterDraftKey(novelId, chapterId, chapterNumber);
+
+  const saveLocalDraftNow = useCallback(() => {
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+    if (!dirtyRef.current) return;
+    writeDraft(draftKeyRef.current, {
+      title: titleRef.current,
+      content: contentRef.current,
+      saved_at: Date.now(),
+      base_updated_at: baseUpdatedAtRef.current,
+    });
+  }, []);
+
+  function scheduleLocalDraft() {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      saveLocalDraftNow();
+      const offline = typeof navigator !== "undefined" && !navigator.onLine;
+      setSaveStatus((s) => (s === "conflict" ? s : offline ? "offline" : s === "idle" ? "local" : s));
+    }, LOCAL_DRAFT_DEBOUNCE_MS);
+  }
+
+  /** เซิร์ฟเวอร์ได้รับแล้ว — ลบร่างในเครื่องเฉพาะเมื่อไม่มีการพิมพ์เพิ่มระหว่างรอ response */
+  function markSynced(sent: { title: string; content: string }, serverUpdatedAt?: string | null) {
+    if (serverUpdatedAt) baseUpdatedAtRef.current = serverUpdatedAt;
+    if (contentRef.current === sent.content && titleRef.current === sent.title) {
+      clearDraft(draftKeyRef.current);
+    } else {
+      saveLocalDraftNow();
+    }
+  }
+
+  // เปิดหน้าแล้วพบร่างในเครื่องที่ยังไม่ถึงเซิร์ฟเวอร์ → เสนอให้กู้คืน
+  useEffect(() => {
+    const draft = readDraft(draftKeyRef.current);
+    if (!draft) return;
+    if (draft.content === initialContent && draft.title === initialTitle) {
+      clearDraft(draftKeyRef.current);
+      return;
+    }
+    setRecoverableDraft(draft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- ตรวจครั้งเดียวตอนเปิดหน้า
+  }, []);
+
+  function restoreLocalDraft() {
+    if (!recoverableDraft) return;
+    setTitle(recoverableDraft.title);
+    setContent(recoverableDraft.content);
+    titleRef.current = recoverableDraft.title;
+    contentRef.current = recoverableDraft.content;
+    setEditorSeed((prev) => ({ key: prev.key + 1, value: recoverableDraft.content }));
+    dirtyRef.current = true;
+    setRecoverableDraft(null);
+    setSaveStatus("local");
+  }
+
+  function discardLocalDraft() {
+    clearDraft(draftKeyRef.current);
+    setRecoverableDraft(null);
+  }
 
   async function persist(
     status: "draft" | "published" | "scheduled",
@@ -112,12 +196,17 @@ export function ChapterEditorForm({
           (onError ?? setErrorMessage)(formatApiError(json, "บันทึกตอนไม่สำเร็จ"));
           return false;
         }
+        // ร่างในเครื่องของ "ตอนใหม่" ย้ายไปผูกกับ chapter_id จริงแล้ว — ลบ key ชั่วคราวทิ้ง
+        clearDraft(chapterDraftKey(novelId, undefined, chapterNumber));
+        baseUpdatedAtRef.current = json.updated_at ?? null;
+        dirtyRef.current = false;
         setChapterId(json.chapter_id);
         setChapterStatus(status);
         router.replace(`/write/${novelId}/chapters/${json.chapter_id}`);
         return true;
       }
 
+      const sent = { title: titleRef.current, content: contentRef.current };
       const res = await fetch(`/api/v1/chapters/${chapterId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -134,6 +223,8 @@ export function ChapterEditorForm({
         (onError ?? setErrorMessage)(formatApiError(json, "บันทึกตอนไม่สำเร็จ"));
         return false;
       }
+      dirtyRef.current = false;
+      markSynced(sent, json.updated_at);
       setChapterStatus(status);
       return true;
     } catch {
@@ -156,36 +247,103 @@ export function ChapterEditorForm({
     if (ok) router.push("/write");
   }
 
-  // Auto-save ทุก 30 วินาที — เฉพาะตอนที่มี chapter_id จริงแล้ว (สร้างครั้งแรกผ่าน "บันทึกร่าง")
-  useEffect(() => {
-    const timer = setInterval(async () => {
-      // audit fix — ถ้า request รอบก่อนยังไม่ตอบกลับ ข้ามรอบนี้ไปก่อน (ไม่ยิงซ้อน) dirtyRef ยังเป็น
-      // true อยู่ต่อ รอบถัดไปจะลองใหม่พร้อมเนื้อหาล่าสุดเสมอ ไม่มีอะไรหาย
+  /** ส่งเนื้อหาล่าสุดขึ้นเซิร์ฟเวอร์ (ถ้ามีอะไรค้าง) — ใช้ร่วมกันโดย timer 30 วิ, กลับมาออนไลน์ และตอนปิดแท็บ */
+  const flushAutosave = useCallback(
+    async (opts: { keepalive?: boolean } = {}) => {
+      // audit fix — ถ้า request รอบก่อนยังไม่ตอบกลับ ข้ามรอบนี้ไปก่อน (ไม่ยิงซ้อน)
       if (!chapterId || !dirtyRef.current || autosaveInFlightRef.current) return;
+      const sent = { title: titleRef.current, content: contentRef.current };
+      if (!sent.content) return;
+      const body = JSON.stringify({
+        content_snapshot: sent.content,
+        // audit fix — ส่งชื่อเฉพาะตอนที่มีชื่อจริง กันชื่อว่างไปเขียนทับของเดิม
+        ...(sent.title.trim() ? { title: sent.title.trim() } : {}),
+        ...(baseUpdatedAtRef.current ? { base_updated_at: baseUpdatedAtRef.current } : {}),
+      });
+      if (opts.keepalive && body.length > KEEPALIVE_MAX_BODY) return; // ร่างในเครื่องรับช่วงแทน
+
       dirtyRef.current = false;
       autosaveInFlightRef.current = true;
-      setSaveStatus("saving");
+      if (!opts.keepalive) setSaveStatus("saving");
       try {
         const res = await fetch(`/api/v1/chapters/${chapterId}/autosave`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content_snapshot: contentRef.current,
-            // audit fix — เดิมส่งแค่เนื้อหา ทำให้แก้ชื่อตอนแล้ว autosave ไม่บันทึกชื่อจริง (ค้าง
-            // ชื่อเดิมจนกว่าจะกด "บันทึกร่าง"/"จบงาน") ส่งเฉพาะตอนที่มีชื่อจริงเท่านั้น กันชื่อว่าง
-            // ไปเขียนทับของเดิมโดยไม่ตั้งใจ
-            ...(titleRef.current.trim() ? { title: titleRef.current.trim() } : {}),
-          }),
+          body,
+          keepalive: opts.keepalive,
         });
-        setSaveStatus(res.ok ? "saved" : "error");
+        if (res.ok) {
+          const json = (await res.json().catch(() => ({}))) as { chapter_updated_at?: string };
+          markSynced(sent, json.chapter_updated_at);
+          setSaveStatus(dirtyRef.current ? "local" : "saved");
+          return;
+        }
+        // ไม่สำเร็จ — คืนสถานะ dirty (เดิมหายเงียบจนกว่าจะพิมพ์ใหม่) ร่างในเครื่องยังอยู่ครบ
+        dirtyRef.current = true;
+        saveLocalDraftNow();
+        setSaveStatus(res.status === 409 ? "conflict" : "error");
       } catch {
-        setSaveStatus("error");
+        dirtyRef.current = true;
+        saveLocalDraftNow();
+        setSaveStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "error");
       } finally {
         autosaveInFlightRef.current = false;
       }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- markSynced อ่านค่าผ่าน ref ทั้งหมด
+    [chapterId, saveLocalDraftNow]
+  );
+
+  // Auto-save ทุก 30 วินาที — เฉพาะตอนที่มี chapter_id จริงแล้ว (สร้างครั้งแรกผ่าน "บันทึกร่าง")
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        if (dirtyRef.current) setSaveStatus("offline");
+        return;
+      }
+      void flushAutosave();
     }, AUTOSAVE_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [chapterId]);
+  }, [flushAutosave]);
+
+  // เน็ตหลุด/กลับมา + แท็บถูกซ่อน/ปิด
+  useEffect(() => {
+    const onOffline = () => {
+      saveLocalDraftNow();
+      if (dirtyRef.current) setSaveStatus("offline");
+    };
+    const onOnline = () => void flushAutosave();
+    const onHide = () => {
+      saveLocalDraftNow();
+      void flushAutosave({ keepalive: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") onHide();
+    };
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      saveLocalDraftNow();
+      if (dirtyRef.current) e.preventDefault();
+    };
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("pagehide", onHide);
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("pagehide", onHide);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [flushAutosave, saveLocalDraftNow]);
+
+  /** 409 — ผู้ใช้ยืนยันใช้ฉบับในแท็บนี้ทับของบนเซิร์ฟเวอร์ */
+  async function overwriteServerCopy() {
+    baseUpdatedAtRef.current = null;
+    dirtyRef.current = true;
+    await flushAutosave();
+  }
 
   const charCount = countCharacters(content);
   const pageCount = estimatePageCount(charCount);
@@ -218,7 +376,9 @@ export function ChapterEditorForm({
             value={title}
             onChange={(e) => {
               setTitle(e.target.value);
+              titleRef.current = e.target.value;
               dirtyRef.current = true;
+              scheduleLocalDraft();
             }}
           />
         </div>
@@ -236,18 +396,66 @@ export function ChapterEditorForm({
                 <Check className="h-3.5 w-3.5 text-emerald-500" /> บันทึกแล้ว
               </>
             )}
-            {saveStatus === "error" && <span className="text-red-500">บันทึกอัตโนมัติไม่สำเร็จ</span>}
+            {saveStatus === "local" && (
+              <>
+                <HardDrive className="h-3.5 w-3.5" /> บันทึกไว้ในเครื่องแล้ว รอซิงก์
+              </>
+            )}
+            {saveStatus === "offline" && (
+              <span className="flex items-center gap-1.5 text-amber-600">
+                <CloudOff className="h-3.5 w-3.5" /> ออฟไลน์ — บันทึกไว้ในเครื่องแล้ว จะซิงก์เมื่อกลับมาออนไลน์
+              </span>
+            )}
+            {saveStatus === "error" && (
+              <span className="text-red-500">บันทึกขึ้นเซิร์ฟเวอร์ไม่สำเร็จ (สำรองไว้ในเครื่องแล้ว จะลองใหม่)</span>
+            )}
           </span>
         </div>
 
+        {saveStatus === "conflict" && (
+          <div role="alert" className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">ตอนนี้ถูกแก้ไขจากแท็บหรืออุปกรณ์อื่นหลังจากที่คุณเปิดไว้</p>
+            <p className="mt-0.5 text-xs">งานของคุณในแท็บนี้สำรองไว้ในเครื่องแล้ว เลือกว่าจะทำอย่างไร:</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="primary" onClick={overwriteServerCopy}>
+                ใช้ฉบับในแท็บนี้ทับ
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
+                โหลดฉบับล่าสุด (กู้ฉบับนี้คืนได้ภายหลัง)
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {recoverableDraft && (
+          <div role="alert" className="mb-3 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900">
+            <p className="font-medium">พบงานที่ยังไม่ได้บันทึกขึ้นเซิร์ฟเวอร์ในเครื่องนี้</p>
+            <p className="mt-0.5 text-xs">
+              บันทึกไว้เมื่อ {new Date(recoverableDraft.saved_at).toLocaleString("th-TH")} (
+              {countCharacters(recoverableDraft.content).toLocaleString("th-TH")} ตัวอักษร)
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button size="sm" variant="primary" onClick={restoreLocalDraft}>
+                กู้คืนฉบับในเครื่อง
+              </Button>
+              <Button size="sm" variant="outline" onClick={discardLocalDraft}>
+                ทิ้ง ใช้ฉบับบนเซิร์ฟเวอร์
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-lg border border-neutral-200">
           <QuillEditor
-            defaultValue={initialContent}
+            key={editorSeed.key}
+            defaultValue={editorSeed.value}
             placeholder="เริ่มเขียนเรื่องราวของคุณที่นี่..."
             onChange={(html) => {
               setContent(html);
+              contentRef.current = html;
               dirtyRef.current = true;
-              setSaveStatus("idle");
+              setSaveStatus((s) => (s === "offline" || s === "conflict" ? s : "idle"));
+              scheduleLocalDraft();
             }}
           />
         </div>

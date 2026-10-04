@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { syncInterestedIn, deleteUserGraphNode } from "@/lib/graphSync";
+import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
 
 /** Reference implementation ที่สอง — แสดง pattern การใช้ req.user จาก requireAuth */
 export async function getMe(req: Request, res: Response) {
@@ -131,21 +132,29 @@ const ageVerificationBodySchema = z.object({
   }),
 });
 
-const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
-
 /** age_verified ใช้เปิด/ปิดการเข้าถึงเนื้อหา 18+ — ต้องคำนวณอายุจริงจาก birth_date
  *  ไม่ใช่ตั้งเป็น true ทันทีที่กรอกวันเกิดมา (ผู้ใช้อายุต่ำกว่า 18 จะได้ age_verified=false) */
 export async function setAgeVerification(req: Request, res: Response) {
   const { birth_date } = ageVerificationBodySchema.parse(req.body);
-  const age = Math.floor((Date.now() - new Date(birth_date).getTime()) / MS_PER_YEAR);
-  const age_verified = age >= 18;
+  // gap 3.4 — อายุที่ยืนยันจากบัญชี Google แล้วแก้ด้วยการกรอกเองไม่ได้ (กันเด็กกรอกวันเกิดปลอมเพื่อปลดล็อก 18+)
+  const current = await prisma.user.findUnique({
+    where: { user_id: req.user!.user_id },
+    select: { age_verification_source: true },
+  });
+  if (current?.age_verification_source && current.age_verification_source !== "self_declared") {
+    throw ApiError.conflict("อายุของบัญชีนี้ยืนยันจากบัญชี Google แล้ว ไม่สามารถแก้ไขเองได้");
+  }
+
+  const d = new Date(birth_date);
+  const age = ageOn({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
+  const age_verified = age >= ADULT_AGE;
 
   await prisma.user.update({
     where: { user_id: req.user!.user_id },
-    data: { age_verified, updated_at: new Date() },
+    data: { age_verified, age_verification_source: "self_declared", updated_at: new Date() },
   });
 
-  res.status(200).json({ age_verified });
+  res.status(200).json({ age_verified, source: "self_declared" });
 }
 
 const interestsBodySchema = z.object({

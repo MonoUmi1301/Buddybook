@@ -26,6 +26,7 @@ const columns = [
     title: "เกี่ยวกับเรา",
     links: [
       { label: "ติดต่อเรา", href: "/contact" },
+      { label: "แจ้งปัญหาการใช้งาน", href: "/support" },
       { label: "ทำความรู้จัก BuddyBook", href: "/about" },
     ],
   },

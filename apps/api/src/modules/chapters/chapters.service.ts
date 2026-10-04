@@ -5,6 +5,8 @@ import { ApiError } from "@/utils/ApiError";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
+import { syncReadEdge } from "@/lib/graphSync";
+import { recordChapterView } from "@/lib/viewTracking";
 import type { ChapterStatus } from "@prisma/client";
 import { env } from "@/config/env";
 import { getBalance, ledgerTimestamp, lockWallets, WALLET_TX_OPTIONS } from "@/modules/wallet/wallet.service";
@@ -160,7 +162,7 @@ export async function listNovelChapters(novel_id: string, requester_id?: string)
 
 /** Reference implementation — GET /chapters/:chapter_id (Public — draft เห็นเฉพาะเจ้าของ,
  *  นิยาย private/pending_review ทั้งเรื่องก็เห็นเฉพาะเจ้าของเช่นกัน) */
-export async function getChapterById(chapter_id: string, requester_id?: string) {
+export async function getChapterById(chapter_id: string, requester_id?: string, viewer_key?: string) {
   const chapter = await getChapterWithNovel(chapter_id);
 
   const isOwner = assertNovelVisible(chapter.novel, requester_id, "Chapter not found");
@@ -181,6 +183,14 @@ export async function getChapterById(chapter_id: string, requester_id?: string) 
   if (locked) {
     const { novel: _n, content, ...meta } = chapter;
     return { ...meta, content: null, teaser: buildTeaser(content), locked: true };
+  }
+
+  // gap 3.1 — นับยอดวิว (ทั้งผู้อ่านที่ล็อกอินและไม่ล็อกอิน) ไม่นับเจ้าของ/ตอนที่ยังล็อกอยู่
+  const viewer = requester_id ?? viewer_key;
+  if (viewer && !isOwner && chapter.status === "published") {
+    recordChapterView(chapter.chapter_id, chapter.novel_id, viewer).catch((err) =>
+      console.error("recordChapterView failed:", err)
+    );
   }
 
   if (requester_id && !isOwner && chapter.status === "published") {
@@ -301,6 +311,10 @@ async function recordReadingProgress(user_id: string, novel_id: string, chapter_
       data: { status: "reading" },
     }),
   ]);
+  // gap 2.2 — READ edge เกิดตั้งแต่อ่าน ไม่ต้องรอรีวิว (Neo4j ล่มต้องไม่กระทบหน้าอ่าน)
+  syncReadEdge(user_id, novel_id, null, { last_chapter_number: chapter_number, last_read_at: now }).catch((err) =>
+    console.error("Neo4j syncReadEdge failed:", err)
+  );
 }
 
 interface UpdateChapterInput {
@@ -389,24 +403,42 @@ export async function autosaveChapter(
   chapter_id: string,
   user_id: string,
   content_snapshot: string,
-  title?: string
+  title?: string,
+  base_updated_at?: Date
 ) {
   const chapter = await getChapterWithNovel(chapter_id);
   if (chapter.novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
 
-  const latest = await prisma.chapterVersion.findFirst({
-    where: { chapter_id },
-    orderBy: { version_number: "desc" },
-    select: { version_number: true },
-  });
-  const version_number = (latest?.version_number ?? 0) + 1;
+  // gap 2.5 — กันเขียนทับข้ามแท็บ/อุปกรณ์: client ส่ง updated_at ที่ตัวเองเห็นล่าสุดมา ถ้าตอนนี้ถูกบันทึก
+  // จากที่อื่นหลังจากนั้น (อีกแท็บ, กู้คืนเวอร์ชัน) ตอบ 409 ให้ผู้ใช้เลือกเองแทนการทับเงียบ ๆ
+  if (base_updated_at && chapter.updated_at && chapter.updated_at.getTime() > base_updated_at.getTime()) {
+    throw new ApiError(409, "ตอนนี้ถูกแก้ไขจากที่อื่นหลังจากที่คุณเปิดไว้", {
+      code: "EDIT_CONFLICT",
+      server_updated_at: chapter.updated_at,
+    });
+  }
 
-  const [version] = await prisma.$transaction([
-    prisma.chapterVersion.create({
-      data: { chapter_id, content_snapshot, version_number, edited_by: user_id, is_autosave: true },
+  // เลข version ถัดไปต้องอ่านแล้วค่อย insert — autosave 2 ครั้งพร้อมกันของตอนเดียว (แท็บ 2 แท็บ, keepalive ตอนปิดแท็บ
+  // ชนกับรอบ 30 วิ) เดิมได้เลขซ้ำแล้วชน unique (chapter_id, version_number) ตอบ 409 ทำให้งานรอบนั้นหาย (พบจาก k6 load test)
+  // ล็อกแถวของตอนนั้นไว้ตลอด transaction ให้ autosave ของตอนเดียวกันต่อคิวกัน (ตอนอื่นไม่โดนล็อก)
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 FROM chapters WHERE chapter_id = ${chapter_id}::uuid FOR UPDATE`;
+    const latest = await tx.chapterVersion.findFirst({
+      where: { chapter_id },
+      orderBy: { version_number: "desc" },
+      select: { version_number: true },
+    });
+    const version = await tx.chapterVersion.create({
+      data: {
+        chapter_id,
+        content_snapshot,
+        version_number: (latest?.version_number ?? 0) + 1,
+        edited_by: user_id,
+        is_autosave: true,
+      },
       select: { version_id: true, version_number: true, is_autosave: true, created_at: true },
-    }),
-    prisma.chapter.update({
+    });
+    const updated = await tx.chapter.update({
       where: { chapter_id },
       data: {
         content: content_snapshot,
@@ -414,10 +446,10 @@ export async function autosaveChapter(
         ...(title !== undefined ? { title } : {}),
         updated_at: new Date(),
       },
-    }),
-  ]);
-
-  return version;
+      select: { updated_at: true },
+    });
+    return { ...version, chapter_updated_at: updated.updated_at };
+  });
 }
 
 export async function listChapterVersions(chapter_id: string, user_id: string) {

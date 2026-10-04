@@ -120,6 +120,9 @@ export function HomeContent({
             />
           )}
 
+          {/* "หมวดนิยาย" ย้ายขึ้นมาต่อจาก "ใหม่มาแรง" (เดิมอยู่ล่างสุดของหน้า) ให้เลือกหมวดได้ก่อนเลื่อนผ่านทุกหมวด */}
+          {categoryTags.length > 0 && <CategoryPills theme={theme} tags={categoryTags} />}
+
           {genreSections.map((section) => (
             <NovelSection
               key={section.tagId}
@@ -137,8 +140,6 @@ export function HomeContent({
               className="mt-10"
             />
           )}
-
-          {categoryTags.length > 0 && <CategoryPills theme={theme} tags={categoryTags} />}
         </div>
       </main>
 

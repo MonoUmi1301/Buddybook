@@ -67,25 +67,47 @@ export async function syncNovelTags(novel_id: string, title: string, tagNames: s
 }
 
 /**
- * upsert ความสัมพันธ์ READ — เรียกตอนมีรีวิว (novel-scoped) เกิดขึ้น สร้าง edge ไว้ก่อนแม้
- * sentiment_score จะยังไม่รู้ (เป็น null ตอน insert แรกเสมอ ดู novels.service.ts createReview) —
- * Phase 7 (Python NLP Worker) จะเรียกอันนี้ซ้ำอีกครั้งพร้อม sentiment_score จริงหลังวิเคราะห์เสร็จ
- * เพื่ออัปเดต edge เดิม (ไม่ใช่สร้างซ้ำ เพราะ MERGE บน (u)-[:READ]->(n) คู่เดิม)
+ * upsert ความสัมพันธ์ READ — gap 2.2: เดิมสร้างจากรีวิวอย่างเดียว ตอนนี้สร้างตั้งแต่เปิดอ่านตอนแรก
+ * (chapters.service recordReadingProgress) เพื่อให้ `NOT (u)-[:READ]->(n)` กรองเรื่องที่อ่านแล้วได้จริง
+ *
+ * sentiment_score บน edge = ขั้วความรู้สึก −1..1 (รวมรีวิว+คอมเมนต์ ดู lib/sentiment.ts) ไม่ใช่ความมั่นใจ
+ * ของโมเดล — null = ไม่แตะค่าเดิม (การอ่านเฉย ๆ ไม่ควรล้างคะแนนที่วิเคราะห์ไว้แล้ว)
+ * progress (ไม่บังคับ) เก็บตอนล่าสุดที่อ่าน/เวลา ใช้เป็นสัญญาณ engagement ตอนจัดอันดับ
  */
-export async function syncReadEdge(user_id: string, novel_id: string, sentiment_score: number | null) {
+export async function syncReadEdge(
+  user_id: string,
+  novel_id: string,
+  sentiment_score: number | null,
+  progress?: { last_chapter_number: number; last_read_at: Date }
+) {
   await withNeo4jSession((session) =>
     session.run(
       // MERGE (ไม่ใช่ MATCH) ทั้ง User และ Novel — ตอนรีวิวถูกสร้าง อาจยังไม่มี node ทั้งสองใน
       // Neo4j เลยก็ได้ (เช่น user ยังไม่เคยตั้ง interests, นิยายยังไม่มี tag) MATCH ตรง ๆ จะ
-      // ล้มเหลวเงียบ ๆ (0 rows, ไม่ throw) ทำให้ edge ไม่ถูกสร้างเลย — พบจากการทดสอบ
-      // sentiment-callback path จริงใน Phase 7 (ต่างจาก fullResync ที่สร้าง node ไว้ก่อนหน้าแล้ว)
+      // ล้มเหลวเงียบ ๆ (0 rows, ไม่ throw) ทำให้ edge ไม่ถูกสร้างเลย
       `MERGE (u:User {user_id: $user_id})
        MERGE (n:Novel {novel_id: $novel_id})
        MERGE (u)-[r:READ]->(n)
        FOREACH (_ IN CASE WHEN $sentiment_score IS NOT NULL THEN [1] ELSE [] END |
          SET r.sentiment_score = $sentiment_score
+       )
+       FOREACH (_ IN CASE WHEN $last_chapter_number IS NOT NULL THEN [1] ELSE [] END |
+         SET r.last_chapter_number = $last_chapter_number, r.last_read_at = datetime($last_read_at)
        )`,
-      { user_id, novel_id, sentiment_score }
+      {
+        user_id,
+        novel_id,
+        sentiment_score,
+        last_chapter_number: progress?.last_chapter_number ?? null,
+        last_read_at: progress?.last_read_at.toISOString() ?? null,
+      }
     )
+  );
+}
+
+/** gap 2.4 — นิยายถูกย้ายลงถังขยะ/ลบถาวร: เอาออกจากกราฟ (ไม่ให้ถูกแนะนำอีก) */
+export async function deleteNovelGraphNode(novel_id: string) {
+  await withNeo4jSession((session) =>
+    session.run("MATCH (n:Novel {novel_id: $novel_id}) DETACH DELETE n", { novel_id })
   );
 }

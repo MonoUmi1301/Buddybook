@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-export type UploadFolder = "covers" | "avatars" | "locations" | "slips" | "chapters";
+export type UploadFolder = "covers" | "avatars" | "locations" | "slips" | "chapters" | "support";
 
 interface SignResponse {
   signature: string;

@@ -178,6 +178,8 @@ enum NotificationType {
   new_chapter
   /// เพิ่มภายหลัง (ติดตามนักเขียน)
   new_follower
+  /// gap 3.2 — ทีมงานตอบ/เปลี่ยนสถานะเรื่องที่แจ้งปัญหา
+  support_reply
 }
 
 /// เพิ่มภายหลัง (รายงานเนื้อหา) — สิ่งที่ผู้ใช้รายงานได้
@@ -232,6 +234,9 @@ model User {
   avatar_url     String?        @db.Text
   bio            String?        @db.Text
   age_verified   Boolean        @default(false)
+  /// gap 3.4 — แหล่งที่ยืนยันอายุ: "google" (People API ตอนล็อกอิน) หรือ "self_declared" (กรอกวันเกิดเอง)
+  /// ยืนยันจาก provider แล้วกรอกเองทับไม่ได้ (ดู users.controller setAgeVerification)
+  age_verification_source String? @db.VarChar(20)
   /// เพิ่มภายหลัง (Phase 8) — PATCH /admin/users/:id/suspend มีอยู่ใน API_Endpoints.md แต่
   /// data dictionary เดิมไม่มีคอลัมน์นี้เลย บล็อกตอน login เท่านั้น (ไม่เช็คทุก request เพื่อไม่ให้
   /// เพิ่ม query ในทุก endpoint ที่ผ่าน requireAuth — access token อายุสั้น 15 นาทีอยู่แล้ว)
@@ -241,6 +246,8 @@ model User {
   /// totp_secret เป็น null จนกว่าจะเปิดใช้งานสำเร็จ (ยืนยันรหัสจากแอปถูกต้องรอบแรกก่อน)
   totp_secret    String?        @db.VarChar(255)
   totp_enabled   Boolean        @default(false)
+  /// gap 3.3 — ประเภทแจ้งเตือนที่ผู้ใช้ปิดไว้ (ไม่แสดงในรายการ/ไม่นับใน unread) ตั้งได้ที่หน้าแจ้งเตือน
+  muted_notification_types NotificationType[] @default([])
   created_at     DateTime       @default(now()) @db.Timestamptz(6)
   updated_at     DateTime?      @db.Timestamptz(6)
 
@@ -266,6 +273,8 @@ model User {
   chapter_purchases   ChapterPurchase[]
   withdrawals         WithdrawalRequest[] @relation("WithdrawalRequester")
   withdrawals_handled WithdrawalRequest[] @relation("WithdrawalProcessor")
+  support_tickets     SupportTicket[]     @relation("SupportTicketOwner")
+  support_messages    SupportMessage[]    @relation("SupportMessageAuthor")
 
   @@unique([oauth_provider, oauth_id])
   @@map("users")
@@ -353,6 +362,12 @@ model Novel {
   /// [{x,y}], width}] เป็น JSONB คอลัมน์เดียวต่อนิยาย เหมือน plot_notes/theme_notes
   map_drawings Json? @db.JsonB
 
+  /// gap 2.4 — ลบนิยายแบบ soft delete (ถังขยะ 30 วัน) ตาม Userflow "หน้านิยายที่ถูกลบ → กู้คืน/ลบถาวร"
+  /// ตอนย้ายลงถังขยะ visibility ถูกตั้งเป็น private (endpoint สาธารณะทุกตัวที่กรอง published จึงซ่อนให้เอง)
+  /// และจำค่าเดิมไว้ใน visibility_before_delete เพื่อกู้คืนกลับ — scheduler ลบถาวรเมื่อครบ 30 วัน
+  deleted_at               DateTime?   @db.Timestamptz(6)
+  visibility_before_delete Visibility?
+
   author           User              @relation("NovelAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   primary_tag      Tag?              @relation("NovelPrimaryTag", fields: [primary_tag_id], references: [tag_id])
   secondary_tag    Tag?              @relation("NovelSecondaryTag", fields: [secondary_tag_id], references: [tag_id])
@@ -374,6 +389,7 @@ model Novel {
 
   @@index([author_id])
   @@index([status, visibility])
+  @@index([deleted_at])
   @@map("novels")
 }
 
@@ -404,6 +420,7 @@ model Chapter {
   linked_by_locations Location[]        @relation("LocationLinkedChapter")
   reading_progress    ReadingProgress[]
   donations           Donation[]
+  view_days           ChapterViewDaily[]
 
   @@unique([novel_id, chapter_number])
   @@map("chapters")
@@ -632,6 +649,9 @@ model Comment {
   sticker_id        String?         @db.VarChar(32)
   sentiment_label   SentimentLabel?
   sentiment_score   Float?
+  /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 (บวก = ชอบ, ลบ = ไม่ชอบ) ที่ระบบแนะนำใช้จริง
+  /// sentiment_score ข้างบนเป็นแค่ "ความมั่นใจ" ของ label ที่โมเดลทาย (0..1) ไม่ใช่ขั้ว — ดู lib/sentiment.ts
+  sentiment_polarity Float?
   created_at        DateTime        @default(now()) @db.Timestamptz(6)
 
   chapter        Chapter   @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
@@ -656,6 +676,8 @@ model Review {
   sticker_id      String?         @db.VarChar(32)
   sentiment_label SentimentLabel?
   sentiment_score Float?
+  /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 ดูคำอธิบายที่ Comment.sentiment_polarity
+  sentiment_polarity Float?
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนรีวิวเลือกไม่เปิดเผยตัวตนได้ (username/avatar จะไม่ถูกส่ง
   /// ออกไปให้คนอื่นเห็นตอนอ่านรีวิว) ยังต้องเก็บ user_id จริงไว้เสมอ เพื่อคุม @@unique ด้านล่าง
   /// (รีวิวได้เรื่องละ 1 ครั้ง) และให้เจ้าของรีวิวแก้ไข/ลบของตัวเองได้ตามปกติ
@@ -982,4 +1004,74 @@ model WithdrawalRequest {
   @@index([user_id, created_at(sort: Desc)])
   @@index([status, created_at])
   @@map("withdrawal_requests")
+}
+
+/// gap 3.1 — ยอดเปิดอ่านรายตอนรายวัน (หน้าสถิตินักเขียน) — 1 แถวต่อตอนต่อวัน (เวลาไทย) นับเฉพาะผู้อ่านที่ไม่ใช่เจ้าของ
+/// กันกดรีเฟรชซ้ำด้วยการนับผู้ชมคนเดิมต่อตอนแค่ครั้งเดียวต่อวัน (ดู lib/viewTracking.ts)
+model ChapterViewDaily {
+  chapter_id String   @db.Uuid
+  novel_id   String   @db.Uuid
+  day        DateTime @db.Date
+  views      Int      @default(0)
+
+  chapter Chapter @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
+
+  @@id([chapter_id, day])
+  @@index([novel_id, day])
+  @@map("chapter_view_daily")
+}
+
+// ---------------------------------------------------------------------------
+// gap 3.2 — ระบบสนับสนุนผู้ใช้งาน / แจ้งปัญหา (Proposal 1.3: "ระบบสนับสนุนผู้ใช้งาน/แจ้งปัญหา")
+// แยกจาก ContentReport (รายงานเนื้อหาไม่เหมาะสม) — อันนี้คือเรื่องบัญชี/การเงิน/บั๊ก ที่ต้องคุยโต้ตอบกับทีมงาน
+// ---------------------------------------------------------------------------
+
+enum SupportCategory {
+  account
+  payment
+  bug
+  content
+  other
+}
+
+enum SupportStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+model SupportTicket {
+  ticket_id  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String          @db.Uuid
+  category   SupportCategory
+  subject    String          @db.VarChar(150)
+  status     SupportStatus   @default(open)
+  created_at DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at DateTime        @default(now()) @db.Timestamptz(6)
+
+  user     User             @relation("SupportTicketOwner", fields: [user_id], references: [user_id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([user_id, updated_at(sort: Desc)])
+  @@index([status, updated_at(sort: Desc)])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  message_id     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id      String   @db.Uuid
+  author_id      String   @db.Uuid
+  /// true = ข้อความจากทีมงาน (admin) — ฝั่งผู้ใช้แสดงเป็น "ทีมงาน BuddyBook" ไม่เปิดเผยชื่อแอดมิน
+  is_staff       Boolean  @default(false)
+  body           String   @db.Text
+  /// รูปแนบ (Cloudinary URL ผ่าน /uploads/sign เหมือนรูปอื่นในระบบ)
+  attachment_url String?  @db.Text
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  ticket SupportTicket @relation(fields: [ticket_id], references: [ticket_id], onDelete: Cascade)
+  author User          @relation("SupportMessageAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
+
+  @@index([ticket_id, created_at])
+  @@map("support_messages")
 }

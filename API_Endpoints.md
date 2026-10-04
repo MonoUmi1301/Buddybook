@@ -183,12 +183,62 @@ Rate limit: `login`, `register/*`, `login/verify-2fa`, `password/*` จำกั
 - ของขวัญ: `GET /gifts/catalog`, `POST /gifts/send`, `GET /authors/:user_id/gifts/public`, `GET /me/gifts/received|sent|stats`, `POST /me/gifts/:id/thank`, `PATCH /me/gifts/:id`, `GET /users/:user_id/supporter-badges`, แอดมิน `/admin/gifts`, `/admin/gift-reports`
 - เติมเงิน: `POST /wallet/topup/checkout-session`, `GET /wallet/topup/orders/:order_id/status`, `POST /wallet/topup/verify-slip`, `POST /webhooks/stripe` (ยืนยันด้วยลายเซ็น Stripe)
 
+### 7. ปิดช่องว่างตาม Proposal (docs/gap-analysis-plan.md)
+
+#### 7.1 ระบบแนะนำ v2 + Sentiment polarity
+
+| Method | URL Path | Request Body (JSON) | Response (JSON) | Status |
+|---|---|---|---|---|
+| GET | `/recommendations?limit=1..50` (default 10) | — | `{"items":[{"novel_id","title","cover_image_url","view_count","author","reason":"interest\|similar_readers\|hidden_gem\|fresh\|popular","score","is_long_tail"}],"content_based","collaborative","underrated","meta":{"long_tail_share","rerank_lambda","graph_available"}}` | 200 |
+| POST | `/internal/nlp/sentiment-callback` | เพิ่ม `"sentiment_polarity?"` (−1..1 = P(pos) − P(neg)); ไม่ส่ง = คำนวณจาก label+score | เพิ่ม `"sentiment_polarity"` | 200 |
+
+`items` จัดอันดับด้วยคะแนนความตรงแนว/ผู้อ่านคล้ายกัน/ขั้วความรู้สึก/ความใหม่ (ไม่ใช้ยอดวิวเป็นสัญญาณบวก) แล้ว re-rank ดันสัดส่วน long-tail (`RECS_LONG_TAIL_LAMBDA`, `RECS_LONG_TAIL_TARGET`) — Neo4j ล่มยังได้ผลจาก Postgres (`graph_available:false`)
+
+#### 7.2 ถังขยะนิยาย + Auto-save กันเขียนทับ
+
+| Method | URL Path | Request Body (JSON) | Response (JSON) | Status |
+|---|---|---|---|---|
+| DELETE | `/novels/:novel_id` | — | `{"novel_id","deleted_at","auto_delete_at"}` (ย้ายลงถังขยะ 30 วัน — เดิมลบถาวร 204) | 200 / 409 (มีผู้ซื้อตอนแล้ว) |
+| GET | `/novels/trash` | — | `{"retention_days":30,"novels":[{"novel_id","title","cover_image_url","chapter_count","deleted_at","auto_delete_at"}]}` | 200 |
+| POST | `/novels/:novel_id/restore` | — | `{"novel_id","visibility"}` (กลับเป็น visibility เดิม) | 200 |
+| DELETE | `/novels/:novel_id/permanent` | — | — (ต้องอยู่ในถังขยะก่อน) | 204 / 409 |
+| PATCH | `/chapters/:chapter_id/autosave` | เพิ่ม `"base_updated_at?"` | เพิ่ม `"chapter_updated_at"`; ถูกแก้จากที่อื่นหลัง base → `{"error","details":{"code":"EDIT_CONFLICT","server_updated_at"}}` | 200 / 409 |
+
+#### 7.3 สถิตินักเขียน + Social listening
+
+| Method | URL Path | Request Body (JSON) | Response (JSON) | Status |
+|---|---|---|---|---|
+| GET | `/me/stats/novels` | — | `{"novels":[{"novel_id","title","views","views_7d","readers","likes","reviews","chapters","avg_rating","avg_polarity"}]}` | 200 |
+| GET | `/me/stats/novels/:novel_id?days=7\|30\|90` | — | `{"totals":{...},"daily_views":[{"day","views"}],"chapters":[{"chapter_number","views","comments","purchases","readers_reached"}],"sentiment":{"counts":{"pos","neg","neutral","pending"},"avg_polarity","weekly":[...]},"keywords":{"positive","negative","all"}}` | 200 / 403 |
+
+ยอดวิว: `GET /chapters/:id` นับผู้ชม (user หรือ IP) วันละครั้งต่อตอน ลง `chapter_view_daily` + `novels.view_count` (ไม่นับเจ้าของ/ตอนที่ยังล็อก) และจำกัด `CHAPTER_READ_RATE_LIMIT_PER_MIN` ครั้ง/นาทีต่อผู้ชม (กันบอทดูดเนื้อหา)
+
+#### 7.4 แจ้งปัญหา (Support) + การแจ้งเตือน
+
+| Method | URL Path | Request Body (JSON) | Response (JSON) | Status |
+|---|---|---|---|---|
+| POST | `/support/tickets` | `{"category":"account\|payment\|bug\|content\|other","subject","body","attachment_url?"}` (รูปจาก Cloudinary เท่านั้น) | ticket | 201 |
+| GET | `/support/tickets` | — | `{"tickets":[{...,"message_count","awaiting_user"}]}` | 200 |
+| GET | `/support/tickets/:ticket_id` | — | ticket + `messages` (ผู้ใช้ไม่เห็นชื่อแอดมิน) | 200 / 404 |
+| POST | `/support/tickets/:ticket_id/messages` | `{"body","attachment_url?"}` | message (แอดมินตอบ → แจ้งเตือน `support_reply`) | 201 / 409 (ปิดแล้ว) |
+| PATCH | `/support/tickets/:ticket_id/status` | `{"status":"open\|in_progress\|resolved\|closed"}` (ผู้ใช้ปิดได้อย่างเดียว) | ticket | 200 / 403 |
+| GET | `/admin/support/tickets?status=` | — | คิวของทีมงาน `{"tickets":[{...,"user","awaiting_staff"}]}` | 200 |
+| GET | `/notifications?page&pageSize&type&unread_only` | — | `{"notifications","total","page","pageSize","unread_count","muted_types"}` | 200 |
+| PATCH | `/notifications/read-all` | `{"type?"}` | `{"updated"}` | 200 |
+| GET/PUT | `/notifications/preferences` | `{"muted_types":[...]}` | `{"muted_types","available_types"}` | 200 |
+
+#### 7.5 อื่น ๆ
+
+- `PATCH /users/me/age-verification` ตอบ `{"age_verified","source"}` และตอบ 409 ถ้าอายุยืนยันจากบัญชี Google แล้ว (`GOOGLE_OAUTH_REQUEST_BIRTHDAY=true` → ขอ scope `user.birthday.read` ตอนล็อกอิน)
+- `GET /health/ready` (นอก `/api/v1`) — 200 เมื่อ Postgres พร้อม / 503 เมื่อไม่พร้อม พร้อมสถานะ Neo4j — ใช้กับระบบ monitor uptime
+- `GET /api/v1/openapi.json` — OpenAPI 3 ที่สร้างจาก router จริง, `GET /api/v1/docs` — Swagger UI (ไฟล์ snapshot: `docs/openapi.json`)
+
 ---
 
 ## หมายเหตุ
 
 1. Endpoint กลุ่ม **DELETE ที่ย้ายลงถังขยะ** (chapters/characters/character-edges/locations/timeline-events) ไม่ใช่การลบถาวร — บันทึกลง `trash_bin` พร้อม `auto_delete_at = deleted_at + 30 วัน` ตาม Data Dictionary; การลบถาวรจริงทำผ่าน `DELETE /trash-bin/:trash_id` เท่านั้น
 2. กลุ่ม 4 (System/Background) ไม่ผ่าน JWT ผู้ใช้ทั่วไป — ใช้ header `x-internal-token` (= `INTERNAL_SERVICE_TOKEN`) ระหว่าง Node.js Gateway ↔ Python NLP Worker ↔ Cron ภายนอก — งาน publish-scheduled / trash purge / recommendations sync รันอัตโนมัติใน process ของ api อยู่แล้ว (`apps/api/src/lib/scheduler.ts`, ปิดได้ด้วย `SCHEDULER_ENABLED=false`)
-3. `sentiment_label`/`sentiment_score` เป็น `null` ตอนสร้าง comment/review เสมอ (async NLP pipeline) แล้วถูก `PATCH` ผ่าน `/internal/nlp/sentiment-callback` ภายหลัง
+3. `sentiment_label`/`sentiment_score`/`sentiment_polarity` เป็น `null` ตอนสร้าง comment/review เสมอ (async NLP pipeline) แล้วถูก `PATCH` ผ่าน `/internal/nlp/sentiment-callback` ภายหลัง
 4. Endpoint ที่ทำเครื่องหมาย **(Public)** ไม่ต้องแนบ `Authorization` header; ที่เหลือทั้งหมดต้องแนบ Bearer token
 5. Path/field naming สอดคล้องกับ 18 models ใน `prisma/schema.prisma` และ 28 Use Case ใน `BuddyBook_UseCase_Diagram.md`

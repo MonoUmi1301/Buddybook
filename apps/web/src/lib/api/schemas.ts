@@ -347,6 +347,8 @@ export const autosaveChapterSchema = z.object({
   // UI ขึ้น "บันทึกแล้ว" ทั้งที่ชื่อตอนจริงในฐานข้อมูลยังเป็นค่าเดิม — เพิ่ม title (optional) ให้ autosave
   // อัปเดตด้วยถ้ามีการแก้ไข
   title: z.string().trim().min(1).max(255).optional(),
+  // gap 2.5 — updated_at ที่ editor เห็นล่าสุด (backend ตอบ 409 ถ้าถูกแก้จากที่อื่นหลังจากนั้น)
+  base_updated_at: z.string().datetime({ offset: true }).optional(),
 });
 
 export const createCharacterSchema = z.object({
@@ -568,7 +570,8 @@ export const resolveGiftReportSchema = z.object({ action: z.enum(["dismiss", "hi
 // ---------------------------------------------------------------------------
 
 export const uploadSignSchema = z.object({
-  folder: z.enum(["covers", "avatars", "locations", "slips"]),
+  // "chapters" เดิมขาดไป (รูปในเนื้อหาตอนอัปโหลดผ่าน proxy ไม่ได้) + "support" รูปแนบแจ้งปัญหา (gap 3.2)
+  folder: z.enum(["covers", "avatars", "locations", "slips", "chapters", "support"]),
 });
 
 export const verifySlipSchema = z.object({
@@ -619,3 +622,29 @@ export const processWithdrawalSchema = z.object({
   action: z.enum(["paid", "rejected"]),
   note: z.string().trim().max(500).optional(),
 });
+
+// gap 3.2 — ระบบแจ้งปัญหา
+const supportAttachment = z
+  .string()
+  .url()
+  .refine((u) => u.startsWith("https://res.cloudinary.com/"), "รองรับเฉพาะรูปที่อัปโหลดผ่านระบบ")
+  .optional();
+
+export const createSupportTicketSchema = z.object({
+  category: z.enum(["account", "payment", "bug", "content", "other"]),
+  subject: z.string().trim().min(4, "หัวข้ออย่างน้อย 4 ตัวอักษร").max(150),
+  body: z.string().trim().min(10, "รายละเอียดอย่างน้อย 10 ตัวอักษร").max(5000),
+  attachment_url: supportAttachment,
+});
+
+export const supportMessageSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+  attachment_url: supportAttachment,
+});
+
+export const supportStatusSchema = z.object({ status: z.enum(["open", "in_progress", "resolved", "closed"]) });
+
+// gap 3.3 — หน้าแจ้งเตือน
+const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply"]);
+export const notificationReadAllSchema = z.object({ type: notificationTypeEnum.optional() });
+export const notificationPreferencesSchema = z.object({ muted_types: z.array(notificationTypeEnum).max(7) });

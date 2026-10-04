@@ -1,3 +1,4 @@
+import { localizeErrorBody } from "@/lib/api/errorMessages";
 import { NextResponse } from "next/server";
 
 /**
@@ -11,7 +12,8 @@ export function jsonOk<T>(data: T, status = 200): NextResponse {
 }
 
 export function jsonError(message: string, status: number, details?: unknown): NextResponse {
-  return NextResponse.json(details ? { error: message, details } : { error: message }, {
+  // error ที่ proxy สร้างเอง (validation, param ไม่ถูกต้อง, เชื่อมต่อ API ไม่ได้) แปลเป็นไทยเหมือน error จาก API
+  return NextResponse.json(localizeErrorBody(status, details ? { error: message, details } : { error: message }), {
     status,
   });
 }

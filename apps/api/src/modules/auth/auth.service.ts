@@ -14,6 +14,7 @@ import { isEmailConfigured, sendOtpEmail, sendPasswordResetEmail } from "@/lib/e
 import { generateTotpSecret, buildTotpUri, generateTotpQrCodeDataUrl, verifyTotpCode } from "@/lib/totp";
 import { env } from "@/config/env";
 import type { OAuthProfile } from "@/lib/oauthProfile";
+import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
 import { normalizeEmail } from "@/lib/normalizeEmail";
 
 // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — เดิม 10 rounds ยังปลอดภัยอยู่ (ขั้นต่ำที่ OWASP
@@ -323,6 +324,19 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
 
   if (user.is_suspended) {
     throw ApiError.forbidden("This account has been suspended");
+  }
+
+  // gap 3.4 — provider ยืนยันวันเกิดมาให้ (Google People API) → ตั้งสถานะอายุจากแหล่งที่เชื่อถือได้
+  // (ทับค่าที่ผู้ใช้กรอกเอง และหลังจากนี้กรอกเองทับไม่ได้อีก — ดู users.controller setAgeVerification)
+  if (profile.birthdate) {
+    user = await prisma.user.update({
+      where: { user_id: user.user_id },
+      data: {
+        age_verified: ageOn(profile.birthdate) >= ADULT_AGE,
+        age_verification_source: profile.provider,
+        updated_at: new Date(),
+      },
+    });
   }
 
   if (user.totp_enabled) {

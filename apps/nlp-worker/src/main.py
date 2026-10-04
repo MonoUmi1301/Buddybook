@@ -30,8 +30,11 @@ def process_queue(client: ApiClient, analyzer: SentimentAnalyzer) -> int:
 
     for item in items:
         result = analyzer.analyze(item["content"])
-        client.submit_sentiment(item["target_type"], item["target_id"], result.label, result.score)
-        logger.info("%s %s -> %s (%.2f)", item["target_type"], item["target_id"], result.label, result.score)
+        client.submit_sentiment(item["target_type"], item["target_id"], result.label, result.score, result.polarity)
+        logger.info(
+            "%s %s -> %s (conf %.2f, polarity %+.2f)",
+            item["target_type"], item["target_id"], result.label, result.score, result.polarity,
+        )
 
     return len(items)
 

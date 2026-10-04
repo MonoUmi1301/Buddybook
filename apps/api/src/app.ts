@@ -1,3 +1,4 @@
+import "@/lib/zodThai"; // ข้อความ validation ภาษาไทยทั้ง API — ต้อง import ก่อน schema ใด ๆ ถูกใช้
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -9,6 +10,9 @@ import { asyncHandler } from "@/utils/asyncHandler";
 import { stripeWebhook } from "@/modules/wallet/wallet.controller";
 import { notFoundHandler } from "@/middleware/notFound.middleware";
 import { errorHandler } from "@/middleware/error.middleware";
+import { prisma } from "@/lib/prisma";
+import { withNeo4jSession } from "@/lib/neo4j";
+import { buildOpenApiSpec, SWAGGER_HTML } from "@/lib/openapi";
 
 export const app = express();
 
@@ -29,6 +33,47 @@ app.use(express.urlencoded({ extended: true }));
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", service: "buddybook-api", env: env.NODE_ENV });
+});
+
+// gap 4.6 — readiness สำหรับระบบ monitor uptime (KPI-5): ตอบ 200 เฉพาะเมื่อคุยกับ Postgres ได้จริง
+// (/health ตอบ ok แม้ฐานข้อมูลล่ม — ใช้เป็น liveness ของ process อย่างเดียว) Neo4j เป็น derived store
+// ล่มได้โดยระบบหลักยังใช้งานได้ จึงรายงานไว้ดูเฉย ๆ ไม่ทำให้ readiness fail
+app.get(
+  "/health/ready",
+  asyncHandler(async (_req, res) => {
+    const started = Date.now();
+    let database = "ok";
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      database = "down";
+    }
+    let graph = "ok";
+    try {
+      await withNeo4jSession((s) => s.run("RETURN 1", {}, { timeout: 1000 }));
+    } catch {
+      graph = "down";
+    }
+    res.status(database === "ok" ? 200 : 503).json({
+      status: database === "ok" ? "ready" : "unavailable",
+      database,
+      graph,
+      latency_ms: Date.now() - started,
+    });
+  })
+);
+
+// gap 4.5 — OpenAPI spec (สร้างจาก router จริง) + Swagger UI
+app.get("/api/v1/openapi.json", (_req, res) => {
+  res.status(200).json(buildOpenApiSpec(app));
+});
+app.get("/api/v1/docs", (_req, res) => {
+  // helmet ตั้ง CSP script-src 'self' — หน้านี้หน้าเดียวอนุญาต swagger-ui จาก unpkg
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://unpkg.com; img-src 'self' data:"
+  );
+  res.type("html").send(SWAGGER_HTML);
 });
 
 app.use("/api/v1", apiRoutes);

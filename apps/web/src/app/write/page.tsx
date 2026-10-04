@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus } from "lucide-react";
+import { BarChart3, Plus, Trash2 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { callApi } from "@/lib/api/proxy";
@@ -59,6 +59,19 @@ export default async function WriterDashboardPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-h2 text-neutral-900">ผลงานของฉัน</h1>
+          <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/write/stats"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-pill border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            <BarChart3 className="h-4 w-4" /> สถิติ
+          </Link>
+          <Link
+            href="/write/trash"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-pill border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            <Trash2 className="h-4 w-4" /> นิยายที่ถูกลบ
+          </Link>
           <Link
             href="/write/gifts"
             className="inline-flex min-h-[44px] items-center gap-2 rounded-pill border border-gift-bear/60 bg-gift-paper px-4 text-sm font-medium text-gift-ink hover:bg-gift-bear/10"
@@ -71,6 +84,7 @@ export default async function WriterDashboardPage() {
               </span>
             )}
           </Link>
+          </div>
         </div>
 
         {"error" in result && (

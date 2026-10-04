@@ -1,6 +1,8 @@
+import { headers as requestHeaders } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_BASE, API_TIMEOUT_MS } from "@/lib/api/config";
 import { jsonError } from "@/lib/api/http";
+import { localizeErrorBody } from "@/lib/api/errorMessages";
 
 export interface ForwardOptions {
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -33,6 +35,16 @@ export async function callApi({
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
+  // gap 3.1 — ยอดวิวรายตอนนับผู้ชมคนเดิมวันละครั้ง; ผู้อ่านที่ไม่ล็อกอินแยกกันด้วย IP จริงของเบราว์เซอร์
+  // (ไม่งั้น api เห็นทุกคนเป็น IP ของ Next server) — ส่งเฉพาะตอนเปิดอ่านตอน ไม่ทำให้หน้าอื่นกลายเป็น dynamic
+  if (method === "GET" && path.startsWith("/chapters/")) {
+    try {
+      const forwarded = requestHeaders().get("x-forwarded-for") ?? requestHeaders().get("x-real-ip");
+      if (forwarded) headers["X-Forwarded-For"] = forwarded;
+    } catch {
+      // เรียกนอก request scope (เช่น build time) — ไม่มี IP ให้ส่ง
+    }
+  }
 
   let upstream: Response;
   try {
@@ -60,7 +72,8 @@ export async function callApi({
   }
 
   try {
-    return { status: upstream.status, json: JSON.parse(raw) as unknown };
+    // error ทุกตัวจาก API แปลเป็นภาษาไทยที่จุดนี้จุดเดียว (ดู lib/api/errorMessages.ts)
+    return { status: upstream.status, json: localizeErrorBody(upstream.status, JSON.parse(raw)) };
   } catch {
     return { error: jsonError("Upstream API returned an invalid response", 502) };
   }
