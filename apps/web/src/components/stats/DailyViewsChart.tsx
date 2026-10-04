@@ -14,6 +14,10 @@ export function DailyViewsChart({ data }: { data: { day: string; views: number }
   const max = Math.max(1, ...data.map((d) => d.views));
   const total = data.reduce((a, d) => a + d.views, 0);
   const labelEvery = data.length > 31 ? 15 : data.length > 14 ? 7 : 1;
+  // ป้ายวันสุดท้ายแสดงเสมอ แต่ถ้าใกล้ป้ายก่อนหน้าเกินครึ่งช่วง ให้ซ่อนป้ายก่อนหน้าแทน (กันตัวหนังสือชนกันบน iPad/มือถือ)
+  const last = data.length - 1;
+  const showLabel = (i: number) =>
+    i === last || (i % labelEvery === 0 && last - i >= Math.ceil(labelEvery / 2));
 
   return (
     <section className="rounded-card border border-neutral-200 p-4 sm:p-5">
@@ -85,10 +89,22 @@ export function DailyViewsChart({ data }: { data: { day: string; views: number }
               {formatThaiShortDate(data[active].day)} · <strong className="tabular-nums">{data[active].views.toLocaleString("th-TH")}</strong> ครั้ง
             </div>
           )}
-          <div className="mt-1.5 flex text-[11px] text-neutral-500">
+          <div className="mt-1.5 flex h-4 text-[11px] text-neutral-500">
             {data.map((d, i) => (
-              <span key={d.day} className="min-w-0 flex-1 overflow-visible whitespace-nowrap text-center">
-                {i % labelEvery === 0 || i === data.length - 1 ? formatThaiShortDate(d.day) : ""}
+              <span key={d.day} className="relative min-w-0 flex-1">
+                {showLabel(i) && (
+                  <span
+                    className={
+                      i === last
+                        ? "absolute right-0 whitespace-nowrap"
+                        : i === 0
+                          ? "absolute left-0 whitespace-nowrap"
+                          : "absolute left-1/2 -translate-x-1/2 whitespace-nowrap"
+                    }
+                  >
+                    {formatThaiShortDate(d.day)}
+                  </span>
+                )}
               </span>
             ))}
           </div>
