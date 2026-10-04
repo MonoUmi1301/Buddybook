@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { syncInterestedIn, deleteUserGraphNode } from "@/lib/graphSync";
 import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
@@ -184,33 +185,38 @@ export async function getPublicProfile(req: Request, res: Response) {
       view_count: true,
       status: true,
       hide_like_count: true,
-      // เพิ่มภายหลัง — หน้าโปรไฟล์นักเขียนโชว์สถิติรวม (ยอดถูกใจ/จำนวนตอน) + การ์ดผลงานที่มีคะแนน
-      _count: { select: { novel_likes: true, chapters: { where: { status: "published" } } } },
     },
   });
 
   // ไม่มี field คะแนนเฉลี่ยสำเร็จรูปบน Novel — groupBy เหมือน searchNovels
-  const ratings = novels.length
-    ? await prisma.review.groupBy({
-        by: ["novel_id"],
-        where: { novel_id: { in: novels.map((n) => n.novel_id) }, rating: { not: null } },
-        _avg: { rating: true },
-        _count: { rating: true },
-      })
-    : [];
+  // เพิ่มภายหลัง — หน้าโปรไฟล์นักเขียนโชว์สถิติรวม (ยอดถูกใจ/จำนวนตอน) + การ์ดผลงานที่มีคะแนน
+  // นับเฉพาะเรื่องของนักเขียนคนนี้ (ดู lib/novelCounts.ts — _count ใน findMany สแกนทั้งตาราง)
+  const ids = novels.map((n) => n.novel_id);
+  const [ratings, likeCounts, chapterCounts] = await Promise.all([
+    ids.length
+      ? prisma.review.groupBy({
+          by: ["novel_id"],
+          where: { novel_id: { in: ids }, rating: { not: null } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        })
+      : [],
+    countLikesByNovel(ids),
+    countChaptersByNovel(ids, { publishedOnly: true }),
+  ]);
   const ratingByNovel = new Map(ratings.map((r) => [r.novel_id, r]));
 
   res.status(200).json({
     ...user,
     novel_count: novels.length,
-    novels: novels.map(({ _count, hide_like_count, ...n }) => {
+    novels: novels.map(({ hide_like_count, ...n }) => {
       const r = ratingByNovel.get(n.novel_id);
       return {
         ...n,
         view_count: Number(n.view_count),
         // เคารพการตั้งค่าซ่อนยอดถูกใจของนักเขียน (เหมือนหน้ารายละเอียดนิยาย) — ส่ง null แทนตัวเลขจริง
-        like_count: hide_like_count ? null : _count.novel_likes,
-        chapter_count: _count.chapters,
+        like_count: hide_like_count ? null : (likeCounts.get(n.novel_id) ?? 0),
+        chapter_count: chapterCounts.get(n.novel_id) ?? 0,
         rating: r?._avg.rating ?? 0,
         review_count: r?._count.rating ?? 0,
       };

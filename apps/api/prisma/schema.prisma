@@ -423,6 +423,8 @@ model Chapter {
   view_days           ChapterViewDaily[]
 
   @@unique([novel_id, chapter_number])
+  // เพิ่มภายหลัง (perf) — นับตอนต่อเรื่องจาก index อย่างเดียว (lib/novelCounts.ts) ไม่ต้องอ่านแถวที่มีเนื้อหาตอน
+  @@index([novel_id, status])
   @@map("chapters")
 }
 
@@ -870,6 +872,8 @@ model ReadingProgress {
 
   @@id([user_id, novel_id])
   @@index([user_id, last_read_at(sort: Desc)])
+  // เพิ่มภายหลัง (perf) — นับผู้อ่านต่อเรื่อง (สถิตินักเขียน) PK เป็น (user_id, novel_id) ใช้กรองด้วย novel_id ไม่ได้
+  @@index([novel_id])
   @@map("reading_progress")
 }
 

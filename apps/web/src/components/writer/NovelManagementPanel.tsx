@@ -166,8 +166,8 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
           }}
         />
       ) : (
-        <div className="flex gap-5 rounded-card border border-neutral-200 p-5">
-          <div className="relative h-40 w-28 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
+        <div className="flex gap-4 rounded-card border border-neutral-200 p-4 sm:gap-5 sm:p-5">
+          <div className="relative h-28 w-20 shrink-0 sm:h-40 sm:w-28 overflow-hidden rounded-lg bg-neutral-100">
             {novel.cover_image_url ? (
               <Image src={novel.cover_image_url} alt={novel.title} fill sizes="112px" className="object-cover" />
             ) : (
@@ -177,9 +177,10 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
 
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
-              <h1 className="text-h3 text-neutral-900">{novel.title}</h1>
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                <Pencil className="h-3.5 w-3.5" /> แก้ไขข้อมูล
+              <h1 className="min-w-0 break-words text-xl font-semibold text-neutral-900 sm:text-h3">{novel.title}</h1>
+              {/* จอแคบเหลือแค่ไอคอน ให้ชื่อเรื่องมีที่พอ (ชื่อปุ่มยังอยู่สำหรับ screen reader) */}
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="shrink-0">
+                <Pencil className="h-3.5 w-3.5" /> <span className="sr-only sm:not-sr-only">แก้ไขข้อมูล</span>
               </Button>
             </div>
 
