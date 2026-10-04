@@ -2,24 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, BookOpen, Gift, MessageCircle, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { Bell } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
-
-interface NotificationItem {
-  notification_id: string;
-  type: "comment" | "reply" | "donation" | "system" | "new_chapter" | "new_follower";
-  content: string;
-  link_url: string | null;
-  is_read: boolean;
-  created_at: string;
-}
+import { NOTIFICATION_ICON, timeAgo, type NotificationItem } from "@/lib/notifications";
 
 const tabFilter: Record<"updates" | "comments" | "activity", NotificationItem["type"][]> = {
   // เพิ่มภายหลัง (audit fix) — new_chapter (นิยายที่เก็บไว้ในชั้นหนังสือมีตอนใหม่) เข้าแท็บ "อัปเดต"
-  // เช่นเดียวกับ system
-  updates: ["system", "new_chapter"],
+  // เช่นเดียวกับ system; gap 3.2 — คำตอบจากทีมงานแจ้งปัญหา (support_reply) ก็อยู่แท็บนี้
+  updates: ["system", "new_chapter", "support_reply"],
   comments: ["comment", "reply"],
   // เพิ่มภายหลัง (ติดตามนักเขียน) — มีผู้ติดตามใหม่
   activity: ["donation", "new_follower"],
@@ -30,25 +23,6 @@ const tabs: { key: keyof typeof tabFilter; label: string }[] = [
   { key: "comments", label: "คอมเมนต์" },
   { key: "activity", label: "กิจกรรม" },
 ];
-
-const tabIcon: Record<NotificationItem["type"], typeof Bell> = {
-  comment: MessageCircle,
-  reply: MessageCircle,
-  donation: Gift,
-  system: Bell,
-  new_chapter: BookOpen,
-  new_follower: UserPlus,
-};
-
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return "เมื่อสักครู่";
-  if (minutes < 60) return `${minutes} นาทีที่แล้ว`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ชม.ที่แล้ว`;
-  return `${Math.floor(hours / 24)} วันที่แล้ว`;
-}
 
 /** แผงแจ้งเตือนแบบแท็บ อัปเดต/คอมเมนต์/กิจกรรม — ต่อกับ GET/PATCH /notifications จริง */
 export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light" }) {
@@ -136,7 +110,7 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
             </li>
           )}
           {items.map((n) => {
-            const Icon = tabIcon[n.type];
+            const Icon = NOTIFICATION_ICON[n.type];
             return (
               <li
                 key={n.notification_id}
@@ -165,6 +139,17 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
             );
           })}
         </ul>
+        {/* gap 3.3 — หน้าแจ้งเตือนเต็ม (แบ่งหน้า/กรอง/ตั้งค่า) */}
+        <Link
+          href="/notifications"
+          onClick={() => setOpen(false)}
+          className={cn(
+            "block border-t px-4 py-2.5 text-center text-sm font-medium text-primary-500 hover:underline",
+            isDark ? "border-surface-border" : "border-neutral-200"
+          )}
+        >
+          ดูการแจ้งเตือนทั้งหมด
+        </Link>
       </div>
     </div>
   );

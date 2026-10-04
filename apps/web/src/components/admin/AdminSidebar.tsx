@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Banknote, Flag, Gift, LayoutDashboard, ScrollText, ShieldAlert, Tag, Users, type LucideIcon } from "lucide-react";
+import { Banknote, Flag, Gift, LayoutDashboard, ScrollText, ShieldAlert, Tag, Users, type LucideIcon, Headset } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface AdminTab {
@@ -21,6 +21,7 @@ const tabs: AdminTab[] = [
   { href: "/admin/gift-reports", label: "การ์ดที่ถูกรายงาน", icon: Flag },
   { href: "/admin/content-reports", label: "รายงานเนื้อหา", icon: ShieldAlert },
   { href: "/admin/withdrawals", label: "คำขอถอนเงิน", icon: Banknote },
+  { href: "/admin/support", label: "แจ้งปัญหา", icon: Headset },
 ];
 
 /** แถบเมนูฝั่ง Admin & System Management ดู API_Endpoints.md ส่วนที่ 5

@@ -6,6 +6,7 @@ import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 import { syncReadEdge } from "@/lib/graphSync";
+import { recordChapterView } from "@/lib/viewTracking";
 import type { ChapterStatus } from "@prisma/client";
 import { env } from "@/config/env";
 import { getBalance, ledgerTimestamp, lockWallets, WALLET_TX_OPTIONS } from "@/modules/wallet/wallet.service";
@@ -144,7 +145,7 @@ export async function listNovelChapters(novel_id: string, requester_id?: string)
 
 /** Reference implementation — GET /chapters/:chapter_id (Public — draft เห็นเฉพาะเจ้าของ,
  *  นิยาย private/pending_review ทั้งเรื่องก็เห็นเฉพาะเจ้าของเช่นกัน) */
-export async function getChapterById(chapter_id: string, requester_id?: string) {
+export async function getChapterById(chapter_id: string, requester_id?: string, viewer_key?: string) {
   const chapter = await getChapterWithNovel(chapter_id);
 
   const isOwner = assertNovelVisible(chapter.novel, requester_id, "Chapter not found");
@@ -165,6 +166,14 @@ export async function getChapterById(chapter_id: string, requester_id?: string) 
   if (locked) {
     const { novel: _n, content: _c, ...meta } = chapter;
     return { ...meta, content: null, locked: true };
+  }
+
+  // gap 3.1 — นับยอดวิว (ทั้งผู้อ่านที่ล็อกอินและไม่ล็อกอิน) ไม่นับเจ้าของ/ตอนที่ยังล็อกอยู่
+  const viewer = requester_id ?? viewer_key;
+  if (viewer && !isOwner && chapter.status === "published") {
+    recordChapterView(chapter.chapter_id, chapter.novel_id, viewer).catch((err) =>
+      console.error("recordChapterView failed:", err)
+    );
   }
 
   if (requester_id && !isOwner && chapter.status === "published") {

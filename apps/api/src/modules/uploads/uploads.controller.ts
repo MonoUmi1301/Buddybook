@@ -6,7 +6,7 @@ import { ApiError } from "@/utils/ApiError";
 // เพิ่มภายหลัง (audit fix) — "chapters" สำหรับรูปที่แทรกในเนื้อหาตอนนิยายผ่าน Quill image toolbar
 // (เดิมไม่มี handler จริง ใช้พฤติกรรม default ของ Quill คือฝัง base64 ตรงใน content แทน ทำให้
 // payload บวมจนชน express.json limit 2mb ได้ง่าย ๆ กับรูปแค่ 1-2 รูป)
-const allowedFolders = ["covers", "avatars", "locations", "slips", "chapters"] as const;
+const allowedFolders = ["covers", "avatars", "locations", "slips", "chapters", "support"] as const;
 const signBodySchema = z.object({ folder: z.enum(allowedFolders) });
 
 /** Reference implementation — POST /uploads/sign (ส่วนขยายนอก API_Endpoints.md เดิม จำเป็นสำหรับ

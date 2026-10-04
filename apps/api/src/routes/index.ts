@@ -18,6 +18,8 @@ import walletRoutes from "@/modules/wallet/wallet.routes";
 import notificationsRoutes from "@/modules/notifications/notifications.routes";
 import adminRoutes, { publicAdminRouter } from "@/modules/admin/admin.routes";
 import internalRoutes from "@/modules/internal/internal.routes";
+import meStatsRouter from "@/modules/stats/stats.routes";
+import supportRoutes from "@/modules/support/support.routes";
 import collectionsRoutes from "@/modules/collections/collections.routes";
 import reportsRoutes from "@/modules/reports/reports.routes";
 
@@ -44,10 +46,14 @@ router.use("/donations", donationsRoutes);
 router.use("/gifts", giftsRoutes);
 router.use("/authors", authorsGiftsRouter);
 router.use("/me", meGiftsRouter);
+// gap 3.1 — สถิตินักเขียน /me/stats/*
+router.use("/me", meStatsRouter);
 router.use("/wallet", walletRoutes);
 router.use("/notifications", notificationsRoutes);
 // เพิ่มภายหลัง (รายงานเนื้อหา) — ผู้ใช้รายงาน, แอดมินตรวจที่ /admin/content-reports
 router.use("/reports", reportsRoutes);
+// gap 3.2 — ระบบสนับสนุนผู้ใช้งาน / แจ้งปัญหา
+router.use("/support", supportRoutes);
 
 // 3. Writer Workspace
 router.use("/trash-bin", trashBinRoutes);

@@ -5,6 +5,7 @@ import * as adminController from "@/modules/admin/admin.controller";
 import * as giftsController from "@/modules/gifts/gifts.controller";
 import * as reportsController from "@/modules/reports/reports.controller";
 import * as walletController from "@/modules/wallet/wallet.controller";
+import * as supportController from "@/modules/support/support.controller";
 
 // GET /admin/tags เป็น (Public) ตาม API_Endpoints.md — แยก router นี้ไว้ mount
 // ก่อน adminRoutes ใน routes/index.ts เพื่อไม่ให้โดน requireAuth/requireAdmin บังคับ
@@ -27,6 +28,9 @@ router.patch("/users/:user_id/unsuspend", asyncHandler(adminController.unsuspend
 // เพิ่มภายหลัง (รายงานเนื้อหา) — แยกชื่อจาก /reports/stats (สถิติ dashboard) ที่มีอยู่เดิม
 router.get("/content-reports", asyncHandler(reportsController.adminListReports));
 router.patch("/content-reports/:report_id", asyncHandler(reportsController.adminResolveReport));
+
+// gap 3.2 — คิวเรื่องแจ้งปัญหา (ตอบ/เปลี่ยนสถานะใช้ /support/tickets/:id/* เดียวกับผู้ใช้ ระบบรู้จาก role)
+router.get("/support/tickets", asyncHandler(supportController.adminList));
 
 // เพิ่มภายหลัง (ถอนรายได้นักเขียน)
 router.get("/withdrawals", asyncHandler(walletController.adminListWithdrawals));

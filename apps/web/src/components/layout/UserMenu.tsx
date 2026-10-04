@@ -3,15 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  BookMarked,
-  Coins,
-  History,
-  LogOut,
-  Moon,
-  PenSquare,
-  Settings,
-} from "lucide-react";
+import { BookMarked, Coins, History, LogOut, Moon, PenSquare, Settings, BarChart3, Bell, LifeBuoy } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -62,9 +54,12 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
     { icon: Moon, label: "ธีม", onClick: toggleTheme },
     { icon: BookMarked, label: "ชั้นหนังสือ", href: "/library" },
     { icon: PenSquare, label: "สร้างผลงาน", href: "/write" },
+    { icon: BarChart3, label: "สถิตินิยายของฉัน", href: "/write/stats" },
     { icon: History, label: "ประวัติการซื้อ", href: "/wallet" },
     { icon: Coins, label: "เติม coin", href: "/wallet" },
     { icon: Settings, label: "ตั้งค่าบัญชี", href: "/settings" },
+    { icon: Bell, label: "การแจ้งเตือน", href: "/notifications" },
+    { icon: LifeBuoy, label: "ศูนย์ช่วยเหลือ", href: "/support" },
   ];
 
   return (

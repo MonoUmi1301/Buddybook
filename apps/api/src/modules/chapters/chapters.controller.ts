@@ -6,7 +6,10 @@ const chapterIdParamSchema = z.object({ chapter_id: z.string().uuid() });
 
 export async function getById(req: Request, res: Response) {
   const { chapter_id } = chapterIdParamSchema.parse(req.params);
-  const chapter = await chaptersService.getChapterById(chapter_id, req.user?.user_id);
+  // ผู้อ่านที่ไม่ล็อกอินแยกกันด้วย IP ของเบราว์เซอร์ (Next proxy ส่ง X-Forwarded-For มา) — ใช้นับยอดวิวเท่านั้น
+  const forwarded = req.headers["x-forwarded-for"];
+  const ip = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim() || req.ip;
+  const chapter = await chaptersService.getChapterById(chapter_id, req.user?.user_id, ip ? `ip:${ip}` : undefined);
   res.status(200).json(chapter);
 }
 
