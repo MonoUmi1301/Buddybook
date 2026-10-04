@@ -105,13 +105,15 @@ export function Navbar({ theme, user = null }: NavbarProps) {
 
         {/* มือถือ (≤ 390px) ไอคอนครบ 5 ตัวล้นจอ ~4px — ลดช่องไฟเฉพาะจอเล็ก desktop เท่าเดิม */}
         <div className="flex items-center gap-0.5 sm:gap-1.5">
-          <Link href="/write" aria-label="สร้างผลงาน" className={iconLinkClasses(isDark)}>
+          {/* ผู้ใช้ที่ยังไม่ล็อกอินบนมือถือ: เหลือแค่ค้นหา + ปุ่ม "เข้าสู่ระบบ" — เขียน/ชั้นหนังสือต้องล็อกอินอยู่แล้ว
+              และหน้าเข้าสู่ระบบมีลิงก์สมัครสมาชิก (เดิมแถบล้นจอ 390px และปุ่มตัดเป็น 2 บรรทัด) */}
+          <Link href="/write" aria-label="สร้างผลงาน" className={cn(iconLinkClasses(isDark), !user && "max-sm:hidden")}>
             <PenLine className="h-5 w-5" />
           </Link>
           <Link href="/search" aria-label="ค้นหา" className={iconLinkClasses(isDark)}>
             <Search className="h-5 w-5" />
           </Link>
-          <Link href="/library" aria-label="ชั้นหนังสือ" className={iconLinkClasses(isDark)}>
+          <Link href="/library" aria-label="ชั้นหนังสือ" className={cn(iconLinkClasses(isDark), !user && "max-sm:hidden")}>
             <Library className="h-5 w-5" />
           </Link>
 
@@ -135,15 +137,16 @@ export function Navbar({ theme, user = null }: NavbarProps) {
               <Link
                 href="/login"
                 className={cn(
-                  "text-sm font-medium transition-colors",
-                  isDark ? "text-zinc-200 hover:text-white" : "text-neutral-700 hover:text-brand-brown"
+                  "whitespace-nowrap text-sm font-medium transition-colors",
+                  "max-sm:inline-flex max-sm:h-9 max-sm:items-center max-sm:rounded-pill max-sm:bg-primary-500 max-sm:px-4 max-sm:text-white",
+                  isDark ? "sm:text-zinc-200 sm:hover:text-white" : "sm:text-neutral-700 sm:hover:text-brand-brown"
                 )}
               >
                 เข้าสู่ระบบ
               </Link>
               <Link
                 href="/register"
-                className="inline-flex h-9 items-center rounded-pill bg-primary-500 px-4 text-sm font-medium text-white transition-colors hover:bg-primary-600"
+                className="inline-flex h-9 items-center whitespace-nowrap rounded-pill bg-primary-500 px-4 text-sm font-medium text-white transition-colors hover:bg-primary-600 max-sm:hidden"
               >
                 สมัครสมาชิก
               </Link>
