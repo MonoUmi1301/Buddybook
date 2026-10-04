@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ShieldBan } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ScrollFade } from "@/components/ui/ScrollFade";
 import { THAI_TIME_ZONE } from "@/lib/format";
 
 export interface AdminUserRow {
@@ -49,8 +50,9 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-card border border-neutral-200">
-      <table className="w-full text-left text-sm">
+    // จอแคบตารางเลื่อนแนวนอนได้ — ScrollFade ใส่เงาจางที่ขอบให้รู้ว่ายังมีคอลัมน์ Role/สถานะอยู่ทางขวา
+    <ScrollFade className="rounded-card border border-neutral-200">
+      <table className="w-full whitespace-nowrap text-left text-sm">
         <thead className="bg-neutral-50 text-neutral-500">
           <tr>
             <th className="px-4 py-3 font-medium">Username</th>
@@ -103,6 +105,6 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
           ))}
         </tbody>
       </table>
-    </div>
+    </ScrollFade>
   );
 }
