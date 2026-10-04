@@ -20,6 +20,7 @@ import {
   type InboxStatus,
 } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
+import { errorText } from "@/lib/formatApiError";
 
 interface GiftInboxProps {
   authorName: string;
@@ -100,7 +101,7 @@ export function GiftInbox({ authorName, initialItems, initialCursor, initialStat
         setItems(page.items);
         setCursor(page.next_cursor);
       })
-      .catch((e: Error) => !cancelled && setListError(e.message))
+      .catch((e: unknown) => !cancelled && setListError(errorText(e, "โหลดกล่องจดหมายไม่สำเร็จ ลองใหม่อีกครั้ง")))
       .finally(() => !cancelled && setLoading(null));
     return () => {
       cancelled = true;
@@ -162,7 +163,7 @@ export function GiftInbox({ authorName, initialItems, initialCursor, initialStat
       setItems((prev) => [...prev, ...page.items]);
       setCursor(page.next_cursor);
     } catch (e) {
-      setListError(e instanceof Error ? e.message : "โหลดไม่สำเร็จ");
+      setListError(errorText(e, "โหลดไม่สำเร็จ ลองใหม่อีกครั้ง"));
     } finally {
       setLoading(null);
     }

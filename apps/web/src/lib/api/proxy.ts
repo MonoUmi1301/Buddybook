@@ -2,6 +2,7 @@ import { headers as requestHeaders } from "next/headers";
 import { NextResponse } from "next/server";
 import { API_BASE, API_TIMEOUT_MS } from "@/lib/api/config";
 import { jsonError } from "@/lib/api/http";
+import { localizeErrorBody } from "@/lib/api/errorMessages";
 
 export interface ForwardOptions {
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
@@ -71,7 +72,8 @@ export async function callApi({
   }
 
   try {
-    return { status: upstream.status, json: JSON.parse(raw) as unknown };
+    // error ทุกตัวจาก API แปลเป็นภาษาไทยที่จุดนี้จุดเดียว (ดู lib/api/errorMessages.ts)
+    return { status: upstream.status, json: localizeErrorBody(upstream.status, JSON.parse(raw)) };
   } catch {
     return { error: jsonError("Upstream API returned an invalid response", 502) };
   }

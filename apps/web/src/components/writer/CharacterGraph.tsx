@@ -25,6 +25,7 @@ import { AddCharacterModal } from "@/components/writer/AddCharacterModal";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { formatApiError } from "@/lib/formatApiError";
 
 const nodeTypes = { characterNode: CharacterNode };
 
@@ -206,7 +207,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges }: Cha
       body: JSON.stringify({ character_name: name, avatar_url: avatarUrl }),
     });
     const json = await res.json();
-    if (!res.ok) throw new Error("create failed");
+    if (!res.ok) throw new Error(formatApiError(json, "เพิ่มตัวละครไม่สำเร็จ ลองใหม่อีกครั้ง"));
     setTray((t) => [...t, { node_id: json.node_id, name, avatar_url: avatarUrl, position_x: null, position_y: null }]);
   }
 

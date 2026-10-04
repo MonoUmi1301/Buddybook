@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
 import { LOCATION_ICONS, type LocationIconKey } from "@/components/writer/LocationNode";
+import { errorText } from "@/lib/formatApiError";
 
 interface AddLocationModalProps {
   onClose: () => void;
@@ -46,8 +47,8 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
     try {
       await onSubmit({ name: trimmed, icon, category: category ?? undefined });
       onClose();
-    } catch {
-      setError("เพิ่มสถานที่ไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } catch (e) {
+      setError(errorText(e, "เพิ่มสถานที่ไม่สำเร็จ ลองใหม่อีกครั้ง"));
     } finally {
       setSubmitting(false);
     }

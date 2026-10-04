@@ -1,3 +1,4 @@
+import "@/lib/zodThai";
 import type { NextResponse } from "next/server";
 import { z, type ZodSchema } from "zod";
 import { jsonError, jsonValidationError } from "@/lib/api/http";

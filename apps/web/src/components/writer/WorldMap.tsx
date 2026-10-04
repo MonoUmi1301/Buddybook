@@ -46,6 +46,7 @@ import { LocationNode, LOCATION_ICONS, type LocationNodeData, type LocationIconK
 import { AddLocationModal } from "@/components/writer/AddLocationModal";
 import { LoreModal, type ChapterOption } from "@/components/writer/LoreModal";
 import { THAI_TIME_ZONE } from "@/lib/format";
+import { formatApiError } from "@/lib/formatApiError";
 
 const nodeTypes = { locationNode: LocationNode };
 
@@ -556,7 +557,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       body: JSON.stringify({ name, map_icon_url: icon, category }),
     });
     const json = await res.json();
-    if (!res.ok) throw new Error("create failed");
+    if (!res.ok) throw new Error(formatApiError(json, "เพิ่มสถานที่ไม่สำเร็จ ลองใหม่อีกครั้ง"));
     locationMetaRef.current.set(json.location_id, { description: "", linkedChapterId: null });
     setTray((t) => [...t, { location_id: json.location_id, name, icon, category, pos_x: null, pos_y: null }]);
   }

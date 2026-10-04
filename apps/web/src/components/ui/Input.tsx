@@ -1,4 +1,4 @@
-import { InputHTMLAttributes, forwardRef } from "react";
+import { InputHTMLAttributes, forwardRef, useId } from "react";
 import { cn } from "@/lib/cn";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -8,7 +8,10 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, id, disabled, ...props }, ref) => {
-    const inputId = id ?? props.name;
+    // เดิมถ้าไม่ส่ง id/name มา label จะไม่ผูกกับช่อง (คลิกชื่อช่องไม่โฟกัส, screen reader ไม่อ่านชื่อช่อง)
+    const autoId = useId();
+    const inputId = id ?? props.name ?? autoId;
+    const errorId = `${inputId}-error`;
     return (
       <div className="w-full">
         {label && (
@@ -20,6 +23,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           disabled={disabled}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           className={cn(
             "h-11 w-full rounded-lg border border-neutral-300 bg-white px-4 text-sm text-neutral-900 placeholder:text-neutral-400",
             "transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100",
@@ -29,7 +34,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
           {...props}
         />
-        {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="mt-1 text-xs text-red-500">
+            {error}
+          </p>
+        )}
       </div>
     );
   }

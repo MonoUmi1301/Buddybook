@@ -5,6 +5,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { X } from "lucide-react";
 import type { CoinPackage } from "@/components/wallet/CoinPackageRow";
+import { errorText } from "@/lib/formatApiError";
 
 // เพิ่มภายหลัง (audit fix — เปลี่ยนจาก SlipOK/อัปโหลดสลิปมาใช้ Stripe) — โหลด Stripe.js แค่ครั้งเดียว
 // ระดับโมดูล ไม่ใช่ทุกครั้งที่ component render (ตามที่ Stripe แนะนำ กัน re-init ไม่จำเป็น)
@@ -51,7 +52,7 @@ export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) 
         if (!cancelled) setClientSecret(json.client_secret);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+        if (!cancelled) setError(errorText(err, "เชื่อมต่อระบบชำระเงินไม่ได้ ลองใหม่อีกครั้ง"));
       });
     return () => {
       cancelled = true;

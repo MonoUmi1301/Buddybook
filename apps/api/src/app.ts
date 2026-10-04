@@ -1,3 +1,4 @@
+import "@/lib/zodThai"; // ข้อความ validation ภาษาไทยทั้ง API — ต้อง import ก่อน schema ใด ๆ ถูกใช้
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";

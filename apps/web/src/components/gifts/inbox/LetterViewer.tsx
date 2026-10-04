@@ -21,6 +21,7 @@ import {
   type InboxItem,
 } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
+import { errorText } from "@/lib/formatApiError";
 
 interface LetterViewerProps {
   item: InboxItem;
@@ -54,7 +55,7 @@ export function LetterViewer({ item, authorName, feePercent, onChange, onClose }
       toast(done);
       if (kind === "report") setReporting(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "ทำรายการไม่สำเร็จ");
+      setError(errorText(e, "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง"));
     } finally {
       setBusy(null);
     }
