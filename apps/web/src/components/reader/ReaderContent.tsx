@@ -134,7 +134,7 @@ export function ReaderContent({
   const activeTheme = themeOptions.find((o) => o.value === prefs.theme)!;
 
   return (
-    <div className="relative -mx-4 px-4 pb-8 transition-colors sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8" ref={panelRef} style={{ backgroundColor: activeTheme.bg, color: activeTheme.text, "--reader-bg": activeTheme.bg } as CSSProperties}>
+    <div className="relative px-4 pb-8 transition-colors sm:px-6 lg:px-8" ref={panelRef} style={{ backgroundColor: activeTheme.bg, color: activeTheme.text, "--reader-bg": activeTheme.bg } as CSSProperties}>
       <div className="mx-auto w-full max-w-3xl pt-4">
         <nav className="mb-4 text-sm" style={{ color: activeTheme.muted }}>
           <Link href={`/novels/${novelId}`} className="hover:underline">
