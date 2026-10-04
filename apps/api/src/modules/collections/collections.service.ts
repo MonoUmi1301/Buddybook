@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
-import { libraryNovelSelect, toLibraryNovel } from "@/modules/library/library.service";
+import { countLibraryChapters, libraryNovelSelect, toLibraryNovel } from "@/modules/library/library.service";
 
 export const COLLECTION_TINTS = ["purple", "coral", "blue", "orange", "mint", "pink"] as const;
 export type CollectionTint = (typeof COLLECTION_TINTS)[number];
@@ -24,11 +24,12 @@ export async function listCollections(user_id: string) {
       },
     },
   });
+  const chapterCounts = await countLibraryChapters(collections.flatMap((c) => c.items.map((i) => i.novel)));
 
   return {
     collections: collections.map(({ items, ...c }) => ({
       ...c,
-      novels: items.map((i) => toLibraryNovel(i.novel)),
+      novels: items.map((i) => toLibraryNovel(i.novel, chapterCounts)),
     })),
   };
 }

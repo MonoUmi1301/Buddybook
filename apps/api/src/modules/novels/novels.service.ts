@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
@@ -112,8 +113,6 @@ export async function searchNovels({
         format: true,
         content_rating: true,
         author: { select: { user_id: true, username: true, pen_name: true } },
-        // เพิ่มภายหลัง (หน้าแรก coverflow "มาแรง") — จำนวนตอนที่เผยแพร่แล้ว
-        _count: { select: { chapters: { where: { status: "published" } } } },
       },
       orderBy: sort === "views" ? { view_count: "desc" } : { created_at: "desc" },
       skip: (page - 1) * pageSize,
@@ -124,33 +123,32 @@ export async function searchNovels({
 
   // ไม่มี field คะแนนเฉลี่ยสำเร็จรูปบน Novel — คำนวณจาก Review.rating เอาเอง ต้อง groupBy แยก
   // เพราะ Prisma ยังไม่รองรับ aggregate ในตัว findMany relation โดยตรง
-  const ratings = novels.length
-    ? await prisma.review.groupBy({
-        by: ["novel_id"],
-        where: { novel_id: { in: novels.map((n) => n.novel_id) }, rating: { not: null } },
-        _avg: { rating: true },
-        _count: { rating: true },
-      })
-    : [];
+  // จำนวนตอน/ถูกใจนับเฉพาะเรื่องในหน้านี้ (ดู lib/novelCounts.ts — _count ใน findMany สแกนทั้งตาราง)
+  // ยิงพร้อมกันทั้งสามตัว ไม่ต่อคิวทีละ query
+  const ids = novels.map((n) => n.novel_id);
+  const [ratings, likeCountByNovel, chapterCountByNovel] = await Promise.all([
+    ids.length
+      ? prisma.review.groupBy({
+          by: ["novel_id"],
+          where: { novel_id: { in: ids }, rating: { not: null } },
+          _avg: { rating: true },
+          _count: { rating: true },
+        })
+      : [],
+    countLikesByNovel(ids),
+    // เพิ่มภายหลัง (หน้าแรก coverflow "มาแรง") — จำนวนตอนที่เผยแพร่แล้ว
+    countChaptersByNovel(ids, { publishedOnly: true }),
+  ]);
   const ratingByNovel = new Map(ratings.map((r) => [r.novel_id, r]));
-
-  const likes = novels.length
-    ? await prisma.novelLike.groupBy({
-        by: ["novel_id"],
-        where: { novel_id: { in: novels.map((n) => n.novel_id) } },
-        _count: { novel_id: true },
-      })
-    : [];
-  const likeCountByNovel = new Map(likes.map((l) => [l.novel_id, l._count.novel_id]));
 
   // view_count เป็น BigInt ใน Postgres — res.json() (JSON.stringify) serialize BigInt ตรง ๆ ไม่ได้
   return {
-    novels: novels.map(({ _count, ...n }) => {
+    novels: novels.map((n) => {
       const r = ratingByNovel.get(n.novel_id);
       return {
         ...n,
         view_count: Number(n.view_count),
-        chapter_count: _count.chapters,
+        chapter_count: chapterCountByNovel.get(n.novel_id) ?? 0,
         rating: r?._avg.rating ?? 0,
         review_count: r?._count.rating ?? 0,
         like_count: likeCountByNovel.get(n.novel_id) ?? 0,
@@ -781,14 +779,17 @@ export async function listTrashedNovels(user_id: string) {
       title: true,
       cover_image_url: true,
       deleted_at: true,
-      _count: { select: { chapters: true } },
     },
   });
+  const chapterCounts = await countChaptersByNovel(
+    novels.map((n) => n.novel_id),
+    { publishedOnly: false }
+  );
   return {
     retention_days: NOVEL_TRASH_RETENTION_DAYS,
-    novels: novels.map(({ _count, deleted_at, ...n }) => ({
+    novels: novels.map(({ deleted_at, ...n }) => ({
       ...n,
-      chapter_count: _count.chapters,
+      chapter_count: chapterCounts.get(n.novel_id) ?? 0,
       deleted_at,
       auto_delete_at: new Date(deleted_at!.getTime() + NOVEL_TRASH_RETENTION_DAYS * DAY_MS),
     })),

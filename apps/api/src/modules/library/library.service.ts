@@ -1,5 +1,6 @@
 import { Prisma, type LibraryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { countChaptersByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 
 /** ข้อมูลนิยายที่หน้า My Library / "อ่านต่อ" ใช้ — ใช้ร่วมกันทั้ง library และ collections */
@@ -10,13 +11,18 @@ export const libraryNovelSelect = {
   status: true,
   view_count: true,
   author: { select: { user_id: true, username: true, pen_name: true } },
-  _count: { select: { chapters: { where: { status: "published" as const } } } },
 } satisfies Prisma.NovelSelect;
 
 type LibraryNovelRow = Prisma.NovelGetPayload<{ select: typeof libraryNovelSelect }>;
 
-export function toLibraryNovel({ _count, view_count, ...novel }: LibraryNovelRow) {
-  return { ...novel, view_count: Number(view_count), chapter_count: _count.chapters };
+/** จำนวนตอนที่เผยแพร่แล้วของชุดนิยายที่จะแสดง — นับแยกครั้งเดียวต่อรายการ ไม่ใช้ _count ใน select
+ *  (ดู lib/novelCounts.ts — _count ใน findMany สแกนตอนทั้งตาราง) */
+export function countLibraryChapters(novels: { novel_id: string }[]) {
+  return countChaptersByNovel([...new Set(novels.map((n) => n.novel_id))], { publishedOnly: true });
+}
+
+export function toLibraryNovel({ view_count, ...novel }: LibraryNovelRow, chapterCounts: Map<string, number>) {
+  return { ...novel, view_count: Number(view_count), chapter_count: chapterCounts.get(novel.novel_id) ?? 0 };
 }
 
 type ProgressRow = { last_chapter_id: string | null; last_chapter_number: number; last_read_at: Date };
@@ -36,7 +42,7 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
   });
 
   const novelIds = items.map((i) => i.novel_id);
-  const [progress, collectionItems, counts] = await Promise.all([
+  const [progress, collectionItems, counts, chapterCounts] = await Promise.all([
     prisma.readingProgress.findMany({ where: { user_id, novel_id: { in: novelIds } } }),
     prisma.collectionItem.findMany({
       where: { novel_id: { in: novelIds }, collection: { user_id } },
@@ -44,6 +50,7 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
     }),
     // นับทุกสถานะเสมอ (ไม่ขึ้นกับ ?status) — ให้ปุ่มกรองโชว์ตัวเลขครบแม้กำลังกรองอยู่
     prisma.userLibrary.groupBy({ by: ["status"], where: { user_id }, _count: { _all: true } }),
+    countLibraryChapters(items.map((i) => i.novel)),
   ]);
   const progressByNovel = new Map(progress.map((p) => [p.novel_id, p]));
   const collectionsByNovel = new Map<string, string[]>();
@@ -57,7 +64,7 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
   return {
     library: items.map((item) => ({
       library_id: item.library_id,
-      novel: toLibraryNovel(item.novel),
+      novel: toLibraryNovel(item.novel, chapterCounts),
       added_at: item.added_at,
       status: item.status,
       progress: toProgress(progressByNovel.get(item.novel_id)),
@@ -119,8 +126,9 @@ export async function listContinueReading(user_id: string, limit: number) {
     take: limit,
     include: { novel: { select: libraryNovelSelect } },
   });
+  const chapterCounts = await countLibraryChapters(rows.map((r) => r.novel));
 
   return {
-    items: rows.map((r) => ({ novel: toLibraryNovel(r.novel), progress: toProgress(r)! })),
+    items: rows.map((r) => ({ novel: toLibraryNovel(r.novel, chapterCounts), progress: toProgress(r)! })),
   };
 }

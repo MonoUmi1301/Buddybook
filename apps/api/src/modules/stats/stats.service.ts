@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { countChaptersByNovel, countLikesByNovel, countReadersByNovel, countReviewsByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { thaiDay } from "@/lib/viewTracking";
 import { topKeywords } from "@/lib/keywords";
@@ -35,14 +36,14 @@ export async function getMyNovelsOverview(user_id: string) {
       cover_image_url: true,
       visibility: true,
       view_count: true,
-      _count: { select: { novel_likes: true, reading_progress: true, reviews: true, chapters: true } },
     },
   });
   const ids = novels.map((n) => n.novel_id);
   if (ids.length === 0) return { novels: [] };
 
   const since = thaiDay(new Date(Date.now() - 6 * DAY_MS));
-  const [views7d, ratings, polarity] = await Promise.all([
+  // จำนวนผู้อ่าน/ถูกใจ/รีวิว/ตอน นับเฉพาะเรื่องของฉัน (ดู lib/novelCounts.ts — _count ใน findMany สแกนทั้งตาราง)
+  const [views7d, ratings, polarity, readers, likes, reviews, chapters] = await Promise.all([
     prisma.chapterViewDaily.groupBy({
       by: ["novel_id"],
       where: { novel_id: { in: ids }, day: { gte: new Date(since) } },
@@ -54,6 +55,10 @@ export async function getMyNovelsOverview(user_id: string) {
       where: { novel_id: { in: ids }, sentiment_polarity: { not: null } },
       _avg: { sentiment_polarity: true },
     }),
+    countReadersByNovel(ids),
+    countLikesByNovel(ids),
+    countReviewsByNovel(ids),
+    countChaptersByNovel(ids, { publishedOnly: false }),
   ]);
   const v7 = new Map(views7d.map((v) => [v.novel_id, v._sum.views ?? 0]));
   const rating = new Map(ratings.map((r) => [r.novel_id, r._avg.rating]));
@@ -67,10 +72,10 @@ export async function getMyNovelsOverview(user_id: string) {
       visibility: n.visibility,
       views: Number(n.view_count),
       views_7d: v7.get(n.novel_id) ?? 0,
-      readers: n._count.reading_progress,
-      likes: n._count.novel_likes,
-      reviews: n._count.reviews,
-      chapters: n._count.chapters,
+      readers: readers.get(n.novel_id) ?? 0,
+      likes: likes.get(n.novel_id) ?? 0,
+      reviews: reviews.get(n.novel_id) ?? 0,
+      chapters: chapters.get(n.novel_id) ?? 0,
       avg_rating: round(rating.get(n.novel_id), 1),
       avg_polarity: round(pol.get(n.novel_id)),
     })),

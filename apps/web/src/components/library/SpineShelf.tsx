@@ -62,6 +62,13 @@ export function SpineShelf({ group, entries }: SpineShelfProps) {
   const router = useRouter();
   const { breakpoint, canHover } = useBreakpoint();
   const [peek, setPeek] = React.useState<string | null>(null);
+  // ปกลอยเหนือสันโหลดเฉพาะเล่มที่เคยชี้/โฟกัส/แตะแล้ว — เดิมทุกเล่ม render <Image> ไว้ (ซ่อนด้วย opacity-0)
+  // lazy-load ไม่ช่วยเพราะดูแค่ว่าอยู่ใกล้จอไหม ไม่สนความโปร่งใส ชั้นที่มี 200 เล่มเลยโหลดปก 200 รูปทันทีที่เปิดหน้า
+  // (ผ่านตัวย่อรูปของ Next ทีละรูป) ทั้งที่ยังไม่มีใครชี้สักเล่ม — เปิดแล้วค้างไว้ ชี้ซ้ำไม่ต้องโหลดใหม่
+  const [revealed, setRevealed] = React.useState<ReadonlySet<string>>(() => new Set());
+  const reveal = React.useCallback((novelId: string) => {
+    setRevealed((prev) => (prev.has(novelId) ? prev : new Set(prev).add(novelId)));
+  }, []);
   const [sheet, setSheet] = React.useState<LibraryNovel | null>(null);
   const clearPeek = React.useCallback(() => setPeek(null), []);
   const rowRef = useDismiss<HTMLDivElement>(peek !== null, clearPeek);
@@ -75,7 +82,10 @@ export function SpineShelf({ group, entries }: SpineShelfProps) {
       return;
     }
     if (peek === novel.novel_id) router.push(`/novels/${novel.novel_id}`);
-    else setPeek(novel.novel_id);
+    else {
+      reveal(novel.novel_id);
+      setPeek(novel.novel_id);
+    }
   }
 
   const sheetEntry = sheet ? entries.get(sheet.novel_id) : undefined;
@@ -102,6 +112,8 @@ export function SpineShelf({ group, entries }: SpineShelfProps) {
                   key={novel.novel_id}
                   href={`/novels/${novel.novel_id}`}
                   onClick={(e) => onSpineClick(e, novel)}
+                  onPointerEnter={canHover ? () => reveal(novel.novel_id) : undefined}
+                  onFocus={() => reveal(novel.novel_id)}
                   aria-label={`${novel.title} โดย ${getPenName(novel.author)}`}
                   className={cn(
                     "group relative flex shrink-0 items-center justify-center rounded-t-[3px] shadow-[inset_-3px_0_6px_rgba(0,0,0,0.18),inset_2px_0_2px_rgba(255,255,255,0.12)] transition-transform duration-200",
@@ -131,7 +143,9 @@ export function SpineShelf({ group, entries }: SpineShelfProps) {
                           : "opacity-0"
                     )}
                   >
-                    <Image src={coverOf(novel)} alt="" width={400} height={600} sizes="160px" className="aspect-[2/3] w-full object-cover" />
+                    {(revealed.has(novel.novel_id) || peeking) && (
+                      <Image src={coverOf(novel)} alt="" width={400} height={600} sizes="160px" className="aspect-[2/3] w-full object-cover" />
+                    )}
                   </span>
                 </Link>
               );
