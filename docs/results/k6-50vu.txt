@@ -1,0 +1,42 @@
+
+     █ guest reader
+
+       ✓ search 200
+       ✓ novel 200
+       ✓ chapter 200
+       ✓ comments 200
+
+     █ writer
+
+       ✓ autosave 200
+       ✓ stats 200
+
+     █ signed-in reader
+
+       ✓ recommendations 200
+       ✓ chapter 200
+       ✓ notifications 200
+
+     checks.........................: 100.00% 11495 out of 11495
+     data_received..................: 24 MB   160 kB/s
+     data_sent......................: 4.6 MB  32 kB/s
+     endpoint_autosave..............: avg=12.32ms min=9.4ms   med=11.74ms p(90)=15.55ms p(95)=17.63ms  max=21.56ms 
+   ✓ endpoint_chapter...............: avg=2.93ms  min=1.8ms   med=2.7ms   p(90)=3.69ms  p(95)=4.45ms   max=18.64ms 
+   ✓ endpoint_recommendations.......: avg=7.78ms  min=4.9ms   med=7.15ms  p(90)=10.5ms  p(95)=12.29ms  max=26.78ms 
+     endpoint_search................: avg=6.44ms  min=4.45ms  med=6.06ms  p(90)=8.12ms  p(95)=9.24ms   max=25.53ms 
+     group_duration.................: avg=17ms    min=9.97ms  med=16.06ms p(90)=22.1ms  p(95)=24.68ms  max=56.13ms 
+     http_req_blocked...............: avg=7.07µs  min=1.46µs  med=3.89µs  p(90)=6.59µs  p(95)=7.74µs   max=7.09ms  
+     http_req_connecting............: avg=846ns   min=0s      med=0s      p(90)=0s      p(95)=0s       max=838.15µs
+   ✓ http_req_duration..............: avg=4.83ms  min=1.8ms   med=3.59ms  p(90)=8.16ms  p(95)=10.25ms  max=160.91ms
+       { expected_response:true }...: avg=4.83ms  min=1.8ms   med=3.59ms  p(90)=8.16ms  p(95)=10.25ms  max=160.91ms
+   ✓ http_req_failed................: 0.00%   0 out of 11521
+     http_req_receiving.............: avg=77.16µs min=20.34µs med=70.32µs p(90)=99.6µs  p(95)=113.43µs max=2.48ms  
+     http_req_sending...............: avg=19.23µs min=4.57µs  med=12.69µs p(90)=31.56µs p(95)=43.77µs  max=4.97ms  
+     http_req_tls_handshaking.......: avg=0s      min=0s      med=0s      p(90)=0s      p(95)=0s       max=0s      
+     http_req_waiting...............: avg=4.74ms  min=1.74ms  med=3.5ms   p(90)=8.06ms  p(95)=10.12ms  max=160.56ms
+     http_reqs......................: 11521   78.003803/s
+     iteration_duration.............: avg=2.02s   min=1.01s   med=2.02s   p(90)=2.82s   p(95)=2.92s    max=3.03s   
+     iterations.....................: 3297    22.322588/s
+     vus............................: 3       min=0              max=50
+     vus_max........................: 50      min=50             max=50
+

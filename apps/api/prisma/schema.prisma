@@ -234,6 +234,9 @@ model User {
   avatar_url     String?        @db.Text
   bio            String?        @db.Text
   age_verified   Boolean        @default(false)
+  /// gap 3.4 — แหล่งที่ยืนยันอายุ: "google" (People API ตอนล็อกอิน) หรือ "self_declared" (กรอกวันเกิดเอง)
+  /// ยืนยันจาก provider แล้วกรอกเองทับไม่ได้ (ดู users.controller setAgeVerification)
+  age_verification_source String? @db.VarChar(20)
   /// เพิ่มภายหลัง (Phase 8) — PATCH /admin/users/:id/suspend มีอยู่ใน API_Endpoints.md แต่
   /// data dictionary เดิมไม่มีคอลัมน์นี้เลย บล็อกตอน login เท่านั้น (ไม่เช็คทุก request เพื่อไม่ให้
   /// เพิ่ม query ในทุก endpoint ที่ผ่าน requireAuth — access token อายุสั้น 15 นาทีอยู่แล้ว)

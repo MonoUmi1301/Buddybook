@@ -1,5 +1,32 @@
 # BuddyBook — Gap Analysis & แผนพัฒนาให้ครบตาม Proposal
 
+> **สถานะ (4 ต.ค. 2569): ทำครบทุกข้อในแผนแล้ว ยกเว้น Apple Sign-in (ตัดออกตามที่ตกลง)**
+> ผลวัด KPI ดู `docs/evaluation.md` · deploy/uptime ดู `docs/deployment-and-monitoring.md` · endpoint ใหม่ดู `API_Endpoints.md` ส่วนที่ 7
+>
+> | ข้อ | งาน | สถานะ |
+> |---|---|---|
+> | 2.1 | Sentiment polarity −1..1 แยกจากความมั่นใจ + backfill + worker ส่ง P(pos)−P(neg) | ✅ |
+> | 2.2 | READ edge จากการอ่าน + รวม sentiment คอมเมนต์ + full resync ใหม่ | ✅ |
+> | 2.3 | Recommendation v2: scoring, นิยายใหม่, re-rank long-tail, ป้ายเหตุผล, fallback Postgres | ✅ |
+> | 2.4 | ลบนิยายแบบ soft delete 30 วัน + หน้านิยายที่ถูกลบ + ลบถาวร | ✅ |
+> | 2.5 | Auto-save: ร่างในเครื่อง, keepalive ตอนปิดแท็บ, ออฟไลน์, กู้คืน, กันเขียนทับ (409), แก้ race เลขเวอร์ชัน | ✅ |
+> | 3.1 | หน้าสถิตินักเขียน (+ เริ่มนับยอดวิวจริง — เดิมไม่เคยนับ) | ✅ |
+> | 3.2 | ระบบแจ้งปัญหา/ซัพพอร์ต + คิวแอดมิน | ✅ |
+> | 3.3 | หน้าแจ้งเตือนเต็ม + ปิดรายประเภท | ✅ |
+> | 3.4 | ยืนยันอายุจาก Google (เปิดด้วย `GOOGLE_OAUTH_REQUEST_BIRTHDAY`) | ✅ |
+> | 3.5 | Social listening ภายใน (แนวโน้ม sentiment + คำที่พูดถึงบ่อย) | ✅ |
+> | 3.6 | Apple Sign-in | ⛔ ตัดออก — แนะนำลบออกจาก userflow ให้ตรงกัน |
+> | อื่น ๆ | robots.txt กันบอท AI + rate limit อ่านตอน | ✅ |
+> | 4.1 | เทสต์ 104 ตัวผ่าน 100% + coverage report (แก้ Proposal: Jest → Vitest) | ✅ |
+> | 4.2 | k6 50 ผู้ใช้: เฉลี่ย 4.8 ms, error 0% | ✅ |
+> | 4.3 | Offline eval: Precision@10 85.8%, long-tail +94% | ✅ |
+> | 4.4 | Playwright fault-tolerance 2/2 | ✅ |
+> | 4.5 | OpenAPI สร้างจาก router จริง + Swagger UI | ✅ |
+> | 4.6 | `/health/ready` + คู่มือ deploy/uptime — **ต้อง deploy จริงแล้ววัดเอง** | ✅ (เครื่องมือ) |
+>
+> พบและแก้ระหว่างทาง: ยอดวิวไม่เคยถูกนับ, autosave ล้มเหลวแล้วงานหายเงียบ, autosave พร้อมกันชนเลขเวอร์ชัน,
+> อัปโหลดรูปในเนื้อหาตอนโดน proxy ปฏิเสธ, Navbar ล้นจอมือถือ 4px, หน้าอ่านไม่มีขอบซ้ายขวาบนมือถือ
+
 > เทียบโค้ดปัจจุบัน (branch `claude/sharp-feynman-idzpw4`) กับเอกสาร 3 ชิ้น:
 > `novel_web_app.pdf` (requirement 8 ข้อ), `Proposal_montira.docx` (ขอบเขต/KPI), `BuddyBook_Userflow.pdf`
 > วันที่วิเคราะห์: 3 ต.ค. 2569

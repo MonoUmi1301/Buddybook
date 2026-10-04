@@ -393,19 +393,27 @@ export async function autosaveChapter(
     });
   }
 
-  const latest = await prisma.chapterVersion.findFirst({
-    where: { chapter_id },
-    orderBy: { version_number: "desc" },
-    select: { version_number: true },
-  });
-  const version_number = (latest?.version_number ?? 0) + 1;
-
-  const [version, updated] = await prisma.$transaction([
-    prisma.chapterVersion.create({
-      data: { chapter_id, content_snapshot, version_number, edited_by: user_id, is_autosave: true },
+  // เลข version ถัดไปต้องอ่านแล้วค่อย insert — autosave 2 ครั้งพร้อมกันของตอนเดียว (แท็บ 2 แท็บ, keepalive ตอนปิดแท็บ
+  // ชนกับรอบ 30 วิ) เดิมได้เลขซ้ำแล้วชน unique (chapter_id, version_number) ตอบ 409 ทำให้งานรอบนั้นหาย (พบจาก k6 load test)
+  // ล็อกแถวของตอนนั้นไว้ตลอด transaction ให้ autosave ของตอนเดียวกันต่อคิวกัน (ตอนอื่นไม่โดนล็อก)
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT 1 FROM chapters WHERE chapter_id = ${chapter_id}::uuid FOR UPDATE`;
+    const latest = await tx.chapterVersion.findFirst({
+      where: { chapter_id },
+      orderBy: { version_number: "desc" },
+      select: { version_number: true },
+    });
+    const version = await tx.chapterVersion.create({
+      data: {
+        chapter_id,
+        content_snapshot,
+        version_number: (latest?.version_number ?? 0) + 1,
+        edited_by: user_id,
+        is_autosave: true,
+      },
       select: { version_id: true, version_number: true, is_autosave: true, created_at: true },
-    }),
-    prisma.chapter.update({
+    });
+    const updated = await tx.chapter.update({
       where: { chapter_id },
       data: {
         content: content_snapshot,
@@ -414,10 +422,9 @@ export async function autosaveChapter(
         updated_at: new Date(),
       },
       select: { updated_at: true },
-    }),
-  ]);
-
-  return { ...version, chapter_updated_at: updated.updated_at };
+    });
+    return { ...version, chapter_updated_at: updated.updated_at };
+  });
 }
 
 export async function listChapterVersions(chapter_id: string, user_id: string) {

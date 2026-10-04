@@ -132,3 +132,21 @@ describe("autosave edit conflict", () => {
     expect(await prisma.chapterVersion.count({ where: { chapter_id: ch.chapter_id } })).toBe(3);
   });
 });
+
+describe("concurrent autosaves", () => {
+  it("never drops a save when two arrive at once (race found by the k6 load test)", async () => {
+    const id = await makeNovel("พร้อมกัน");
+    const ch = await prisma.chapter.create({
+      data: { novel_id: id, chapter_number: 1, title: "c", content: "<p>x</p>" },
+      select: { chapter_id: true },
+    });
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        h.api("PATCH", `/chapters/${ch.chapter_id}/autosave`, author.token, { content_snapshot: `<p>${i}</p>` })
+      )
+    );
+    expect(results.map((r) => r.status)).toEqual(Array(8).fill(200));
+    const versions = await prisma.chapterVersion.findMany({ where: { chapter_id: ch.chapter_id }, select: { version_number: true } });
+    expect(versions.map((v) => v.version_number).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+});

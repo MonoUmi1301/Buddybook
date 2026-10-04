@@ -88,6 +88,11 @@ api รันงานตามเวลาใน process ของตัวเ�
 | `CHAPTER_PLATFORM_FEE_PERCENT` | 10 | ค่าธรรมเนียมแพลตฟอร์มจากการขายตอนติดเหรียญ |
 | `WITHDRAWAL_MIN_COINS` | 500 | ถอนรายได้ขั้นต่ำต่อครั้ง |
 | `COIN_TO_THB_RATE` | 1 | อัตราแลก coin → บาทตอนถอน |
+| `RECS_LONG_TAIL_LAMBDA` | 0.3 | น้ำหนัก re-ranking ดันนิยาย long-tail ในระบบแนะนำ (0 = ปิด) |
+| `RECS_LONG_TAIL_TARGET` | 0.4 | สัดส่วน long-tail เป้าหมายใน top-k |
+| `RECS_FRESH_DAYS` | 30 | นิยายที่สร้างไม่เกินกี่วันนับเป็น "มาใหม่" |
+| `CHAPTER_READ_RATE_LIMIT_PER_MIN` | 120 | เปิดอ่านตอนได้กี่ครั้ง/นาทีต่อผู้ชม (กันบอทดูดเนื้อหา) |
+| `GOOGLE_OAUTH_REQUEST_BIRTHDAY` | false | ขอวันเกิดจาก Google ตอนล็อกอินเพื่อยืนยันอายุ 18+ (sensitive scope — ต้องผ่าน Google verification) |
 
 ## การทดสอบ
 
@@ -100,8 +105,20 @@ npm run lint
 
 CI (`.github/workflows/ci.yml`) รันทั้งหมดนี้บน Postgres 16 ทุก PR + `next build` ของ web
 
+เครื่องมือประเมินผลตาม Proposal (ผลล่าสุดและวิธีอ่านผลอยู่ใน `docs/evaluation.md`):
+
+```bash
+npm run eval:recs --workspace=apps/api      # KPI-1/2 Precision@10 + long-tail (mock data, ไม่ต้องมี DB)
+npm run test:coverage --workspace=apps/api  # coverage report
+npm run test:e2e                            # KPI-3 auto-save fault tolerance (Playwright, ต้องรัน api+web + seed-e2e)
+k6 run loadtest/buddybook.k6.js             # KPI-4 load test 50 ผู้ใช้พร้อมกัน
+npm run openapi --workspace=apps/api        # เขียน docs/openapi.json (ตัวสดอยู่ที่ /api/v1/openapi.json, UI ที่ /api/v1/docs)
+```
+
 ## เอกสารอ้างอิง
 
 - Schema: `apps/api/prisma/schema.prisma` (18 models, 12 enums) + `apps/api/prisma/migrations_manual/checks.sql`
 - API contract: `API_Endpoints.md` (74 endpoints, 5 กลุ่ม)
 - Business logic / ER / DFD / Use Case ทั้งหมด: โฟลเดอร์ `buddybook_real`
+- OpenAPI: `GET /api/v1/openapi.json` (Swagger UI: `/api/v1/docs`) — สร้างจาก router จริง
+- เทียบกับ Proposal / แผนงาน: `docs/gap-analysis-plan.md`, ผลทดสอบ KPI: `docs/evaluation.md`, deploy + uptime: `docs/deployment-and-monitoring.md`

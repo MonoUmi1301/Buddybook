@@ -9,4 +9,6 @@ export interface OAuthProfile {
   email: string;
   name: string;
   picture: string | null;
+  /** gap 3.4 — วันเกิดที่ provider ยืนยันให้ (ตอนนี้มีแค่ Google People API) ใช้ยืนยันอายุ 18+ */
+  birthdate?: import("@/lib/ageVerification").BirthDate | null;
 }

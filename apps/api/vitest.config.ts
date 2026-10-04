@@ -13,6 +13,14 @@ export default defineConfig({
     // รันทีละไฟล์กันสองไฟล์แย่งกระเป๋าเงินผู้ใช้ชุดเดียวกัน
     fileParallelism: false,
     testTimeout: 30_000,
+    // npm run test:coverage — รายงานความครอบคลุมของโค้ดประกอบผลทดสอบ (Proposal 3.5.1 Unit/Integration testing)
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      exclude: ["src/server.ts", "src/types/**"],
+      reporter: ["text-summary", "json-summary", "html"],
+      reportsDirectory: "coverage",
+    },
     hookTimeout: 60_000,
   },
 });

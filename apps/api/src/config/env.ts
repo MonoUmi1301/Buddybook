@@ -35,6 +35,12 @@ const envSchema = z.object({
   // แทน (ดู lib/googleOAuth.ts, lib/lineOAuth.ts)
   GOOGLE_CLIENT_ID: z.string().default(""),
   GOOGLE_CLIENT_SECRET: z.string().default(""),
+  // gap 3.4 — ขอ scope user.birthday.read เพื่อยืนยันอายุจากบัญชี Google (เป็น sensitive scope: แอปที่ยังไม่ผ่าน
+  // Google verification จะเห็นหน้าเตือน "unverified app" — เปิดเมื่อพร้อม หรือใช้กับ test users ของ OAuth consent screen)
+  GOOGLE_OAUTH_REQUEST_BIRTHDAY: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   LINE_CLIENT_ID: z.string().default(""),
   LINE_CLIENT_SECRET: z.string().default(""),
   FACEBOOK_CLIENT_ID: z.string().default(""),
@@ -78,6 +84,8 @@ const envSchema = z.object({
   RECS_LONG_TAIL_TARGET: z.coerce.number().min(0).max(1).default(0.4),
   // นิยายที่สร้างไม่เกินกี่วันนับเป็น "มาใหม่" (candidate กลุ่ม fresh)
   RECS_FRESH_DAYS: z.coerce.number().int().positive().default(30),
+  // Requirement ข้อ 5 — กันบอทดูดเนื้อหาตอน: จำนวนครั้งที่ผู้ชมคนเดียว (user/IP) เปิดตอนได้ต่อนาที
+  CHAPTER_READ_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(120),
   // เพิ่มภายหลัง (auth hardening) — จำนวนครั้งต่อ IP ต่อ 15 นาทีของ endpoint login/register/OTP/ลืมรหัส
   AUTH_RATE_LIMIT_PER_15MIN: z.coerce.number().int().positive().default(20),
   // เพิ่มภายหลัง (ตอนติดเหรียญ) — ค่าธรรมเนียมแพลตฟอร์ม (%) หักจากราคาตอนก่อนเข้ากระเป๋านักเขียน
