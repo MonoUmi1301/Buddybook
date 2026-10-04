@@ -115,6 +115,30 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
 
   const [selected, setSelected] = React.useState(0);
 
+  // เพิ่มภายหลัง (perf) — วางเนื้อหาการ์ด (ปก) เฉพาะใบที่อยู่ในระยะมองเห็นรอบใบที่เลือก + ใบที่เคยเห็นแล้ว
+  // การ์ดห่างเกิน 1/fade ใบโปร่งใสสนิท (opacity = 1 − fade × ระยะ) แต่เดิมทุกใบ render <Image> ไว้ และเพราะ
+  // การ์ดซ้อนกันกลางกรอบแล้วกระจายด้วย transform เบราว์เซอร์จึงนับว่าทุกใบ "อยู่ในจอ" — lazy-load ไม่ทำงาน
+  // ชั้น "กำลังอ่าน" 149 เรื่องเลยโหลดปก 149 รูปทันทีที่เปิดหน้า ทั้งที่มองเห็นได้แค่ ~20 ใบ
+  // ตัวกล่องการ์ดยัง render ครบทุกใบ (ขนาด/ตำแหน่ง/การเลื่อนเหมือนเดิม) แค่ข้างในว่างจนกว่าจะเข้าใกล้
+  const reach = Math.ceil(1 / Math.max(fade, 0.05));
+  const windowAround = React.useCallback(
+    (center: number, into: Set<number>) => {
+      for (let d = -reach; d <= reach; d++) {
+        const i = loop ? (((center + d) % count) + count) % count : center + d;
+        if (i >= 0 && i < count) into.add(i);
+      }
+      return into;
+    },
+    [count, loop, reach]
+  );
+  const [mounted, setMounted] = React.useState<ReadonlySet<number>>(() => windowAround(0, new Set()));
+  React.useEffect(() => {
+    setMounted((prev) => {
+      const next = windowAround(selected, new Set(prev));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [selected, windowAround]);
+
   const indexAt = React.useCallback((pos: number) => ((Math.round(pos) % count) + count) % count, [count]);
 
   const paint = React.useCallback(() => {
@@ -374,7 +398,7 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
                 )}
                 style={{ width: "var(--cf-card)", aspectRatio }}
               >
-                {renderCard ? (
+                {!mounted.has(index) ? null : renderCard ? (
                   renderCard(slide, index, index === selected)
                 ) : (
                   <Image
