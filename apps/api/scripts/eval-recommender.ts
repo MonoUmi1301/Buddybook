@@ -11,11 +11,13 @@
  *   - Neo4j: query ของสคริปต์รันใน session.executeRead (READ access mode) ส่วน getRecommendations()
  *     ของแอปเป็น MATCH/RETURN ล้วน และสคริปต์เทียบจำนวน node/relationship ก่อน-หลังรันเพื่อยืนยัน
  *
- * สิ่งที่ประเมิน:
- *   1. Correctness — จำนวนข้อมูล Postgres vs Neo4j, ความคล้ายของ 20 คู่ผู้ใช้ (คำนวณเองเทียบ Neo4j),
+ * สิ่งที่ประเมิน (ระบบแนะนำ v2 — READ.sentiment_score คือขั้วความรู้สึกรวม −1..1 ดู lib/sentiment.ts):
+ *   1. Correctness — จำนวนข้อมูล Postgres vs Neo4j (READ = ประวัติการอ่าน ∪ รีวิว ∪ คอมเมนต์ ของนิยายที่ published),
+ *      ความคล้ายของ 20 คู่ผู้ใช้ (ขั้วรวมคำนวณเองจาก Postgres เทียบ Neo4j),
  *      คำแนะนำจริงจาก getRecommendations() ห้ามมีเรื่องที่อ่านแล้ว/ไม่ published/ของตัวเอง, latency
  *   2. Offline eval ของ collaborative filtering (Q2) ที่ threshold ต่าง ๆ เทียบ popularity baseline
- *      แบ่งข้อมูลต่อผู้ใช้ตามเวลา train/val/test, ความคล้ายคำนวณจาก train เท่านั้น
+ *      แบ่งข้อมูลต่อผู้ใช้ตามเวลา train/val/test, ความคล้ายคำนวณจาก train เท่านั้น (ใช้ขั้วของรีวิว)
+ *   ภาพรวม Precision@10 / long-tail ของทั้ง pipeline (รวม re-rank) ดู scripts/eval-recs.ts
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -36,11 +38,13 @@ const CFG = {
   authorSample: 20,
   similarityPairs: 20,
   seed: argNum("seed", 42),
-  thresholds: [0.01, 0.03, 0.05, 0.07, 0.1],
+  /** ระยะ |Δขั้ว| บนสเกล −1..1 — ระบบจริงใช้ 0.3 (Q2_MAX_DISTANCE) */
+  thresholds: [0.1, 0.2, 0.3, 0.4, 0.5],
   ks: [5, 10],
   topNNeighbors: 10,
-  /** เกณฑ์ของ Q2 ในระบบจริง — candidate ต้องมี sentiment ของเพื่อนบ้าน > ค่านี้ */
-  candidateMinSentiment: 0.5,
+  /** เกณฑ์ของ Q2 ในระบบจริง — candidate ต้องมีขั้วของเพื่อนบ้าน > ค่านี้ */
+  q2MaxDistance: 0.3,
+  candidateMinSentiment: 0.3,
   relevantMinRating: 4,
   minUserCoverage: 0.8,
   minUsersForSignificance: 30,
@@ -97,16 +101,22 @@ interface ReviewRow {
 }
 
 async function loadPostgres(prisma: PrismaClient) {
-  const [users, novels, novelTags, interests, reviews, library, progress] = await Promise.all([
+  // import หลังตั้ง DATABASE_URL แบบ read-only แล้ว (sentiment.ts ดึง prisma ของแอปมาด้วย)
+  const { combinePolarity } = await import("@/lib/sentiment");
+  const [users, novels, novelTags, interests, reviews, library, progress, comments] = await Promise.all([
     prisma.user.findMany({ select: { user_id: true } }),
     prisma.novel.findMany({ select: { novel_id: true, author_id: true, visibility: true } }),
     prisma.novelTag.findMany({ select: { novel_id: true, tag: { select: { name: true } } } }),
     prisma.userInterest.findMany({ select: { user_id: true, tag: { select: { name: true } } } }),
     prisma.review.findMany({
-      select: { user_id: true, novel_id: true, rating: true, sentiment_score: true, created_at: true },
+      select: { user_id: true, novel_id: true, rating: true, sentiment_polarity: true, created_at: true },
     }),
     prisma.userLibrary.findMany({ select: { user_id: true, novel_id: true } }),
     prisma.readingProgress.findMany({ select: { user_id: true, novel_id: true } }),
+    prisma.comment.findMany({
+      where: { sentiment_polarity: { not: null } },
+      select: { user_id: true, sentiment_polarity: true, chapter: { select: { novel_id: true } } },
+    }),
   ]);
 
   const published = new Set(novels.filter((n) => n.visibility === "published").map((n) => n.novel_id));
@@ -127,13 +137,29 @@ async function loadPostgres(prisma: PrismaClient) {
     user_id: r.user_id,
     novel_id: r.novel_id,
     rating: r.rating,
-    sentiment: r.sentiment_score,
+    sentiment: r.sentiment_polarity,
     t: r.created_at.getTime(),
   }));
 
-  return { users, novels, novelTags, interests, reviews: reviewRows, published, authorOf, tagsOf, readAny };
+  // เส้น READ ที่ควรมีใน Neo4j ตาม fullResync(): คู่ (user, novel published) จากประวัติการอ่าน ∪ รีวิว ∪ คอมเมนต์
+  // พร้อมขั้วรวม combinePolarity(รีวิว, ค่าเฉลี่ยคอมเมนต์)
+  const edgeParts = new Map<string, { review: number | null; comments: number[] }>();
+  const part = (user_id: string, novel_id: string) => {
+    const key = `${user_id}|${novel_id}`;
+    return edgeParts.get(key) ?? edgeParts.set(key, { review: null, comments: [] }).get(key)!;
+  };
+  for (const p of progress) part(p.user_id, p.novel_id);
+  for (const r of reviews) part(r.user_id, r.novel_id).review = r.sentiment_polarity;
+  for (const c of comments) part(c.user_id, c.chapter.novel_id).comments.push(c.sentiment_polarity as number);
+  const readEdges = new Map<string, number | null>();
+  for (const [key, v] of edgeParts) {
+    if (pg_published(published, key)) readEdges.set(key, combinePolarity(v.review, v.comments));
+  }
+
+  return { users, novels, novelTags, interests, reviews: reviewRows, published, authorOf, tagsOf, readAny, readEdges };
 }
 type PgData = Awaited<ReturnType<typeof loadPostgres>>;
+const pg_published = (published: Set<string>, pairKey: string) => published.has(pairKey.split("|")[1]);
 
 // ---------------------------------------------------------------------------
 // Neo4j (READ access mode)
@@ -175,8 +201,7 @@ async function compareCounts(session: Session, pg: PgData) {
   const g = await graphFingerprint(session);
   const pubTags = pg.novelTags.filter((nt) => pg.published.has(nt.novel_id));
   const tagNames = new Set([...pubTags.map((nt) => nt.tag.name), ...pg.interests.map((i) => i.tag.name)]);
-  const readPairs = new Set(pg.reviews.map((r) => `${r.user_id}|${r.novel_id}`));
-  const scoredPairs = new Set(pg.reviews.filter((r) => r.sentiment !== null).map((r) => `${r.user_id}|${r.novel_id}`));
+  const scoredPairs = [...pg.readEdges.values()].filter((v) => v !== null).length;
   const scoredInGraph = toNum(
     (await readCypher(session, "MATCH ()-[r:READ]->() WHERE r.sentiment_score IS NOT NULL RETURN count(r) AS c"))[0].get("c")
   );
@@ -187,8 +212,8 @@ async function compareCounts(session: Session, pg: PgData) {
     { item: "Tag (ที่ถูกใช้)", postgres: tagNames.size, neo4j: g.Tag ?? 0 },
     { item: "HAS_TAG", postgres: pubTags.length, neo4j: g.HAS_TAG ?? 0 },
     { item: "INTERESTED_IN", postgres: pg.interests.length, neo4j: g.INTERESTED_IN ?? 0 },
-    { item: "READ (คู่ user–novel ที่มีรีวิว)", postgres: readPairs.size, neo4j: g.READ ?? 0 },
-    { item: "READ ที่มี sentiment_score", postgres: scoredPairs.size, neo4j: scoredInGraph },
+    { item: "READ (อ่าน ∪ รีวิว ∪ คอมเมนต์)", postgres: pg.readEdges.size, neo4j: g.READ ?? 0 },
+    { item: "READ ที่มี sentiment_score (ขั้วรวม)", postgres: scoredPairs, neo4j: scoredInGraph },
   ];
 
   // id ที่อยู่ฝั่งเดียว (node ผี / ยังไม่ sync)
@@ -215,20 +240,22 @@ interface PairResult {
   shared_neo4j: number;
   min_dist_ts: number;
   min_dist_neo4j: number;
-  within_005_ts: number;
-  within_005_neo4j: number;
+  within_ts: number;
+  within_neo4j: number;
   match: boolean;
 }
 
-/** "ความคล้าย" ที่ระบบใช้จริงคือระยะ |Δsentiment| ต่อเรื่องที่อ่านร่วมกัน (ไม่มีค่ารวมต่อคู่)
- *  จึงเทียบ 3 ค่าต่อคู่: จำนวนเรื่องร่วม, ระยะต่ำสุด, จำนวนเรื่องร่วมที่ระยะ <= 0.05 (เกณฑ์จริงของ Q2) */
+/** "ความคล้าย" ที่ Q2 ใช้คือระยะ |Δขั้ว| ต่อเรื่องที่อ่านร่วมกัน (ขั้วรวมของเส้น READ)
+ *  จึงเทียบ 3 ค่าต่อคู่: จำนวนเรื่องร่วม, ระยะต่ำสุด, จำนวนเรื่องร่วมที่ระยะ <= 0.3 (เกณฑ์จริงของ Q2) */
 async function compareSimilarity(session: Session, pg: PgData): Promise<PairResult[]> {
-  const byNovel = new Map<string, ReviewRow[]>();
-  const byUser = new Map<string, ReviewRow[]>();
-  for (const r of pg.reviews) {
-    if (r.sentiment === null) continue;
-    (byNovel.get(r.novel_id) ?? byNovel.set(r.novel_id, []).get(r.novel_id)!).push(r);
-    (byUser.get(r.user_id) ?? byUser.set(r.user_id, []).get(r.user_id)!).push(r);
+  const byNovel = new Map<string, { user_id: string; novel_id: string; sentiment: number }[]>();
+  const byUser = new Map<string, { user_id: string; novel_id: string; sentiment: number }[]>();
+  for (const [key, sentiment] of pg.readEdges) {
+    if (sentiment === null) continue;
+    const [user_id, novel_id] = key.split("|");
+    const r = { user_id, novel_id, sentiment };
+    (byNovel.get(novel_id) ?? byNovel.set(novel_id, []).get(novel_id)!).push(r);
+    (byUser.get(user_id) ?? byUser.set(user_id, []).get(user_id)!).push(r);
   }
 
   // สุ่มคู่ที่อ่านเรื่องเดียวกันอย่างน้อย 1 เรื่อง (คู่ที่ไม่มีเรื่องร่วม ระบบไม่มีทางจับคู่อยู่แล้ว)
@@ -247,19 +274,19 @@ async function compareSimilarity(session: Session, pg: PgData): Promise<PairResu
   const results: PairResult[] = [];
   for (const key of pairs) {
     const [a, b] = key.split("|");
-    const sb = new Map(byUser.get(b)!.map((r) => [r.novel_id, r.sentiment as number]));
+    const sb = new Map(byUser.get(b)!.map((r) => [r.novel_id, r.sentiment]));
     const dists = byUser
       .get(a)!
       .filter((r) => sb.has(r.novel_id))
-      .map((r) => Math.abs((r.sentiment as number) - sb.get(r.novel_id)!));
+      .map((r) => Math.abs(r.sentiment - sb.get(r.novel_id)!));
     const rec = (
       await readCypher(
         session,
         `MATCH (a:User {user_id: $a})-[r1:READ]->(n:Novel)<-[r2:READ]-(b:User {user_id: $b})
          WHERE r1.sentiment_score IS NOT NULL AND r2.sentiment_score IS NOT NULL
          WITH abs(r1.sentiment_score - r2.sentiment_score) AS d
-         RETURN count(d) AS shared, min(d) AS min_dist, sum(CASE WHEN d <= 0.05 THEN 1 ELSE 0 END) AS within`,
-        { a, b }
+         RETURN count(d) AS shared, min(d) AS min_dist, sum(CASE WHEN d <= $thr THEN 1 ELSE 0 END) AS within`,
+        { a, b, thr: CFG.q2MaxDistance }
       )
     )[0];
     const row: PairResult = {
@@ -269,14 +296,15 @@ async function compareSimilarity(session: Session, pg: PgData): Promise<PairResu
       shared_neo4j: toNum(rec.get("shared")),
       min_dist_ts: dists.length ? Math.min(...dists) : NaN,
       min_dist_neo4j: toNum(rec.get("min_dist")),
-      within_005_ts: dists.filter((d) => d <= 0.05).length,
-      within_005_neo4j: toNum(rec.get("within")),
+      within_ts: dists.filter((d) => d <= CFG.q2MaxDistance).length,
+      within_neo4j: toNum(rec.get("within")),
       match: false,
     };
     row.match =
       row.shared_ts === row.shared_neo4j &&
-      row.within_005_ts === row.within_005_neo4j &&
-      Math.abs(row.min_dist_ts - row.min_dist_neo4j) < 1e-9;
+      row.within_ts === row.within_neo4j &&
+      // ขั้วรวมเป็นค่าเฉลี่ยถ่วงน้ำหนัก (float) — ยอมคลาดเล็กน้อยจากลำดับการบวก
+      Math.abs(row.min_dist_ts - row.min_dist_neo4j) < 1e-6;
     results.push(row);
   }
   return results;
@@ -310,7 +338,8 @@ async function checkLiveRecommendations(pg: PgData): Promise<SanityResult> {
     const t = performance.now();
     const rec = await getRecommendations(user_id);
     times.push(performance.now() - t);
-    for (const [name, items] of Object.entries(rec) as [string, readonly { novel_id: string }[]][]) {
+    for (const [name, items] of Object.entries(rec)) {
+      if (!Array.isArray(items)) continue; // meta (long_tail_share ฯลฯ) ไม่ใช่รายการ
       const s = (lists[name] ??= { usersWithItems: 0, items: 0, reviewed: 0, readInLibrary: 0, unpublished: 0, self: 0, duplicates: 0 });
       if (items.length) s.usersWithItems++;
       s.items += items.length;
@@ -371,7 +400,7 @@ interface Neighbor {
 }
 
 /** คำนวณจาก train เท่านั้น: เพื่อนบ้านของ user ที่ threshold หนึ่ง ตามกฎของ Q2
- *  (มีเรื่องที่อ่านร่วมอย่างน้อย 1 เรื่องที่ |Δsentiment| <= threshold) */
+ *  (มีเรื่องที่รีวิวร่วมอย่างน้อย 1 เรื่องที่ |Δขั้ว| <= threshold — ใช้ขั้วของรีวิวเพราะต้องแบ่งตามเวลาได้) */
 function neighborsFor(
   user: string,
   trainByUser: Map<string, ReviewRow[]>,
@@ -399,8 +428,8 @@ interface RankedList {
   neighbors: number;
 }
 
-/** จำลอง Q2: candidate = เรื่องที่เพื่อนบ้านให้ sentiment > 0.5 และมีแท็กร่วมกับเรื่องที่อ่านร่วม
- *  ระบบจริงไม่มี ORDER BY (LIMIT 10 ลำดับไม่แน่นอน) — ที่นี่เรียงตามจำนวนเพื่อนบ้านที่แนะนำ แล้วตาม popularity */
+/** จำลอง Q2 ของ v2: candidate = เรื่องที่เพื่อนบ้านให้ขั้ว > 0.3 ที่ผู้ใช้ยังไม่อ่าน
+ *  เรียงตามจำนวนเพื่อนบ้านที่สนับสนุน (ORDER BY supporters DESC เหมือนระบบจริง) แล้วตาม popularity */
 function collaborative(
   user: string,
   exclude: Set<string>,
@@ -415,16 +444,11 @@ function collaborative(
       .slice(0, topN);
   }
   const score = new Map<string, number>();
-  for (const [nbId, nb] of chosen) {
-    const sharedTags = new Set<string>();
-    for (const n of nb.matched) for (const t of ctx.pg.tagsOf.get(n) ?? []) sharedTags.add(t);
+  for (const [nbId] of chosen) {
     for (const cand of ctx.trainByUser.get(nbId) ?? []) {
       if (cand.sentiment === null || cand.sentiment <= CFG.candidateMinSentiment) continue;
       const c = cand.novel_id;
       if (exclude.has(c) || !ctx.pg.published.has(c) || ctx.pg.authorOf.get(c) === user) continue;
-      let tagOk = false;
-      for (const t of ctx.pg.tagsOf.get(c) ?? []) if (sharedTags.has(t)) { tagOk = true; break; }
-      if (!tagOk) continue;
       score.set(c, (score.get(c) ?? 0) + 1);
     }
   }
@@ -607,18 +631,18 @@ function metricsTable(rows: MetricRow[]) {
   return `${header}\n${body}`;
 }
 
-const STEP0 = `## 0. ระบบแนะนำปัจจุบันทำงานอย่างไร (อ่านจาก \`apps/api/src/modules/recommendations/recommendations.service.ts\`)
+const STEP0 = `## 0. ระบบแนะนำปัจจุบันทำงานอย่างไร (v2 — \`recommendations.service.ts\` + \`ranking.ts\`)
 
 | คำถาม | คำตอบ |
 |---|---|
-| สูตร similarity | **ไม่มีสูตรมาตรฐาน** (ไม่ใช่ Jaccard / cosine / Pearson / GDS nodeSimilarity) Q2 ใช้ระยะ \`abs(r1.sentiment_score - r2.sentiment_score)\` **ทีละเรื่องที่อ่านร่วมกัน** ไม่มีค่ารวมต่อคู่ผู้ใช้ |
-| threshold | แบบ **ระยะห่าง \`<= 0.05\`** — เป็นเพื่อนบ้านทันทีถ้ามีเรื่องร่วม **อย่างน้อย 1 เรื่อง** ที่ sentiment ต่างกันไม่เกิน 0.05 |
-| topK เพื่อนบ้าน | **ไม่มี** ใช้เพื่อนบ้านทุกคนที่ผ่านเกณฑ์ ผลลัพธ์ตัดที่ \`LIMIT 10\` โดย **ไม่มี ORDER BY** (ลำดับ/ชุดที่ได้ไม่แน่นอน) |
-| candidate (Q2) | เรื่องที่เพื่อนบ้านให้ \`sentiment_score > 0.5\`, ผู้ใช้ยังไม่มีเส้น READ และ **มีแท็กร่วม** กับเรื่องที่อ่านร่วม |
-| สัญญาณที่ใช้ | **รีวิวเท่านั้น** (เส้น \`READ\` สร้างจากตาราง reviews พร้อม \`sentiment_score\`) + \`INTERESTED_IN\` (แท็กตอน onboarding) + \`HAS_TAG\` — **ไม่ใช้** like, ชั้นหนังสือ, reading progress และไม่ใช้ \`rating\` (sync ไม่ได้ส่ง rating เข้า Neo4j แม้คอมเมนต์ใน neo4j.ts จะเขียนไว้) |
-| Q1 content-based | แท็กที่สนใจ ∩ แท็กนิยาย, ตัดเรื่องที่มีเส้น READ, \`LIMIT 10\` ไม่มี ORDER BY |
-| Q3 underrated | avg sentiment >= 0.5 เรียง avg desc แล้วจำนวนคนอ่าน asc, \`LIMIT 10\` |
-| "อ่านแล้ว" ในทุก query | = มีรีวิว (เส้น READ) เท่านั้น — เรื่องที่อยู่ในชั้นหนังสือ/กำลังอ่านแต่ไม่ได้รีวิว **ยังถูกแนะนำได้** |
+| ค่าบนเส้น READ | \`sentiment_score\` = **ขั้วความรู้สึกรวม −1..1** (รีวิว 0.6 + ค่าเฉลี่ยคอมเมนต์ 0.4, \`lib/sentiment.ts\`) — null ถ้ายังไม่มีผลวิเคราะห์ |
+| เส้น READ มาจาก | ประวัติการอ่าน (เปิดอ่านตอนแรก) ∪ รีวิว ∪ คอมเมนต์ ของนิยายที่ published — "อ่านแล้ว" จึงรวมเรื่องที่อ่านแต่ไม่ได้รีวิว |
+| similarity (Q2) | ระยะ \`abs(r1.sentiment_score - r2.sentiment_score) <= ${CFG.q2MaxDistance}\` ทีละเรื่องที่อ่านร่วมกัน (เพื่อนบ้าน = มีอย่างน้อย 1 เรื่องที่ผ่าน) |
+| candidate (Q2) | เรื่องที่เพื่อนบ้านให้ขั้ว \`> ${CFG.candidateMinSentiment}\` และผู้ใช้ยังไม่มีเส้น READ เรียงตามจำนวนเพื่อนบ้านที่สนับสนุน |
+| Q1 interest | แท็กที่สนใจ ∩ แท็กนิยาย เรียงตามจำนวนแท็กที่ตรง |
+| Q3 hidden gem | ขั้วเฉลี่ย \`>= 0.3\` เรียงจากคนอ่านน้อยก่อน |
+| เพิ่มเติม (Postgres) | นิยายใหม่ (fresh) + fallback ยอดนิยมเมื่อ Neo4j ล่ม |
+| จัดอันดับ | \`relevanceScore\` (ไม่ใช้ยอดวิวเป็นสัญญาณบวก) → \`rerankLongTail\` (λ, เป้าสัดส่วน long-tail) → \`items\` + 3 key เดิมแยกตามแหล่ง |
 `;
 
 function writeOutputs(
@@ -680,11 +704,11 @@ function writeOutputs(
   md.push(
     `### 1.2 ความคล้ายของ ${ctx.pairs.length} คู่ผู้ใช้: คำนวณเองจาก Postgres vs Neo4j ${pairMismatch ? `— ❌ ไม่ตรง ${pairMismatch} คู่` : "— ✅ ตรงทุกคู่"}\n`
   );
-  md.push("เทียบ 3 ค่าที่ Q2 ใช้จริง: จำนวนเรื่องที่อ่านร่วม, ระยะ |Δsentiment| ต่ำสุด, จำนวนเรื่องร่วมที่ระยะ <= 0.05\n");
-  md.push("| user A | user B | ร่วม (TS/Neo4j) | ระยะต่ำสุด (TS/Neo4j) | <= 0.05 (TS/Neo4j) | ตรง |\n|---|---|---|---|---|---|");
+  md.push(`เทียบ 3 ค่าที่ Q2 ใช้จริง (ขั้วรวมของเส้น READ): จำนวนเรื่องที่อ่านร่วม, ระยะ |Δขั้ว| ต่ำสุด, จำนวนเรื่องร่วมที่ระยะ <= ${CFG.q2MaxDistance}\n`);
+  md.push(`| user A | user B | ร่วม (TS/Neo4j) | ระยะต่ำสุด (TS/Neo4j) | <= ${CFG.q2MaxDistance} (TS/Neo4j) | ตรง |\n|---|---|---|---|---|---|`);
   for (const p of ctx.pairs) {
     md.push(
-      `| ${p.a.slice(0, 8)} | ${p.b.slice(0, 8)} | ${p.shared_ts} / ${p.shared_neo4j} | ${fmt(p.min_dist_ts)} / ${fmt(p.min_dist_neo4j)} | ${p.within_005_ts} / ${p.within_005_neo4j} | ${p.match ? "✅" : "❌"} |`
+      `| ${p.a.slice(0, 8)} | ${p.b.slice(0, 8)} | ${p.shared_ts} / ${p.shared_neo4j} | ${fmt(p.min_dist_ts)} / ${fmt(p.min_dist_neo4j)} | ${p.within_ts} / ${p.within_neo4j} | ${p.match ? "✅" : "❌"} |`
     );
   }
 
@@ -747,7 +771,8 @@ function writeOutputs(
   md.push(
     [
       "- แบ่งตามเวลา **ต่อผู้ใช้** ตามที่กำหนด — train ของผู้ใช้คนหนึ่งอาจเกิดหลัง test ของอีกคน (รั่วข้ามผู้ใช้ตามเวลาได้เล็กน้อย) ถ้าต้องการเข้มงวดกว่านี้ควรตัดด้วยเวลาเดียวทั้งระบบ",
-      "- ข้อมูลชุด `@scale.buddybook.local` เป็นข้อมูลจำลอง: sentiment_score ถูกสร้างจาก rating + noise เล็กน้อย จึงสัมพันธ์กับ rating สูงกว่าข้อมูลจริงจาก NLP",
+      "- ข้อมูลชุด `@scale.buddybook.local` เป็นข้อมูลจำลอง: sentiment ถูกสร้างจาก rating + noise เล็กน้อย จึงสัมพันธ์กับ rating สูงกว่าข้อมูลจริงจาก NLP",
+      "- offline eval (ข้อ 2) จำลอง Q2 จากขั้วของรีวิวเท่านั้น (คอมเมนต์ไม่มี rating ให้ใช้เป็น ground truth) และไม่รวม re-rank — ผลทั้ง pipeline ดู `npm run eval:recs`",
       "- ประเมินเฉพาะ Q2 (collaborative) ที่มี threshold — Q1 (content-based) และ Q3 (underrated) ตรวจแค่ความถูกต้องในข้อ 1.3",
     ].join("\n") + "\n"
   );
