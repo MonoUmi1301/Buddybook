@@ -57,7 +57,7 @@ export function NovelsList({ initialNovels }: NovelsListProps) {
       {novels.map((n) => (
         <li
           key={n.novel_id}
-          className="flex items-center gap-4 rounded-card border border-neutral-200 p-3"
+          className="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-card border border-neutral-200 p-3 sm:flex-nowrap"
         >
           <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
             {n.cover_image_url && (
@@ -65,13 +65,14 @@ export function NovelsList({ initialNovels }: NovelsListProps) {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-neutral-900">{n.title}</p>
+            <p className="line-clamp-2 text-sm font-semibold text-neutral-900">{n.title}</p>
             <p className="text-xs text-neutral-500">โดย {n.author.username}</p>
             <span className="mt-1 inline-block rounded-pill bg-neutral-100 px-2 py-0.5 text-[11px] text-neutral-600">
               {legalStatusLabel[n.legal_status] ?? n.legal_status}
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          {/* จอแคบ: ปุ่มขึ้นบรรทัดใหม่ ไม่งั้นบีบชื่อนิยายจนอ่านไม่ออกว่ากำลังอนุมัติเรื่องไหน */}
+          <div className="flex w-full shrink-0 items-center justify-end gap-2 sm:w-auto">
             <QuickAddPopover placeholder="เหตุผลที่ปฏิเสธ" onSubmit={(reason) => reject(n.novel_id, reason)}>
               {(open) => (
                 <Button
