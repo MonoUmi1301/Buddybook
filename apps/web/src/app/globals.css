@@ -63,3 +63,59 @@
     scrollbar-width: none;
   }
 }
+
+/* BearLoader (components/ui/BearLoader.tsx) — หมีอ่านหนังสือ หน้าโหลดของทั้งเว็บ */
+.bb-bear {
+  animation: bb-bear-bob 2.4s ease-in-out infinite;
+}
+.bb-bear-eyes {
+  animation: bb-bear-read 2.4s ease-in-out infinite;
+}
+.bb-bear-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bb-bear-blink 4.8s ease-in-out infinite;
+}
+.bb-bear-page {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: bb-bear-flip 2.4s ease-in-out infinite;
+}
+.bb-bear-dots::after {
+  content: "";
+  display: inline-block;
+  width: 1.5em;
+  text-align: left;
+  animation: bb-bear-dots 1.2s steps(4, end) infinite;
+}
+@keyframes bb-bear-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes bb-bear-read {
+  0%, 15% { transform: translateX(-2.5px); }
+  55%, 70% { transform: translateX(2.5px); }
+  100% { transform: translateX(-2.5px); }
+}
+@keyframes bb-bear-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+/* พลิกจากหน้าขวาข้ามสันไปทับหน้าซ้าย แล้วหายไปก่อนเริ่มแผ่นใหม่ */
+@keyframes bb-bear-flip {
+  0%, 55% { transform: scaleX(1); fill: #fff8ee; opacity: 1; }
+  77% { transform: scaleX(0); fill: #eadbc6; }
+  97% { transform: scaleX(-1); fill: #fff8ee; opacity: 1; }
+  100% { transform: scaleX(-1); opacity: 0; }
+}
+@keyframes bb-bear-dots {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75% { content: "..."; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bb-bear, .bb-bear-eyes, .bb-bear-blink, .bb-bear-page, .bb-bear-dots::after {
+    animation: none;
+  }
+}
