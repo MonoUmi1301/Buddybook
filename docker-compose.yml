@@ -2,6 +2,9 @@
 #
 #   DB อย่างเดียว (postgres + neo4j):   docker compose up -d
 #   ทั้งหมด (+ api + web):              docker compose --profile app up -d
+#   web แบบ production (เปลี่ยนหน้าเร็ว): docker compose --profile prod up -d
+#     next build ครั้งเดียวตอน start (หลายนาที) แล้ว next start — ไม่มี hot reload แก้โค้ดแล้วต้อง restart web-prod
+#     ใช้แทน --profile app (port 3000 ชนกัน) — next dev ใน Docker บน Windows ช้าเพราะอ่านไฟล์ผ่าน bind mount
 #
 # api/web อยู่ใน profile "app" — ไม่ใส่ profile จะได้แค่ DB แล้วรัน api/web ด้วย Node บนเครื่องได้
 # ขีดจำกัด resource ตั้งไว้สำหรับเครื่องสเปคต่ำ รวมทั้งหมดราว 3.8 GB (ดูตารางใน docker/README.md)
@@ -86,6 +89,7 @@ services:
   api:
     <<: *node-app
     working_dir: /app/apps/api
+    profiles: ["app", "prod"]
     # prisma generate ในนี้ทุกครั้ง — ได้ engine ของ linux-musl ตรงกับ container (ไม่ใช่ของ Windows)
     command: sh -c "npx prisma generate && npx nodemon --config nodemon.docker.json"
     env_file:
@@ -131,7 +135,9 @@ services:
       - /app/node_modules
       - /app/apps/web/node_modules
       # .next แยกเป็น volume — ห้ามแชร์กับ next dev ที่รันบนเครื่อง (สองตัวเขียนพร้อมกันแล้ว cache พัง)
-      - /app/apps/web/.next
+      # ต้องเป็น named volume: anonymous volume ถูกสร้างใหม่ทุกครั้งที่ compose สร้าง container ใหม่
+      # cache ของ webpack หายหมด ทุกหน้าต้อง compile ใหม่ตั้งแต่ศูนย์ (หน้าละ 10-40 วิ)
+      - webnext:/app/apps/web/.next
     depends_on:
       - api
     deploy:
@@ -139,6 +145,31 @@ services:
         limits:
           memory: 1536M
           cpus: "1.5"
+
+  web-prod:
+    <<: *node-app
+    profiles: ["prod"]
+    working_dir: /app/apps/web
+    # build ทุกครั้งที่ container start — แก้โค้ดแล้ว `docker compose --profile prod restart web-prod`
+    command: sh -c "npx next build && npx next start -H 0.0.0.0 -p 3000"
+    environment:
+      API_URL: http://api:4000
+      NODE_OPTIONS: --max-old-space-size=1536
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      # แยกจาก webnext ของ next dev — build output ของ prod กับ dev ห้ามปนกัน
+      - webnextprod:/app/apps/web/.next
+    depends_on:
+      - api
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
 
   # เพิ่มภายหลัง — Python NLP Worker (WangchanBERTa) poll /internal/nlp/pending-queue ของ api แล้วส่ง sentiment กลับ
   # อยู่ใน profile "nlp" แยก เพราะต้องมีโฟลเดอร์โมเดล fine-tuned (~400MB อยู่นอก repo) และกินแรมมาก
@@ -170,3 +201,5 @@ services:
 volumes:
   pgdata:
   neo4jdata:
+  webnext:
+  webnextprod:
