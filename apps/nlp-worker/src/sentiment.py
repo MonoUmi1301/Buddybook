@@ -21,7 +21,8 @@ class SentimentAnalyzer:
     """
     โมเดล fine-tuned จริงจาก buddybook_real/My_Novel_Project/my_final_sentiment_model
     (เทรนใน novel_codetrainSentiment.ipynb บน novel_dataset.csv + pythainlp/wisesight_sentiment
-    รวม ~22k ตัวอย่าง — 99.33% accuracy บน held-out test set)
+    รวม ~22k ตัวอย่าง) — notebook รายงาน 99.33% แต่ชุดทดสอบนั้นซ้ำกับชุดเทรนเกือบทั้งหมด
+    ผลบนชุดทดสอบแยกดู eval/evaluate.py และ docs/evaluation.md
     """
 
     def __init__(self, model_path: str):
