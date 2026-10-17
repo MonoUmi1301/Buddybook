@@ -24,6 +24,7 @@ export function computeWordCount(content?: string | null): number {
 }
 
 const TEASER_MAX_CHARS = 200;
+const TEASER_MAX_RATIO = 0.3;
 const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", nbsp: " " };
 
 /** เพิ่มภายหลัง (ตอนติดเหรียญ) — ตัวอย่างสั้น ๆ ของตอนที่ยังไม่ได้ซื้อ เป็น plain text (ไม่ใช่ HTML)
@@ -34,10 +35,13 @@ export function buildTeaser(content?: string | null): string {
     .replace(/&(amp|lt|gt|quot|#39|nbsp);/g, (_m, name: string) => HTML_ENTITIES[name])
     .replace(/\s+/g, " ")
     .trim();
-  if (text.length <= TEASER_MAX_CHARS) return text;
-  const cut = text.slice(0, TEASER_MAX_CHARS);
+  // ตัวอย่างต้องไม่เกิน 30% ของตอน — เดิมตอนที่สั้นกว่า 200 ตัวอักษรได้ทั้งตอนเป็น "ตัวอย่าง" ฟรี
+  // (เจอจาก e2e: ตอนติดเหรียญสั้น ๆ อ่านได้ครบโดยไม่ต้องซื้อ)
+  const limit = Math.min(TEASER_MAX_CHARS, Math.floor(text.length * TEASER_MAX_RATIO));
+  if (limit < 1) return "";
+  const cut = text.slice(0, limit);
   const lastSpace = cut.lastIndexOf(" ");
-  return `${(lastSpace > TEASER_MAX_CHARS / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+  return `${(lastSpace > limit / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 async function assertNovelOwner(novel_id: string, user_id: string) {

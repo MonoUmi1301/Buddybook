@@ -1,15 +1,27 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { loadStripe, type Stripe } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { X } from "lucide-react";
 import type { CoinPackage } from "@/components/wallet/CoinPackageRow";
 import { errorText } from "@/lib/formatApiError";
 
-// เพิ่มภายหลัง (audit fix — เปลี่ยนจาก SlipOK/อัปโหลดสลิปมาใช้ Stripe) — โหลด Stripe.js แค่ครั้งเดียว
-// ระดับโมดูล ไม่ใช่ทุกครั้งที่ component render (ตามที่ Stripe แนะนำ กัน re-init ไม่จำเป็น)
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "");
+// โหลด Stripe.js ครั้งเดียวต่อหน้า แต่โหลดตอนเปิดแผงจ่ายเงินจริงเท่านั้น — เดิมโหลดตั้งแต่ import โมดูล
+// (ทุกครั้งที่เข้า /wallet) ถ้าโหลดไม่ได้ (ad blocker บล็อก js.stripe.com / เน็ตหลุด) จะเป็น unhandled
+// rejection เด้ง error ทั้งหน้าโดยที่ผู้ใช้ยังไม่ได้กดอะไร ตอนนี้จับไว้แล้วแสดงข้อความในแผงแทน
+let stripePromise: Promise<Stripe | null> | null = null;
+function getStripe(): Promise<Stripe | null> {
+  if (!stripePromise) {
+    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "").catch(() => {
+      stripePromise = null; // เปิดแผงใหม่แล้วลองโหลดอีกรอบได้
+      return null;
+    });
+  }
+  return stripePromise;
+}
+
+const STRIPE_LOAD_ERROR = "โหลดระบบชำระเงินไม่ได้ ถ้าเปิดตัวบล็อกโฆษณาอยู่ ลองปิดสำหรับเว็บนี้แล้วลองใหม่";
 
 interface StripeCheckoutPanelProps {
   pkg: CoinPackage;
@@ -24,6 +36,17 @@ interface StripeCheckoutPanelProps {
 export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stripe] = useState(getStripe);
+
+  useEffect(() => {
+    let cancelled = false;
+    stripe.then((s) => {
+      if (!s && !cancelled) setError(STRIPE_LOAD_ERROR);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [stripe]);
 
   // ref เก็บ request ไว้ — StrictMode (dev) รัน effect สองรอบ ถ้ายิงใหม่ทุกรอบจะได้ 2 Checkout Session
   // ต่อการเปิดแผงหนึ่งครั้ง (ของเดิมเป็นแบบนั้น) ให้ทั้งสองรอบใช้ request เดียวกัน
@@ -80,7 +103,7 @@ export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) 
         )}
 
         {clientSecret && (
-          <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret }}>
+          <EmbeddedCheckoutProvider stripe={stripe} options={{ clientSecret }}>
             <EmbeddedCheckout />
           </EmbeddedCheckoutProvider>
         )}
