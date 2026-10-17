@@ -10,7 +10,7 @@ import {
   verifyTwoFactorChallengeToken,
 } from "@/lib/jwt";
 import { ApiError } from "@/utils/ApiError";
-import { isEmailConfigured, sendOtpEmail, sendPasswordResetEmail } from "@/lib/email";
+import { isEmailConfigured, sendOAuthLoginReminderEmail, sendOtpEmail, sendPasswordResetEmail } from "@/lib/email";
 import { generateTotpSecret, buildTotpUri, generateTotpQrCodeDataUrl, verifyTotpCode } from "@/lib/totp";
 import { env } from "@/config/env";
 import type { OAuthProfile } from "@/lib/oauthProfile";
@@ -261,13 +261,19 @@ export async function disableTwoFactor(user_id: string, password: string) {
 /** สร้าง username ที่ไม่ชนกับใคร จาก email prefix ของ Google — ลองชื่อตรง ๆ ก่อน แล้วค่อยเติม
  *  เลขท้ายถ้าชนซ้ำ (username มี unique constraint) จำกัดจำนวนรอบกันลูปไม่รู้จบ */
 async function generateUniqueUsername(base: string): Promise<string> {
-  const cleaned = base.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 40) || "user";
+  // รับตัวอักษรทุกภาษา (รวมสระ/วรรณยุกต์ไทย \p{M}) — ชื่อ LINE ส่วนใหญ่เป็นภาษาไทย ถ้าตัดเหลือแค่ a-z จะว่างเปล่า
+  const cleaned = base.normalize("NFC").replace(/[^\p{L}\p{M}\p{N}_]/gu, "").slice(0, 40) || "reader";
   for (let attempt = 0; attempt < 20; attempt++) {
     const candidate = attempt === 0 ? cleaned : `${cleaned}${Math.floor(Math.random() * 10000)}`;
     const existing = await prisma.user.findUnique({ where: { username: candidate }, select: { user_id: true } });
     if (!existing) return candidate;
   }
   throw ApiError.conflict("Could not generate a unique username");
+}
+
+/** อีเมลสำรองที่ lineOAuth.ts สร้างให้เมื่อ LINE ไม่ส่งอีเมลมา — ไม่ใช่อีเมลจริง ส่งเมลไปไม่ถึง */
+export function isPlaceholderOAuthEmail(email: string): boolean {
+  return email.endsWith("@line.buddybook.local");
 }
 
 const oauthProviderLabel: Record<OAuthProfile["provider"], string> = {
@@ -309,7 +315,10 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
         data: { oauth_provider: profile.provider, oauth_id: profile.sub },
       });
     } else {
-      const username = await generateUniqueUsername(email.split("@")[0]);
+      // LINE ส่วนใหญ่ไม่ให้อีเมล (lineOAuth ใช้อีเมลสำรองแทน) — ตั้ง username จากชื่อที่แสดงใน LINE
+      // แทน prefix ของอีเมลสำรอง ไม่งั้นได้ชื่อแบบ line_U1a2b3... ที่อ่านไม่ออก (เปลี่ยนเองได้ในหน้าตั้งค่า)
+      const usernameBase = isPlaceholderOAuthEmail(email) ? profile.name : email.split("@")[0];
+      const username = await generateUniqueUsername(usernameBase);
       user = await prisma.user.create({
         data: {
           username,
@@ -324,6 +333,15 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
 
   if (user.is_suspended) {
     throw ApiError.forbidden("This account has been suspended");
+  }
+
+  // บัญชี LINE ที่สร้างก่อนแก้ข้างบนได้ username แบบ line_U<id> — เปลี่ยนเป็นชื่อจาก LINE ให้ครั้งเดียว
+  // (เฉพาะชื่อที่ระบบตั้งให้เองเท่านั้น ถ้าผู้ใช้เปลี่ยนเองแล้วจะไม่แตะ)
+  if (profile.provider === "line" && user.username === `line_${profile.sub}`.slice(0, 40)) {
+    user = await prisma.user.update({
+      where: { user_id: user.user_id },
+      data: { username: await generateUniqueUsername(profile.name), updated_at: new Date() },
+    });
   }
 
   // gap 3.4 — provider ยืนยันวันเกิดมาให้ (Google People API) → ตั้งสถานะอายุจากแหล่งที่เชื่อถือได้
@@ -360,10 +378,21 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
  *  token เซ็นด้วย JWT_REFRESH_SECRET แยกจาก access token หมดอายุ 30 นาที (ดู signResetToken) */
 export async function requestPasswordReset(rawEmail: string) {
   const email = normalizeEmail(rawEmail);
-  const user = await prisma.user.findUnique({ where: { email }, select: { user_id: true, password_hash: true } });
-  if (!user || !user.password_hash) {
-    // ไม่มีบัญชี หรือเป็นบัญชี OAuth ล้วน (ไม่มีรหัสผ่านให้ reset) — ทำเหมือนสำเร็จเสมอ ไม่ throw
-    // และไม่ส่งอีเมล เพื่อลด user enumeration
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { user_id: true, password_hash: true, oauth_provider: true, oauth_id: true },
+  });
+  if (!user) {
+    // ไม่มีบัญชี — ทำเหมือนสำเร็จเสมอ ไม่ throw และไม่ส่งอีเมล เพื่อลด user enumeration
+    return;
+  }
+  if (!user.password_hash) {
+    // บัญชี OAuth ล้วน (ไม่มีรหัสผ่านให้ reset) — เดิมเงียบไปเลย ผู้ใช้ที่ลืมว่าสมัครด้วยช่องทางไหนจะรออีเมล
+    // ที่ไม่มีวันมา ตอนนี้ส่งอีเมลบอกช่องทางเข้าสู่ระบบแทน (ไปที่อีเมลเจ้าของบัญชีเท่านั้น response ยังเหมือนเดิม
+    // จึงไม่เพิ่ม enumeration) — บัญชีที่ถูกลบ/anonymize แล้ว (oauth_id เป็น null ด้วย) ไม่ส่ง
+    if (user.oauth_provider && user.oauth_id && isEmailConfigured()) {
+      await sendOAuthLoginReminderEmail(email, oauthProviderLabel[user.oauth_provider], `${env.APP_URL}/login`);
+    }
     return;
   }
 

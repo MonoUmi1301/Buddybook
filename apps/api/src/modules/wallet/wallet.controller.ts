@@ -60,6 +60,11 @@ export async function stripeWebhook(req: Request, res: Response) {
   }
 
   // ที่เดียวในระบบที่เปลี่ยนสถานะ order และเติม coin — กฎสถานะอยู่ใน lib/payments/resolveStatus.ts
+  // (สำรอง: GET /wallet/topup/orders/:id/status ถาม Stripe เองถ้า webhook ยังไม่มา — ดู wallet.service.ts)
+  if (event.type.startsWith("checkout.session.")) {
+    const s = event.data.object as { id: string; status?: string | null; payment_status?: string | null };
+    console.log(`[stripe webhook] ${event.type} session=${s.id} status=${s.status} payment_status=${s.payment_status}`);
+  }
   switch (event.type) {
     case "checkout.session.completed":
       // PromptPay ฯลฯ อาจ complete ทั้งที่ยัง unpaid → PENDING ต่อ รอ async_payment_succeeded/failed

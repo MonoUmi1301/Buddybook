@@ -25,9 +25,11 @@ COPY apps/web/package.json apps/web/
 # npm ci บน alpine จึงไม่ได้ SWC มาด้วย — ดึง musl build ให้ตรงเวอร์ชัน next แล้วแตกไฟล์ใส่ node_modules เอง
 # ห้ามใช้ `npm install --no-save` ตรงนี้: มันจัดโครง node_modules ใหม่แล้วลิงก์ใน .bin (next/tsx) หายไป
 # (next อาจถูก hoist ไว้ที่ root หรืออยู่ใน apps/web ก็ได้ แล้วแต่ lockfile — @next/swc ที่ root หาเจอทั้งสองแบบ)
+# เวอร์ชัน SWC ต้องอ่านจาก optionalDependencies ของ next ไม่ใช่เวอร์ชัน next เอง — patch release บางตัว
+# (เช่น next 14.2.35) ไม่ได้ออก @next/swc-* เวอร์ชันเดียวกัน (ใช้ 14.2.33) ถ้าขอ 14.2.35 จะได้ 404
 RUN npm ci \
- && NEXT_VERSION=$(node -p "require(require.resolve('next/package.json', { paths: ['/app/apps/web'] })).version") \
- && cd /tmp && npm pack "@next/swc-linux-x64-musl@${NEXT_VERSION}" --silent \
+ && SWC_VERSION=$(node -p "require(require.resolve('next/package.json', { paths: ['/app/apps/web'] })).optionalDependencies['@next/swc-linux-x64-musl']") \
+ && cd /tmp && npm pack "@next/swc-linux-x64-musl@${SWC_VERSION}" --silent \
  && mkdir -p /app/node_modules/@next/swc-linux-x64-musl \
  && tar -xzf next-swc-linux-x64-musl-*.tgz -C /app/node_modules/@next/swc-linux-x64-musl --strip-components=1 \
  && rm -f /tmp/*.tgz \

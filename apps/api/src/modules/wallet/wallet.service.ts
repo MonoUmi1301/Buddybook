@@ -7,7 +7,7 @@ import { env } from "@/config/env";
 import { verifySlip, transRefToUuid } from "@/lib/slipok";
 import { getStripeClient } from "@/lib/stripe";
 import { stringToUuid } from "@/lib/idHash";
-import { resolveOrderStatus } from "@/lib/payments/resolveStatus";
+import { resolveOrderStatus, resolveStripeSession } from "@/lib/payments/resolveStatus";
 
 type QueryClient = typeof prisma | Prisma.TransactionClient;
 
@@ -197,12 +197,47 @@ export async function getTopupOrderStatus(user_id: string, order_id: string) {
   const order = await prisma.topupOrder.findUnique({ where: { order_id } });
   // ของคนอื่นตอบ 404 เหมือนไม่มีอยู่ — กันเดา order_id ของคนอื่นมาดู
   if (!order || order.user_id !== user_id) throw ApiError.notFound("Top-up order not found");
-  return {
-    order_id,
-    status: resolveOrderStatus(order),
-    coins: order.coins,
-    expires_at: order.expires_at,
-  };
+
+  let status = resolveOrderStatus(order);
+  if (status === "PENDING" && order.stripe_session_id) {
+    status = await reconcileWithStripe(order.order_id, order.stripe_session_id, status);
+  }
+  return { order_id, status, coins: order.coins, expires_at: order.expires_at };
+}
+
+/** เพิ่มภายหลัง (ระบบสำรอง webhook) — order ยัง pending ตอนหน้าเว็บถามสถานะ: ถาม Stripe ตรง ๆ (ฝั่ง server
+ *  ด้วย secret key ไม่ใช่ให้ client เดา) ถ้าจ่ายแล้วก็เติม coin ผ่านฟังก์ชันเดียวกับ webhook (idempotent
+ *  ชนกับ webhook ที่มาทีหลังก็ไม่เติมซ้ำ) — กันกรณี webhook มาช้า/หลุด/ส่งต่อไม่ถึงตอน dev แล้วผู้ใช้ค้าง
+ *  "กำลังตรวจสอบการชำระเงิน" ตลอด หน้าเว็บ poll ถี่ จึงถาม Stripe ไม่เกินทุก 5 วินาทีต่อ order */
+const STRIPE_RECHECK_MS = 5000;
+const lastStripeCheck = new Map<string, number>();
+
+async function reconcileWithStripe(
+  order_id: string,
+  stripe_session_id: string,
+  current: "PENDING" | "PAID" | "FAILED"
+): Promise<"PENDING" | "PAID" | "FAILED"> {
+  const now = Date.now();
+  if (now - (lastStripeCheck.get(order_id) ?? 0) < STRIPE_RECHECK_MS) return current;
+  lastStripeCheck.set(order_id, now);
+  if (lastStripeCheck.size > 1000) lastStripeCheck.clear();
+
+  try {
+    const session = await getStripeClient().checkout.sessions.retrieve(stripe_session_id);
+    const result = resolveStripeSession(session);
+    if (result === "PAID") {
+      await fulfillStripeTopup(session);
+      console.log(`[topup] order ${order_id} paid on Stripe but no webhook yet — fulfilled via status check`);
+    } else if (result === "FAILED") {
+      await failStripeTopup(session);
+    }
+    const fresh = await prisma.topupOrder.findUnique({ where: { order_id } });
+    return fresh ? resolveOrderStatus(fresh) : current;
+  } catch (err) {
+    // Stripe ล่ม/ต่อไม่ได้ — ตอบสถานะเดิมจาก DB ไป รอ webhook หรือรอบ poll ถัดไป
+    console.warn(`[topup] Stripe status check failed for order ${order_id}:`, err instanceof Error ? err.message : err);
+    return current;
+  }
 }
 
 /** webhook: checkout.session.completed (+ paid) / async_payment_succeeded — เติม coin ครั้งเดียวต่อ session

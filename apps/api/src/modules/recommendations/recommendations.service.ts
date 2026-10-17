@@ -1,5 +1,11 @@
 import neo4j from "neo4j-driver";
-import { NEO4J_READ_TIMEOUT_MS, withNeo4jSession } from "@/lib/neo4j";
+import {
+  classifyNeo4jError,
+  describeNeo4jTarget,
+  NEO4J_READ_TIMEOUT_MS,
+  withNeo4jSession,
+  type Neo4jFailureReason,
+} from "@/lib/neo4j";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { env } from "@/config/env";
@@ -42,8 +48,10 @@ function blank(novel_id: string, source: CandidateSource): Candidate {
   };
 }
 
-/** candidate จาก Neo4j — interest / similar_readers / hidden_gem (ล่มแล้วคืน [] + degraded=true) */
-async function graphCandidates(user_id: string): Promise<{ candidates: Candidate[]; degraded: boolean }> {
+type GraphResult = { candidates: Candidate[]; degraded: boolean; reason?: Neo4jFailureReason };
+
+/** candidate จาก Neo4j — interest / similar_readers / hidden_gem (ล่มแล้วคืน [] + degraded=true + เหตุผล) */
+async function graphCandidates(user_id: string): Promise<GraphResult> {
   try {
     const read = (cypher: string) =>
       withNeo4jSession((session) =>
@@ -105,8 +113,13 @@ async function graphCandidates(user_id: string): Promise<{ candidates: Candidate
     }
     return { candidates: out, degraded: false };
   } catch (err) {
-    console.error("Neo4j recommendation candidates failed, falling back to Postgres only:", err);
-    return { candidates: [], degraded: true };
+    const { reason, hint } = classifyNeo4jError(err);
+    // บรรทัดเดียวพอ — เดิม dump stack ทั้งก้อนทุก request จนหาเหตุผลจริงใน log ไม่เจอ (stack ไว้เฉพาะ error ที่ไม่รู้จัก)
+    console.warn(
+      `[recommendations] graph unavailable (${reason}) at ${describeNeo4jTarget()} — ${hint}; falling back to Postgres popular novels`
+    );
+    if (reason === "error") console.warn(err);
+    return { candidates: [], degraded: true, reason };
   }
 }
 
@@ -178,7 +191,7 @@ export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMM
 
   const merged = mergeCandidates(candidates);
   if (merged.size === 0) {
-    return { items: [], content_based: [], collaborative: [], underrated: [], meta: buildMeta([], graph.degraded) };
+    return { items: [], content_based: [], collaborative: [], underrated: [], meta: buildMeta([], graph) };
   }
 
   const ids = [...merged.keys()];
@@ -246,15 +259,17 @@ export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMM
     content_based: bySource("interest"),
     collaborative: bySource("similar_readers"),
     underrated: bySource("hidden_gem"),
-    meta: buildMeta(ranked, graph.degraded),
+    meta: buildMeta(ranked, graph),
   };
 }
 
-function buildMeta(ranked: { long_tail: boolean }[], degraded: boolean) {
+function buildMeta(ranked: { long_tail: boolean }[], graph: Pick<GraphResult, "degraded" | "reason">) {
   return {
     long_tail_share: Math.round(longTailShare(ranked) * 100) / 100,
     rerank_lambda: env.RECS_LONG_TAIL_LAMBDA,
-    graph_available: !degraded,
+    graph_available: !graph.degraded,
+    // เหตุผลที่กราฟใช้ไม่ได้ (timeout / unavailable / auth / database_not_found / error) — มีเฉพาะตอน degraded
+    ...(graph.degraded ? { graph_reason: graph.reason ?? "error" } : {}),
   };
 }
 

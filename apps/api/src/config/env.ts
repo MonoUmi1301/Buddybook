@@ -19,6 +19,9 @@ const envSchema = z.object({
   NEO4J_USER: z.string().min(1, "NEO4J_USER is required"),
   NEO4J_PASSWORD: z.string().min(1, "NEO4J_PASSWORD is required"),
   NEO4J_DATABASE: z.string().optional(),
+  // timeout ต่อ query ของหน้าที่ผู้ใช้รออยู่ (recommendations) — เครื่อง dev ที่ RAM น้อย Neo4j ตอบช้ากว่า 2 วิได้
+  // เกินแล้วระบบแนะนำ fallback เป็นยอดนิยมจาก Postgres (meta.graph_available=false, graph_reason="timeout")
+  NEO4J_READ_TIMEOUT_MS: z.coerce.number().int().positive().default(2000),
   // ไม่บังคับตอน boot (ต่างจาก NEO4J_*) — ฟีเจอร์อัปโหลดที่ต้องใช้ค่านี้ gate ตัวเองด้วย
   // isCloudinaryConfigured() แทน (ดู lib/cloudinary.ts) เพื่อไม่ให้ dev ทั้งระบบพังถ้ายังไม่ได้ตั้งค่า
   CLOUDINARY_CLOUD_NAME: z.string().default(""),
@@ -78,6 +81,8 @@ const envSchema = z.object({
   SCHEDULE_PUBLISH_INTERVAL_SEC: z.coerce.number().int().positive().default(60),
   SCHEDULE_TRASH_PURGE_INTERVAL_SEC: z.coerce.number().int().positive().default(3600),
   SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC: z.coerce.number().int().positive().default(6 * 3600),
+  // ความถี่ที่เช็คว่ามี graph sync ล้มค้างอยู่ไหม (ค้างค่อย full resync — ไม่ค้างไม่ทำอะไร)
+  SCHEDULE_GRAPH_HEAL_INTERVAL_SEC: z.coerce.number().int().positive().default(60),
   // เพิ่มภายหลัง (Recommendation v2, gap 2.3) — ดู modules/recommendations/ranking.ts
   // λ ของ long-tail re-ranking (0 = ปิด) และสัดส่วน long-tail เป้าหมายใน top-k
   RECS_LONG_TAIL_LAMBDA: z.coerce.number().min(0).max(1).default(0.3),

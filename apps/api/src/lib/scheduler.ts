@@ -1,4 +1,5 @@
 import { env } from "@/config/env";
+import { healGraphIfDirty } from "@/lib/graphSync";
 import * as internalService from "@/modules/internal/internal.service";
 import * as recommendationsService from "@/modules/recommendations/recommendations.service";
 
@@ -38,6 +39,13 @@ export function defaultJobs(): ScheduledJob[] {
       intervalMs: env.SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC * 1000,
       run: recommendationsService.fullResync,
     },
+    {
+      // เพิ่มภายหลัง (graph self-heal) — ซ่อมกราฟเองภายใน ~1 นาทีหลัง Neo4j กลับมา ถ้ามี sync ที่ล้มค้างอยู่
+      name: "recommendations-heal",
+      intervalMs: env.SCHEDULE_GRAPH_HEAL_INTERVAL_SEC * 1000,
+      run: healGraphIfDirty,
+      runOnStart: true,
+    },
   ];
 }
 
@@ -57,7 +65,8 @@ export function startScheduler(jobs: ScheduledJob[] = defaultJobs(), logger: Log
     running.add(job.name);
     try {
       const result = await job.run();
-      logger.log(`[scheduler] ${job.name}`, JSON.stringify(result ?? {}));
+      // null = งานไม่มีอะไรต้องทำรอบนี้ (เช่น heal ตอนกราฟไม่ค้าง) ไม่ต้อง log ให้รก
+      if (result !== null) logger.log(`[scheduler] ${job.name}`, JSON.stringify(result ?? {}));
     } catch (err) {
       logger.warn(`[scheduler] ${job.name} failed:`, err instanceof Error ? err.message : err);
     } finally {

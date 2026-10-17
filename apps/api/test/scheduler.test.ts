@@ -27,6 +27,18 @@ describe("scheduler", () => {
     expect(run).toHaveBeenCalledTimes(4);
   });
 
+  it("does not log a run that returns null (nothing to do this tick)", async () => {
+    vi.useFakeTimers();
+    const run = vi.fn().mockResolvedValue(null);
+    const logger = { log: vi.fn(), warn: vi.fn() };
+    const stop = startScheduler([{ name: "idle", intervalMs: 1000, run, runOnStart: true }], logger);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(run).toHaveBeenCalledTimes(3);
+    expect(logger.log).not.toHaveBeenCalled();
+    stop();
+  });
+
   it("skips a tick while the previous run is still in progress", async () => {
     vi.useFakeTimers();
     let release!: () => void;

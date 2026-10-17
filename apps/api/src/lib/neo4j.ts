@@ -44,8 +44,73 @@ export async function withNeo4jSession<T>(
 }
 
 /** เพิ่มภายหลัง (perf) — timeout ต่อ query ของหน้าที่ผู้ใช้รออยู่ (เช่น recommendations บนหน้าแรก)
- *  กราฟช้า/ค้างต้องไม่ลากทั้งหน้าไปด้วย — เกินนี้ driver ยกเลิก transaction แล้วฝั่ง service degrade เป็นผลว่าง */
-export const NEO4J_READ_TIMEOUT_MS = 2000;
+ *  กราฟช้า/ค้างต้องไม่ลากทั้งหน้าไปด้วย — เกินนี้ driver ยกเลิก transaction แล้วฝั่ง service degrade เป็นผลว่าง
+ *  ปรับได้ด้วย env NEO4J_READ_TIMEOUT_MS (ค่าเริ่มต้น 2000) */
+export const NEO4J_READ_TIMEOUT_MS = env.NEO4J_READ_TIMEOUT_MS;
+
+/** ปลายทางที่ driver ต่ออยู่จริง (ไม่มีรหัสผ่าน) — ใช้ใน log ให้เห็นทันทีว่าต่อ Aura หรือ container local
+ *  (api ใน Docker ใช้ค่าจาก docker/api.docker.env ที่ทับ apps/api/.env → bolt://neo4j:7687 ไม่ใช่ Aura) */
+export function describeNeo4jTarget(): string {
+  let host = env.NEO4J_URI;
+  try {
+    const u = new URL(env.NEO4J_URI);
+    host = `${u.protocol}//${u.host}`;
+  } catch {
+    // URI ผิดรูปแบบ — แสดงตามที่ตั้งไว้ ให้เห็นว่าผิด
+  }
+  return `${host} user=${env.NEO4J_USER} db=${env.NEO4J_DATABASE ?? "(default)"}`;
+}
+
+export type Neo4jFailureReason = "timeout" | "unavailable" | "auth" | "database_not_found" | "error";
+
+/** แปลง error ของ driver เป็นเหตุผลสั้น ๆ + คำแนะนำ สำหรับ log และ meta.graph_reason */
+export function classifyNeo4jError(err: unknown): { reason: Neo4jFailureReason; hint: string } {
+  const code = (err as { code?: string })?.code ?? "";
+  const message = err instanceof Error ? err.message : String(err);
+  if (code.includes("TransactionTimedOut") || /timed? ?out/i.test(message)) {
+    return {
+      reason: "timeout",
+      hint: `query เกิน ${NEO4J_READ_TIMEOUT_MS} ms — Neo4j ช้าเกินไป (เครื่อง RAM น้อย/กราฟเพิ่งบูต) เพิ่ม NEO4J_READ_TIMEOUT_MS ได้`,
+    };
+  }
+  if (code === "ServiceUnavailable" || code === "SessionExpired" || /ECONNREFUSED|ENOTFOUND|Could not perform discovery|Failed to connect/i.test(message)) {
+    return { reason: "unavailable", hint: "ต่อ Neo4j ไม่ได้ — เช็คว่า instance เปิดอยู่ และ NEO4J_URI ถูกต้อง (Aura ต้องเป็น neo4j+s://)" };
+  }
+  if (code.startsWith("Neo.ClientError.Security")) {
+    return { reason: "auth", hint: "username/password ไม่ถูกต้อง — เช็ค NEO4J_USER / NEO4J_PASSWORD" };
+  }
+  if (code === "Neo.ClientError.Database.DatabaseNotFound") {
+    return { reason: "database_not_found", hint: "ไม่มี database ตาม NEO4J_DATABASE (Neo4j Community มีแค่ \"neo4j\")" };
+  }
+  return { reason: "error", hint: code ? `${code}: ${message.split("\n")[0]}` : message.split("\n")[0] };
+}
+
+/** เรียกครั้งเดียวตอน api เริ่ม — log ว่าต่อที่ไหน ต่อได้ไหม และกราฟมีข้อมูลหรือยัง (กราฟว่าง = ระบบแนะนำได้แต่ยอดนิยม) */
+export async function logNeo4jStartupStatus(logger: Pick<Console, "log" | "warn"> = console): Promise<void> {
+  const target = describeNeo4jTarget();
+  try {
+    await neo4jDriver.verifyConnectivity();
+    const counts = await withNeo4jSession(async (session) => {
+      const res = await session.run(
+        "MATCH (n) WHERE n:User OR n:Novel OR n:Tag RETURN labels(n)[0] AS label, count(*) AS c"
+      );
+      return Object.fromEntries(res.records.map((r) => [r.get("label"), Number(r.get("c"))]));
+    });
+    const summary = `User=${counts.User ?? 0} Novel=${counts.Novel ?? 0} Tag=${counts.Tag ?? 0}`;
+    if (!counts.Novel) {
+      logger.warn(
+        `[neo4j] connected to ${target} but the graph has no Novel nodes (${summary}) — ` +
+          "recommendations will fall back to popular novels until a full resync runs " +
+          "(POST /api/v1/internal/recommendations/sync or the recommendations-full-resync job)"
+      );
+    } else {
+      logger.log(`[neo4j] connected to ${target} (${summary})`);
+    }
+  } catch (err) {
+    const { reason, hint } = classifyNeo4jError(err);
+    logger.warn(`[neo4j] NOT READY (${reason}) at ${target} — ${hint}`);
+  }
+}
 
 /** เพิ่มภายหลัง (perf) — index ของ property ที่ทุก MATCH/MERGE ใช้หา node (ดู lib/graphSync.ts)
  *  เดิมไม่มีเลย (มีแค่ LOOKUP index ของ label) ทุก `MATCH (u:User {user_id})` จึงสแกนทั้ง label

@@ -35,8 +35,9 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
     try {
       await fetch("/api/v1/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     } finally {
-      router.push("/");
-      router.refresh();
+      // โหลดหน้าใหม่ทั้งหน้าแทน router.push + refresh — ถ้าอยู่หน้าแรกอยู่แล้ว push("/") ไม่ทำอะไร
+      // และ client router cache อาจยังเรนเดอร์เมนูของผู้ใช้เดิมค้างไว้ (ปัญหา "กดออกจากระบบแล้วไม่ออก")
+      window.location.assign("/");
     }
   }
 
@@ -55,7 +56,7 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
     { icon: BookMarked, label: "ชั้นหนังสือ", href: "/library" },
     { icon: PenSquare, label: "สร้างผลงาน", href: "/write" },
     { icon: BarChart3, label: "สถิตินิยายของฉัน", href: "/write/stats" },
-    { icon: History, label: "ประวัติการซื้อ", href: "/wallet" },
+    { icon: History, label: "ประวัติการซื้อ", href: "/wallet#history" },
     { icon: Coins, label: "เติม coin", href: "/wallet" },
     { icon: Settings, label: "ตั้งค่าบัญชี", href: "/settings" },
     { icon: Bell, label: "การแจ้งเตือน", href: "/notifications" },
