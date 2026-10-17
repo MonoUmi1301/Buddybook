@@ -1,6 +1,5 @@
-import { execFileSync } from "node:child_process";
-import path from "node:path";
 import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { apiEnv, runApiScript } from "./helpers";
 
 /**
  * ฟีเจอร์แกนของงานวิจัยแบบ end-to-end (ต่อจาก autosave-fault.spec.ts ที่ทดสอบเน็ตหลุด/ปิดแท็บ)
@@ -17,9 +16,8 @@ import { expect, test, type APIRequestContext, type BrowserContext, type Page } 
  * NLP worker (WangchanBERTa) ไม่ต้องรัน: เทสต์ทำหน้าที่ worker เองผ่าน internal API สัญญาเดียวกัน
  * (pending-queue → sentiment-callback) เพื่อทดสอบเส้นทางข้อมูล ส่วนความแม่นของโมเดลวัดแยกใน apps/nlp-worker/eval
  */
-const API_DIR = path.resolve(__dirname, "../apps/api");
 const API = process.env.E2E_API_URL ?? "http://localhost:4000/api/v1";
-const INTERNAL_TOKEN = process.env.INTERNAL_SERVICE_TOKEN ?? "";
+const INTERNAL_TOKEN = apiEnv.INTERNAL_SERVICE_TOKEN ?? "";
 
 type Seed = {
   password: string;
@@ -44,8 +42,7 @@ const shared: {
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async ({ playwright }) => {
-  const out = execFileSync("npx", ["tsx", "prisma/seed-e2e-core.ts"], { cwd: API_DIR, encoding: "utf8" });
-  seed = JSON.parse(out.trim().split("\n").pop()!);
+  seed = runApiScript<Seed>("prisma/seed-e2e-core.ts");
   const req = await playwright.request.newContext();
   for (const role of ["writer", "reader", "minor", "admin"] as Role[]) {
     const res = await req.post(`${API}/auth/login`, { data: { email: seed[role].email, password: seed.password } });

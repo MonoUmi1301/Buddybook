@@ -1,6 +1,5 @@
-import { execFileSync } from "node:child_process";
-import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { runApiScript } from "./helpers";
 
 /**
  * KPI-3 — Fault-tolerance ของ Auto-save (Proposal 3.4.4 / 3.5.1 Scenario-based testing)
@@ -8,14 +7,12 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
  * ผ่านเมื่อเปิดหน้าเดิมอีกครั้งแล้วได้เนื้อหาที่พิมพ์ครบ 100% (กู้จากเครื่อง หรือถึงเซิร์ฟเวอร์แล้ว)
  */
 const WRITER = { email: "e2e_writer@e2e.buddybook.local", password: "e2e12345" };
-const API_DIR = path.resolve(__dirname, "../apps/api");
 
 let ids: { novel_id: string; chapter_id: string };
 
 test.beforeEach(() => {
   // seed ใหม่ทุกเทสต์ — ตอนเริ่มจากเนื้อหาเดิมเสมอ
-  const out = execFileSync("npx", ["tsx", "prisma/seed-e2e.ts"], { cwd: API_DIR, encoding: "utf8" });
-  ids = JSON.parse(out.trim().split("\n").pop()!);
+  ids = runApiScript("prisma/seed-e2e.ts");
 });
 
 async function login(context: BrowserContext) {
