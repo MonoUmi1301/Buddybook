@@ -155,7 +155,9 @@ describe("paid chapters", () => {
   it("hides the content of an unpurchased chapter", async () => {
     const res = await api("GET", `/chapters/${chapterId}`, readerToken);
     expect(res.status).toBe(200);
-    expect(res.json).toMatchObject({ locked: true, content: null, teaser: "เนื้อหาลับ", price_coins: PRICE });
+    expect(res.json).toMatchObject({ locked: true, content: null, price_coins: PRICE });
+    // ตอนสั้นต้องไม่ได้ทั้งตอนเป็นตัวอย่างฟรี (ตัวอย่างไม่เกิน 30% ของตอน)
+    expect(res.json.teaser).not.toBe("เนื้อหาลับ");
 
     const anon = await api("GET", `/chapters/${chapterId}`);
     expect(anon.json.content).toBeNull();

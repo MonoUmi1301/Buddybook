@@ -201,17 +201,21 @@ export function ReaderContent({
         </div>
       </div>
 
+      {/* sticky แทน fixed — ปุ่มลอยตามจอเฉพาะช่วงที่อ่านเนื้อหาอยู่ พอเลื่อนลงถึงคอมเมนต์ปุ่มจะหยุดที่ท้ายเนื้อหา
+          ไม่ลอยทับปุ่ม "ส่งคอมเมนต์" บนมือถืออีก (เจอจากเทสต์ responsive ที่ 390px) */}
+      <div className="pointer-events-none sticky bottom-6 z-30 mt-4 flex justify-end">
+      <div className="pointer-events-auto relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="ตั้งค่าการอ่าน"
-        className="fixed bottom-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary-500 text-base font-bold text-white shadow-lg transition-transform hover:scale-105 hover:bg-primary-600"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-500 text-base font-bold text-white shadow-lg transition-transform hover:scale-105 hover:bg-primary-600"
       >
         Aa
       </button>
 
       {open && (
-        <div className="fixed bottom-24 right-6 z-30 w-72 rounded-card border border-neutral-200 bg-white p-4 shadow-xl">
+        <div className="absolute bottom-16 right-0 z-30 w-72 rounded-card border border-neutral-200 bg-white p-4 shadow-xl">
           <div className="mb-4">
             <p className="mb-2 text-xs font-semibold text-neutral-500">รูปแบบตัวอักษร</p>
             <div className="flex gap-2">
@@ -284,6 +288,8 @@ export function ReaderContent({
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

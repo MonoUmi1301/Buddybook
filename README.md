@@ -62,8 +62,8 @@ NLP_MODEL_DIR=/path/to/my_final_sentiment_model docker compose --profile app --p
 
 ```bash
 npm install              # ติดตั้งทุก workspace พร้อมกัน
-npm run dev:api          # apps/api
-npm run dev:web          # apps/web (คนละ terminal)
+npm run dev              # เปิด api + web + stripe:listen พร้อมกันในหน้าต่างเดียว (Ctrl+C ปิดทั้งหมด)
+# หรือแยกเอง: npm run dev:api / npm run dev:web / npm run stripe:listen คนละ terminal
 ```
 
 ## งานเบื้องหลัง (Scheduler)

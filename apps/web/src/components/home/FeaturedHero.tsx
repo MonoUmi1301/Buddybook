@@ -33,7 +33,7 @@ export function FeaturedHero({ items, startHref, exploreHref }: FeaturedHeroProp
           <span className="text-primary-500"> ติดงอมแงม</span>สัปดาห์นี้
         </h1>
         <p className="mt-4 max-w-md text-base leading-relaxed text-neutral-500 max-md:mx-auto max-md:text-sm">
-          คัดจากยอดอ่านจริงของชุมชน BuddyBook — วางเมาส์หรือแตะที่ปกเพื่อดูแต่ละเรื่อง
+          คัดจากยอดอ่านจริงของชุมชน BuddyBook
         </p>
         <div className="mt-8 flex flex-wrap gap-3 max-md:mt-6 max-md:justify-center">
           <Link
