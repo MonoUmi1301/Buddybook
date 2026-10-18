@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { ACCESS_TOKEN_COOKIE, HAS_INTERESTS_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/api/auth";
 import { appUrl } from "@/lib/api/config";
+import { decodeJwtPayload } from "@/lib/api/jwtPayload";
 
 /**
  * Silent Token Refresh สำหรับ Persistent Session
@@ -23,15 +24,8 @@ import { appUrl } from "@/lib/api/config";
 const REFRESH_THRESHOLD_SECONDS = 60;
 
 function decodeJwtExpirySeconds(token: string): number | null {
-  try {
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-    const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const json = JSON.parse(atob(base64)) as { exp?: number };
-    return typeof json.exp === "number" ? json.exp : null;
-  } catch {
-    return null;
-  }
+  const exp = decodeJwtPayload(token)?.exp;
+  return typeof exp === "number" ? exp : null;
 }
 
 function needsRefresh(accessToken: string | undefined): boolean {
@@ -117,9 +111,12 @@ export async function middleware(request: NextRequest) {
   // เช็ค has_interests จริงจาก DB ซ้ำอีกชั้น ถ้า cookie ยังไม่ sync (เช่น ล็อกอินเครื่องใหม่) ก็แค่
   // เด้งผ่าน /onboarding ไปหน้าแรกทันทีเงียบ ๆ ไม่ใช่ bug
   const pathname = request.nextUrl.pathname;
+  // cookie เก็บ user_id ของคนที่ตอบแล้ว (ไม่ใช่แค่ "1") — ต้องตรงกับเจ้าของ token ปัจจุบัน
+  // cookie ของบัญชีอื่นที่เคยล็อกอินบนเครื่องนี้จึงใช้ข้าม onboarding ไม่ได้ (บั๊ก B1)
+  const tokenUserId = decodeJwtPayload(effectiveAccessToken)?.user_id;
   if (
     effectiveAccessToken &&
-    !request.cookies.get(HAS_INTERESTS_COOKIE)?.value &&
+    (!tokenUserId || request.cookies.get(HAS_INTERESTS_COOKIE)?.value !== tokenUserId) &&
     !isOnboardingExempt(pathname)
   ) {
     const onboardingUrl = appUrl("/onboarding");

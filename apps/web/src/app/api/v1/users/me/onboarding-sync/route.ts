@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const next = new URL(request.url).searchParams.get("next");
   const target = next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
   const response = NextResponse.redirect(appUrl(target));
-  response.cookies.set(HAS_INTERESTS_COOKIE, "1", {
+  response.cookies.set(HAS_INTERESTS_COOKIE, user.user_id, {
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
     sameSite: "lax",
