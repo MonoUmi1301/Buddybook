@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/api/auth";
+import { ACCESS_TOKEN_COOKIE, HAS_INTERESTS_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/api/auth";
 import { appUrl } from "@/lib/api/config";
 
 /**
@@ -63,8 +63,6 @@ const ONBOARDING_EXEMPT_PREFIXES = [
 function isOnboardingExempt(pathname: string): boolean {
   return ONBOARDING_EXEMPT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
-
-const HAS_INTERESTS_COOKIE = "bb_has_interests";
 
 export async function middleware(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;

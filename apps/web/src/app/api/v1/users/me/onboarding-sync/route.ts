@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/api/session";
 import { appUrl } from "@/lib/api/config";
+import { HAS_INTERESTS_COOKIE } from "@/lib/api/auth";
 
 /**
  * เพิ่มภายหลัง (bug fix) — GET /api/v1/users/me/onboarding-sync
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
   const next = new URL(request.url).searchParams.get("next");
   const target = next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
   const response = NextResponse.redirect(appUrl(target));
-  response.cookies.set("bb_has_interests", "1", {
+  response.cookies.set(HAS_INTERESTS_COOKIE, "1", {
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
     sameSite: "lax",

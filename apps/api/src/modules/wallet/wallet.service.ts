@@ -61,6 +61,8 @@ export async function listTransactions(user_id: string) {
     prisma.walletTransaction.findMany({
       where: { user_id },
       orderBy: { created_at: "desc" },
+      // หน้าประวัติแสดงล่าสุด 100 รายการ — เดิมไม่จำกัด คนที่มีธุรกรรมมาก ๆ จะได้ JSON ก้อนใหญ่ทุกครั้งที่ดูยอด
+      take: 100,
       select: { transaction_id: true, type: true, amount: true, balance_after: true, created_at: true },
     }),
     getBalance(user_id),

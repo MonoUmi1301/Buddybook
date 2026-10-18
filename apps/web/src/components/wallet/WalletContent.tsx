@@ -8,6 +8,7 @@ import { Footer } from "@/components/layout/Footer";
 import { CoinPackageRow, type CoinPackage } from "@/components/wallet/CoinPackageRow";
 import { StripeCheckoutPanel } from "@/components/wallet/StripeCheckoutPanel";
 import { WithdrawalSection } from "@/components/wallet/WithdrawalSection";
+import { TransactionHistory } from "@/components/wallet/TransactionHistory";
 import { GiftDraftBanner } from "@/components/gifts/GiftDraftBanner";
 import type { SessionUser } from "@/lib/api/session";
 import { usePaymentResult, type PaymentOutcome } from "@/hooks/use-payment-result";
@@ -106,6 +107,8 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         </div>
 
         <WithdrawalSection onBalanceChange={setBalance} />
+
+        <TransactionHistory refreshKey={balance} />
       </main>
 
       {selectedPkg && <StripeCheckoutPanel pkg={selectedPkg} onClose={() => setSelectedPkg(null)} />}

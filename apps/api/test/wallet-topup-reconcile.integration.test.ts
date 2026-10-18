@@ -23,6 +23,7 @@ vi.mock("@/lib/stripe", () => ({
 
 const h = createHarness("topup");
 let user: { id: string; token: string };
+let seq = 0;
 
 async function createOrder(sessionState: { status: string; payment_status: string }) {
   const order_id = crypto.randomUUID();
@@ -53,7 +54,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  user = await h.createUser("buyer");
+  user = await h.createUser(`buyer${++seq}`);
 });
 
 afterAll(async () => {
@@ -94,7 +95,7 @@ describe("top-up status reconciles with Stripe when the webhook never arrives", 
 
   it("does not let another user read or reconcile someone else's order", async () => {
     const { order_id } = await createOrder({ status: "complete", payment_status: "paid" });
-    const other = await h.createUser("other");
+    const other = await h.createUser(`other${++seq}`);
     const res = await h.api("GET", `/wallet/topup/orders/${order_id}/status`, other.token);
     expect(res.status).toBe(404);
     expect(await getBalance(user.id)).toBe(0);

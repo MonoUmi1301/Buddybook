@@ -1,7 +1,7 @@
 import { forwardToApi } from "@/lib/api/proxy";
 import { parseJsonBody } from "@/lib/api/validate";
 import { interestsSchema } from "@/lib/api/schemas";
-import { requireAccessToken } from "@/lib/api/auth";
+import { HAS_INTERESTS_COOKIE, requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/users/me/interests — เลือก tag ความสนใจตอน Onboarding
 export async function POST(request: Request) {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   // แล้ว redirect กลับ "/" → วนลูปไม่รู้จบสำหรับผู้ใช้ที่ล็อกอินทุกคน — ใช้ < 400 กันไว้ ทนทานกว่าเช็ค
   // status code ตัวเดียวเป๊ะ ๆ ถ้ามีการเปลี่ยน status สำเร็จในอนาคต
   if (response.status < 400) {
-    response.cookies.set("bb_has_interests", "1", {
+    response.cookies.set(HAS_INTERESTS_COOKIE, "1", {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
       sameSite: "lax",
