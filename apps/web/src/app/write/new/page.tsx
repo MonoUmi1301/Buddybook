@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { BackButton } from "@/components/ui/BackButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { CreateNovelForm, type NovelWizardTag } from "@/components/writer/CreateNovelForm";
@@ -21,6 +22,7 @@ export default async function CreateNovelPage() {
       <Navbar user={user} />
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10 sm:px-6 lg:px-8">
+        <BackButton href="/write" label="ผลงานของฉัน" className="-ml-1.5 mb-3" />
         <h1 className="mb-6 text-h2 text-neutral-900">สร้างนิยายใหม่</h1>
         <CreateNovelForm tags={tags} />
       </main>

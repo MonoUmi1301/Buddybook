@@ -5,7 +5,7 @@ import type { TopupOrderStatus } from "@prisma/client";
 export type PaymentResult = "PENDING" | "PAID" | "FAILED";
 
 /**
- * กฎจาก Stripe Checkout Session (ใช้ใน webhook เท่านั้น — client ไม่เดาสถานะจาก Stripe เอง)
+ * กฎจาก Stripe Checkout Session (webhook + reconcileWithStripe ฝั่ง server — client ไม่เดาสถานะจาก Stripe เอง)
  *   open (unpaid)                 → PENDING  (ไม่ใช่ failed เด็ดขาด — ผู้ใช้อาจยังกรอกบัตรอยู่)
  *   complete + paid               → PAID
  *   complete + unpaid (PromptPay) → PENDING  รอ async_payment_succeeded / async_payment_failed

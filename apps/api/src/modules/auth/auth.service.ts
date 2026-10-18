@@ -10,7 +10,7 @@ import {
   verifyTwoFactorChallengeToken,
 } from "@/lib/jwt";
 import { ApiError } from "@/utils/ApiError";
-import { isEmailConfigured, sendOtpEmail, sendPasswordResetEmail } from "@/lib/email";
+import { isEmailConfigured, sendOAuthSignInHintEmail, sendOtpEmail, sendPasswordResetEmail } from "@/lib/email";
 import { generateTotpSecret, buildTotpUri, generateTotpQrCodeDataUrl, verifyTotpCode } from "@/lib/totp";
 import { env } from "@/config/env";
 import type { OAuthProfile } from "@/lib/oauthProfile";
@@ -260,10 +260,16 @@ export async function disableTwoFactor(user_id: string, password: string) {
 
 /** สร้าง username ที่ไม่ชนกับใคร จาก email prefix ของ Google — ลองชื่อตรง ๆ ก่อน แล้วค่อยเติม
  *  เลขท้ายถ้าชนซ้ำ (username มี unique constraint) จำกัดจำนวนรอบกันลูปไม่รู้จบ */
-async function generateUniqueUsername(base: string): Promise<string> {
-  const cleaned = base.replace(/[^a-zA-Z0-9_]/g, "").slice(0, 40) || "user";
+async function generateUniqueUsername(base: string, opts: { unicode?: boolean } = {}): Promise<string> {
+  // unicode: ชื่อแสดงจาก provider (เช่นชื่อไทยใน LINE) — เก็บตัวอักษร/สระ/วรรณยุกต์ทุกภาษา ช่องว่างเป็น _
+  const cleaned =
+    (opts.unicode
+      ? base.trim().replace(/\s+/g, "_").replace(/[^\p{L}\p{M}\p{N}_.]/gu, "")
+      : base.replace(/[^a-zA-Z0-9_]/g, "")
+    ).slice(0, 40);
+  const safe = [...cleaned].length >= 3 ? cleaned : "reader";
   for (let attempt = 0; attempt < 20; attempt++) {
-    const candidate = attempt === 0 ? cleaned : `${cleaned}${Math.floor(Math.random() * 10000)}`;
+    const candidate = attempt === 0 ? safe : `${safe}${Math.floor(Math.random() * 10000)}`;
     const existing = await prisma.user.findUnique({ where: { username: candidate }, select: { user_id: true } });
     if (!existing) return candidate;
   }
@@ -309,7 +315,12 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
         data: { oauth_provider: profile.provider, oauth_id: profile.sub },
       });
     } else {
-      const username = await generateUniqueUsername(email.split("@")[0]);
+      // ผลทดสอบ #9 — LINE ไม่ส่งอีเมลมา ระบบใช้อีเมลแทน line_<sub>@line.buddybook.local ซึ่งเดิมกลายเป็น
+      // username "line_U…" ที่อ่านไม่ออก — ใช้ชื่อแสดงของบัญชี LINE แทน (แก้ทีหลังได้ในหน้าตั้งค่า)
+      const placeholderEmail = email.endsWith(".buddybook.local");
+      const username = placeholderEmail
+        ? await generateUniqueUsername(profile.name, { unicode: true })
+        : await generateUniqueUsername(email.split("@")[0]);
       user = await prisma.user.create({
         data: {
           username,
@@ -360,10 +371,21 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
  *  token เซ็นด้วย JWT_REFRESH_SECRET แยกจาก access token หมดอายุ 30 นาที (ดู signResetToken) */
 export async function requestPasswordReset(rawEmail: string) {
   const email = normalizeEmail(rawEmail);
-  const user = await prisma.user.findUnique({ where: { email }, select: { user_id: true, password_hash: true } });
-  if (!user || !user.password_hash) {
-    // ไม่มีบัญชี หรือเป็นบัญชี OAuth ล้วน (ไม่มีรหัสผ่านให้ reset) — ทำเหมือนสำเร็จเสมอ ไม่ throw
-    // และไม่ส่งอีเมล เพื่อลด user enumeration
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { user_id: true, password_hash: true, oauth_provider: true },
+  });
+  // response หน้าตาเดียวกันเสมอ (ไม่ throw) ไม่ว่าจะมีบัญชีหรือไม่ — กัน user enumeration
+  if (!user) return;
+  if (!user.password_hash) {
+    // บัญชี OAuth ล้วน (ผลทดสอบ #6) — ส่งอีเมลบอกช่องทางเข้าสู่ระบบแทน ไปที่อีเมลเจ้าของบัญชีเท่านั้น
+    // ข้ามอีเมลปลอมที่ระบบสร้างให้ (LINE ไม่ส่งอีเมลมา → line_xxx@line.buddybook.local)
+    if (user.oauth_provider && isEmailConfigured() && !email.endsWith(".buddybook.local")) {
+      // ไม่ await — ส่งเบื้องหลัง ให้เวลาตอบกลับใกล้เคียงกับอีเมลที่ไม่มีบัญชี (กันเดาบัญชีจากเวลาตอบ)
+      void sendOAuthSignInHintEmail(email, user.oauth_provider, `${env.APP_URL}/login`).catch((err) =>
+        console.error("[auth] OAuth sign-in hint email failed:", err instanceof Error ? err.message : err)
+      );
+    }
     return;
   }
 

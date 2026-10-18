@@ -10,7 +10,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 const WRITER = { email: "e2e_writer@e2e.buddybook.local", password: "e2e12345" };
 const API_DIR = path.resolve(__dirname, "../apps/api");
 
-let ids: { novel_id: string; chapter_id: string };
+let ids: { writer_id: string; novel_id: string; chapter_id: string };
 
 test.beforeEach(() => {
   // seed ใหม่ทุกเทสต์ — ตอนเริ่มจากเนื้อหาเดิมเสมอ
@@ -22,8 +22,9 @@ async function login(context: BrowserContext) {
   const res = await context.request.post("/api/v1/auth/login", { data: WRITER });
   expect(res.ok()).toBeTruthy();
   // ผู้ใช้ e2e ตั้งความสนใจไว้แล้ว — ข้าม redirect ไป onboarding ด้วย cookie เดียวกับที่ระบบตั้งให้
+  // (ค่าคือ user_id ของเจ้าของบัญชี — middleware เทียบกับ token)
   const url = new URL(test.info().project.use.baseURL!);
-  await context.addCookies([{ name: "bb_has_interests", value: "1", domain: url.hostname, path: "/" }]);
+  await context.addCookies([{ name: "bb_has_interests", value: ids.writer_id, domain: url.hostname, path: "/" }]);
 }
 
 const editorUrl = () => `/write/${ids.novel_id}/chapters/${ids.chapter_id}`;

@@ -110,3 +110,26 @@ export async function sendPasswordResetEmail(to: string, resetLink: string): Pro
     `,
   });
 }
+
+const PROVIDER_LABEL: Record<string, string> = { google: "Google", facebook: "Facebook", line: "LINE", apple: "Apple" };
+
+/** ผลทดสอบ #6 — บัญชีที่สมัครด้วย Google/Facebook/LINE ไม่มีรหัสผ่าน กด "ลืมรหัสผ่าน" แล้วเดิมเงียบไป
+ *  ผู้ใช้รออีเมลที่ไม่มีวันมา — ส่งอีเมลบอกว่าให้เข้าสู่ระบบด้วยช่องทางไหนแทน (ไม่มีลิงก์ตั้งรหัส) */
+export async function sendOAuthSignInHintEmail(to: string, provider: string, loginUrl: string): Promise<void> {
+  const label = PROVIDER_LABEL[provider] ?? provider;
+  await sendEmail({
+    to,
+    subject: "วิธีเข้าสู่ระบบบัญชีของคุณ — BuddyBook",
+    html: `
+      <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+        <h2 style="color: #5B3A29;">บัญชีนี้ไม่ได้ใช้รหัสผ่าน</h2>
+        <p>มีคนขอตั้งรหัสผ่านใหม่ให้อีเมลนี้ แต่บัญชี BuddyBook ของคุณสมัครด้วย <b>${label}</b> จึงไม่มีรหัสผ่านให้ตั้งใหม่</p>
+        <p>เข้าสู่ระบบได้โดยกดปุ่ม "เข้าสู่ระบบด้วย ${label}" ที่หน้าเข้าสู่ระบบ</p>
+        <p style="margin: 24px 0;">
+          <a href="${loginUrl}" style="background: #F0803C; color: white; padding: 12px 24px; border-radius: 999px; text-decoration: none; font-weight: bold;">ไปหน้าเข้าสู่ระบบ</a>
+        </p>
+        <p style="color: #737373; font-size: 13px;">หากคุณไม่ได้เป็นผู้ขอ สามารถละเว้นอีเมลนี้ได้ บัญชีของคุณยังปลอดภัย</p>
+      </div>
+    `,
+  });
+}

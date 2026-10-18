@@ -139,6 +139,34 @@ describe("loginOrRegisterWithOAuth", () => {
   });
 });
 
+describe("usernames for accounts without an email", () => {
+  it("names a LINE account after its display name instead of line_U…", async () => {
+    const sub = `U${crypto.randomBytes(8).toString("hex")}`;
+    const email = `line_${sub}@line.buddybook.local`.toLowerCase();
+    try {
+      await loginOrRegisterWithOAuth(
+        profile({ provider: "line", sub, email, name: `มะลิ ${tag}`, email_verified: false })
+      );
+      const created = await prisma.user.findUnique({ where: { email }, select: { username: true } });
+      expect(created?.username).toBe(`มะลิ_${tag}`);
+    } finally {
+      await prisma.user.deleteMany({ where: { email } });
+    }
+  });
+
+  it("falls back to a readable default when the display name has nothing usable", async () => {
+    const sub = `U${crypto.randomBytes(8).toString("hex")}`;
+    const email = `line_${sub}@line.buddybook.local`.toLowerCase();
+    try {
+      await loginOrRegisterWithOAuth(profile({ provider: "line", sub, email, name: "🙂", email_verified: false }));
+      const created = await prisma.user.findUnique({ where: { email }, select: { username: true } });
+      expect(created?.username).toMatch(/^reader\d*$/);
+    } finally {
+      await prisma.user.deleteMany({ where: { email } });
+    }
+  });
+});
+
 describe("email normalization", () => {
   it("logs in regardless of email case and surrounding spaces", async () => {
     const user = await createUser("login");

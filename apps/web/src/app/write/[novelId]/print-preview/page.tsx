@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { BackButton } from "@/components/ui/BackButton";
 import { PrintButton } from "@/components/writer/PrintButton";
 import { callApi } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
@@ -27,7 +26,7 @@ export default async function PrintPreviewPage({ params }: { params: { novelId: 
     return (
       <div className="mx-auto max-w-3xl px-4 py-8">
         <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-          เชื่อมต่อ API Gateway ไม่ได้ตอนนี้ — ตรวจสอบว่า apps/api (Express) กำลังรันอยู่หรือไม่
+          ตอนนี้เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณารอสักครู่แล้วรีเฟรชหน้านี้อีกครั้ง
         </p>
       </div>
     );
@@ -38,13 +37,7 @@ export default async function PrintPreviewPage({ params }: { params: { novelId: 
   return (
     <div className="min-h-screen bg-neutral-100 print:bg-white">
       <div className="print:hidden sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 sm:px-6">
-        <Link
-          href={`/write/${params.novelId}`}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-neutral-600 hover:text-neutral-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          กลับไปแก้ไข
-        </Link>
+        <BackButton href={`/write/${params.novelId}`} label="กลับไปแก้ไข" />
         <PrintButton />
       </div>
 

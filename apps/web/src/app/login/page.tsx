@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/auth/AuthForm";
+import { getCurrentUser } from "@/lib/api/session";
 
 /** ข้อความของ ?error= ที่ OAuth callback (api/v1/auth/oauth/[provider]/callback) ส่งกลับมา */
 const oauthErrorMessages: Record<string, string> = {
@@ -10,7 +12,10 @@ const oauthErrorMessages: Record<string, string> = {
   oauth_suspended: "บัญชีนี้ถูกระงับการใช้งาน",
 };
 
-export default function LoginPage({ searchParams }: { searchParams: { error?: string; two_factor?: string } }) {
+export default async function LoginPage({ searchParams }: { searchParams: { error?: string; two_factor?: string } }) {
+  // ผลทดสอบ #8 — เดิมเปิด /login ได้ทั้งที่ล็อกอินค้าง ถ้าล็อกอินช่องทางใหม่ไม่สำเร็จ ผู้ใช้ยังอยู่บัญชีเก่า
+  // โดยไม่รู้ตัว — คนที่ล็อกอินอยู่ให้ออกจากระบบก่อนถึงจะเปลี่ยนบัญชีได้
+  if (await getCurrentUser()) redirect("/");
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 py-12">
       <AuthForm

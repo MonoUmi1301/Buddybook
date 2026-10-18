@@ -3,6 +3,7 @@ import { IBM_Plex_Sans_Thai, Noto_Serif_Thai, Sarabun } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthFetchInterceptor } from "@/components/auth/AuthFetchInterceptor";
 import { Toaster } from "@/components/ui/Toaster";
+import { NavigationTracker } from "@/components/layout/NavigationTracker";
 import "./globals.css";
 import "./gifts.css";
 
@@ -67,6 +68,7 @@ export default function RootLayout({
         <AuthFetchInterceptor />
         <ThemeProvider>{children}</ThemeProvider>
         <Toaster />
+        <NavigationTracker />
       </body>
     </html>
   );
