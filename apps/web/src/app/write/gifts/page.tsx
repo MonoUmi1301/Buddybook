@@ -1,6 +1,5 @@
-import Link from "next/link";
+import { BackButton } from "@/components/ui/BackButton";
 import { redirect } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { GiftInbox } from "@/components/gifts/inbox/GiftInbox";
@@ -30,10 +29,7 @@ export default async function GiftInboxPage({ searchParams }: { searchParams: { 
       <Navbar user={user} />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        <Link href="/write" className="inline-flex min-h-[44px] items-center gap-1 text-sm text-gift-muted hover:text-gift-ink">
-          <ChevronLeft className="h-4 w-4" aria-hidden />
-          ผลงานของฉัน
-        </Link>
+        <BackButton href="/write" label="ผลงานของฉัน" className="-ml-1.5" />
         <h1 className="mt-1 text-h2 text-gift-ink">กล่องจดหมาย</h1>
         <p className="mt-1 text-sm text-gift-muted">ของขวัญและการ์ดจากนักอ่าน ข้อความส่วนตัวเห็นได้เฉพาะคุณ</p>
 

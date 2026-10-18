@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { BackButton } from "@/components/ui/BackButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { TrashBinManager, type TrashItem } from "@/components/writer/TrashBinManager";
@@ -37,6 +38,7 @@ export default async function NovelTrashPage({ params }: { params: { novelId: st
       <Navbar user={user} />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton href={`/write/${novel.novel_id}`} label={novel.title} className="-ml-1.5 mb-3 max-w-full truncate" />
         <h1 className="mb-1 text-h2 text-neutral-900">ถังขยะของ {novel.title}</h1>
         <p className="mb-6 text-sm text-neutral-500">
           รายการที่ถูกลบจะถูกเก็บไว้ 30 วันก่อนลบถาวรอัตโนมัติ
@@ -44,7 +46,7 @@ export default async function NovelTrashPage({ params }: { params: { novelId: st
 
         {"error" in trashResult && (
           <p className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-            เชื่อมต่อ API Gateway ไม่ได้ตอนนี้ — ตรวจสอบว่า apps/api (Express) กำลังรันอยู่หรือไม่
+            ตอนนี้เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณารอสักครู่แล้วรีเฟรชหน้านี้อีกครั้ง
           </p>
         )}
 

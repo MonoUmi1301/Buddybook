@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { BackButton } from "@/components/ui/BackButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { NovelManagementPanel, type ManagedNovel, type ManagedChapter } from "@/components/writer/NovelManagementPanel";
@@ -39,6 +40,7 @@ export default async function NovelManagePage({ params }: { params: { novelId: s
       <Navbar user={user} />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton href="/write" label="ผลงานของฉัน" className="-ml-1.5 mb-3" />
         <NovelManagementPanel novel={novel} chapters={chapters} tags={tags} />
       </main>
 
