@@ -5,9 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { env } from "@/config/env";
 import { verifySlip, transRefToUuid } from "@/lib/slipok";
-import { getStripeClient } from "@/lib/stripe";
+import { getStripeClient, isStripeConfigured } from "@/lib/stripe";
 import { stringToUuid } from "@/lib/idHash";
-import { resolveOrderStatus } from "@/lib/payments/resolveStatus";
+import { resolveOrderStatus, resolveStripeSession } from "@/lib/payments/resolveStatus";
 
 type QueryClient = typeof prisma | Prisma.TransactionClient;
 
@@ -191,12 +191,43 @@ export async function createStripeCheckoutSession(user_id: string, packageId: st
   return { client_secret: session.client_secret, order_id, expires_at: new Date(expiresAtSec * 1000) };
 }
 
-/** GET /wallet/topup/orders/:order_id/status (requireAuth) — อ่านสถานะจาก topup_orders เท่านั้น
- *  (ไม่เรียก Stripe และไม่เติม coin — webhook เป็นคนเดียวที่เปลี่ยนสถานะ/เติม coin) */
+/** ห้ามถาม Stripe ถี่กว่านี้ต่อ order (หน้า /wallet poll สถานะทุกไม่กี่วินาที) */
+const RECONCILE_MIN_INTERVAL_MS = 4000;
+const lastReconcileAt = new Map<string, number>();
+
+/** เพิ่มภายหลัง (ผลทดสอบ S4) — webhook มาไม่ถึง (ไม่ได้ตั้ง endpoint ใน Stripe Dashboard, เครื่อง dev ไม่มี
+ *  public URL, Stripe ล่ม) ผู้ใช้จ่ายเงินแล้วแต่ order ค้าง pending และไม่ได้ coin ตลอดไป
+ *  ถาม Stripe ตรงเมื่อ order ยัง pending แล้วใช้ fulfill/fail ตัวเดียวกับ webhook — fulfillStripeTopup
+ *  idempotent อยู่แล้ว (claim order + unique reference_id ใน lockWallets/$transaction) ถ้า webhook
+ *  กับหน้านี้มาพร้อมกันก็เติม coin ครั้งเดียว ผล session มาจาก API ของ Stripe ด้วย secret key ฝั่งเรา
+ *  ไม่ได้เชื่อข้อมูลจาก client */
+async function reconcileWithStripe(order: { order_id: string; stripe_session_id: string }) {
+  const now = Date.now();
+  if (now - (lastReconcileAt.get(order.order_id) ?? 0) < RECONCILE_MIN_INTERVAL_MS) return;
+  lastReconcileAt.set(order.order_id, now);
+  if (lastReconcileAt.size > 10_000) lastReconcileAt.clear();
+
+  try {
+    const session = await getStripeClient().checkout.sessions.retrieve(order.stripe_session_id);
+    const result = resolveStripeSession(session);
+    if (result === "PAID") await fulfillStripeTopup(session);
+    else if (result === "FAILED") await failStripeTopup(session);
+  } catch (err) {
+    // Stripe ตอบไม่ได้ = คงสถานะเดิมใน DB ไว้ รอบถัดไปหรือ webhook จะมาปิดเอง
+    console.warn(`[wallet] reconcile ${order.order_id} failed:`, err instanceof Error ? err.message : err);
+  }
+}
+
+/** GET /wallet/topup/orders/:order_id/status (requireAuth) — สถานะจาก topup_orders
+ *  ถ้ายัง pending จะถาม Stripe ตรงก่อน (ดู reconcileWithStripe) */
 export async function getTopupOrderStatus(user_id: string, order_id: string) {
-  const order = await prisma.topupOrder.findUnique({ where: { order_id } });
+  let order = await prisma.topupOrder.findUnique({ where: { order_id } });
   // ของคนอื่นตอบ 404 เหมือนไม่มีอยู่ — กันเดา order_id ของคนอื่นมาดู
   if (!order || order.user_id !== user_id) throw ApiError.notFound("Top-up order not found");
+  if (order.status === "pending" && isStripeConfigured()) {
+    await reconcileWithStripe(order);
+    order = (await prisma.topupOrder.findUnique({ where: { order_id } })) ?? order;
+  }
   return {
     order_id,
     status: resolveOrderStatus(order),
