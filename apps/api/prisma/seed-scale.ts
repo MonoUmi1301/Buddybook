@@ -19,8 +19,14 @@
  * - ไม่แตะผู้ใช้จริง / mock / demo (ระบุชุดนี้จากอีเมล @scale.buddybook.local)
  * - id ทุกตัวสร้างฝั่งสคริปต์ด้วย UUID เพื่อใช้ createMany แบบ batch ได้
  * - ข้อมูลใน Neo4j ไม่ถูกสร้างที่นี่ ต้องรัน sync ของระบบหลังจากนี้
+ *
+ * เพิ่มภายหลัง (ข้อมูลสำหรับทดสอบมือ) — ทุกบัญชีล็อกอินด้วยอีเมล + รหัสผ่าน buddy1234 ได้, เนื้อหาตอนยาวจริง,
+ * ตอนติดเหรียญ + การซื้อ + ledger กระเป๋าเงินที่ยอดถูกต้อง, ติดตามนักเขียน, คอมเมนต์หลายแบบ + นักเขียนตอบกลับ,
+ * sentiment (label/score/polarity) ครบ, ยอดวิวรายวัน (กราฟสถิตินักเขียน) — จบแล้วพิมพ์บัญชีแนะนำให้ลองล็อกอิน
+ *   --no-sentiment   เว้น sentiment ว่าง ให้ NLP worker วิเคราะห์เอง (ทดสอบ worker กับข้อมูลจำนวนมาก)
  */
 import { randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { writeFileSync } from "node:fs";
 
 // ---------------------------------------------------------------------------
@@ -38,10 +44,16 @@ const CFG = {
   seed: arg("seed", 42),
   days: 540, // อายุแพลตฟอร์มจำลอง (วัน)
   reviewRate: 0.3, // โอกาสที่คนอ่านจะเขียนรีวิว (ปรับได้)
-  commentRate: 0.08, // โอกาสที่คนอ่านจะคอมเมนต์อย่างน้อย 1 ตอน
+  commentRate: 0.22, // โอกาสที่คนอ่านจะคอมเมนต์อย่างน้อย 1 ตอน (คอมเมนต์ได้ 1-3 ตอน)
+  authorReplyRate: 0.25, // โอกาสที่นักเขียนตอบคอมเมนต์
+  paidNovelShare: 0.2, // สัดส่วนนิยาย (>= 10 ตอน) ที่มีตอนติดเหรียญ
+  spenderShare: 0.4, // สัดส่วนนักอ่านที่ยอมจ่ายปลดล็อกตอน
+  chapterFeePercent: 10, // ต้องตรงกับ CHAPTER_PLATFORM_FEE_PERCENT
+  password: "buddy1234",
   inactiveShare: 0.08, // สัดส่วนคนสมัครแล้วแทบไม่อ่าน
 };
 const DRY_RUN = argv.includes("--dry-run");
+const WITH_SENTIMENT = !argv.includes("--no-sentiment");
 const EXPORT = argv.includes("--export-csv"); // เขียน scale-interactions.csv สำหรับทดลองนอกฐานข้อมูล
 const DOMAIN = "scale.buddybook.local";
 
@@ -105,15 +117,34 @@ const NAME_A = ["ภู", "ธาร", "แพร", "ฟ้า", "ดาว", "�
 const NAME_B = ["", "รินทร์", "วา", "ธิดา", "พล", "ภพ", "ฤทัย", "นภา", "กร", "ดา", "เทพ", "พร"];
 const TITLE_PATTERNS = ["{n}แห่ง{m}", "{h}", "บันทึก{n}", "{n}กับ{m}", "เมื่อ{n}ไม่ใช่{m}", "{n}ที่หายไป", "ตำนาน{n}", "{n}ร้อยวัน", "ย้อนรอย{n}", "{n}ของฉัน"];
 const REVIEW_TEXT: Record<number, string[]> = {
-  5: ["ชอบมาก อ่านรวดเดียวจบ", "คาแรกเตอร์มีมิติมาก ตามต่อแน่นอน", "ดีที่สุดที่อ่านปีนี้", "เขียนดีมาก ภาษาสวย"],
-  4: ["สนุกดี บางช่วงยืดไปนิด", "พล็อตดี รอตอนต่อไป", "ชอบตัวรองมากกว่าพระเอกอีก", "อ่านเพลิน แนะนำ"],
-  3: ["พออ่านได้ ยังไม่ค่อยอิน", "เปิดเรื่องดีแต่กลางเรื่องแผ่ว", "พล็อตคุ้น ๆ แต่ก็โอเค"],
-  2: ["ช้าไปหน่อย ไม่ค่อยเข้าทาง", "ตัวละครทำอะไรไม่ค่อยสมเหตุผล"],
-  1: ["ไม่ใช่แนว อ่านไม่จบ", "ผิดหวัง เปิดเรื่องดีแต่หลุดโฟกัส"],
+  5: ["ชอบมาก อ่านรวดเดียวจบ", "คาแรกเตอร์มีมิติมาก ตามต่อแน่นอน", "ดีที่สุดที่อ่านปีนี้", "เขียนดีมาก ภาษาสวย",
+    "ปูมาดีมาก เฉลยแล้วขนลุกเลย", "อ่านจบแล้วยังคิดถึงตัวละครอยู่เลย", "ฉากสุดท้ายทำร้องไห้หนักมาก คุ้มทุกตอน",
+    "เป็นเรื่องที่ทำให้กลับมาอ่านนิยายอีกครั้ง ขอบคุณนักเขียนค่ะ", "บรรยายเห็นภาพชัดมาก เหมือนดูซีรีส์"],
+  4: ["สนุกดี บางช่วงยืดไปนิด", "พล็อตดี รอตอนต่อไป", "ชอบตัวรองมากกว่าพระเอกอีก", "อ่านเพลิน แนะนำ",
+    "โดยรวมดีมาก ติดแค่ช่วงกลางเรื่องเดินช้า", "ตัวเอกน่ารัก แต่อยากให้ตัวร้ายมีเหตุผลมากกว่านี้", "เรื่องนี้ฟีลกู้ดดี อ่านก่อนนอนได้"],
+  3: ["พออ่านได้ ยังไม่ค่อยอิน", "เปิดเรื่องดีแต่กลางเรื่องแผ่ว", "พล็อตคุ้น ๆ แต่ก็โอเค",
+    "มีหลายจุดที่ชอบและไม่ชอบพอ ๆ กัน", "อ่านได้เรื่อย ๆ ยังไม่ถึงกับติด", "ภาษาดีแต่จังหวะเรื่องยังไม่ค่อยลงตัว"],
+  2: ["ช้าไปหน่อย ไม่ค่อยเข้าทาง", "ตัวละครทำอะไรไม่ค่อยสมเหตุผล", "ปมเยอะเกินจนตามไม่ทัน",
+    "ตอนแรก ๆ ดีแต่หลังจากนั้นวนอยู่ที่เดิม", "พิมพ์ผิดเยอะ อ่านแล้วสะดุด"],
+  1: ["ไม่ใช่แนว อ่านไม่จบ", "ผิดหวัง เปิดเรื่องดีแต่หลุดโฟกัส", "เนื้อเรื่องไม่ไปไหนเลย เลิกอ่านแล้ว",
+    "ตัวเอกนิสัยแย่มาก อ่านแล้วหงุดหงิด"],
 };
-const COMMENT_POS = ["ตอนนี้ดีมาก", "รอตอนต่อไปค่ะ", "ฉากนี้ทำใจสั่น", "555 ขำมาก", "ร้องไห้หนักมาก", "ขอบคุณที่อัปนะคะ"];
-const COMMENT_NEU = ["ปมนี้น่าจะเฉลยตอนท้าย", "สงสัยตัวร้ายตัวจริงคือใคร", "ตอนนี้สั้นไปนิด"];
-const COMMENT_NEG = ["งงตรงนี้นิดหน่อย", "ทำไมพระเอกทำแบบนั้น", "เดาทางได้แล้ว"];
+const COMMENT_POS = ["ตอนนี้ดีมาก", "รอตอนต่อไปค่ะ", "ฉากนี้ทำใจสั่น", "555 ขำมาก", "ร้องไห้หนักมาก", "ขอบคุณที่อัปนะคะ",
+  "ชอบบทพูดตรงนี้มาก จำไปใช้เลย", "พระเอกน่ารักเกินไปแล้ว", "อ่านตอนตีสองก็ยังไม่ง่วง สนุกมาก", "ฉากต่อสู้มันส์มาก บรรยายเห็นภาพ",
+  "ในที่สุดก็สารภาพกันสักที!!", "ชอบความสัมพันธ์ของสองคนนี้มาก", "ตอนนี้อบอุ่นหัวใจสุด ๆ", "เป็นกำลังใจให้นะคะ เขียนดีมาก"];
+const COMMENT_NEU = ["ปมนี้น่าจะเฉลยตอนท้าย", "สงสัยตัวร้ายตัวจริงคือใคร", "ตอนนี้สั้นไปนิด", "ตอนหน้าจะลงวันไหนคะ",
+  "ตัวละครใหม่นี่เคยโผล่ตอนไหนมาก่อนไหมนะ", "อ่านถึงตรงนี้แล้วขอเดาว่าเป็นพี่ชาย", "ลืมไปแล้วว่าใครเป็นใคร ต้องย้อนอ่าน", "มาอ่านรอบสองค่ะ"];
+const COMMENT_NEG = ["งงตรงนี้นิดหน่อย", "ทำไมพระเอกทำแบบนั้น", "เดาทางได้แล้ว", "ตอนนี้ยืดไปหน่อย ไม่มีอะไรเกิดขึ้นเลย",
+  "รำคาญนางเอกมาก ตัดสินใจอะไรไม่ได้สักอย่าง", "ฉากนี้ข้ามไปเร็วเกินไป", "เศร้าจนไม่อยากอ่านต่อแล้ว", "ตัวร้ายแบนไปหน่อย"];
+const AUTHOR_REPLY = ["ขอบคุณที่อ่านนะคะ 🥰", "ตอนหน้าเฉลยแน่นอนค่ะ รอติดตามนะ", "ดีใจที่ชอบฉากนี้ค่ะ เขียนอยู่สามวันเลย",
+  "รับทราบค่ะ จะปรับให้กระชับขึ้นนะคะ", "ขอบคุณสำหรับกำลังใจค่ะ", "ใจเย็น ๆ นะคะ ทุกอย่างมีเหตุผล 555"];
+const DIALOG = ["\"เธอแน่ใจเหรอว่าจะทำแบบนี้\"", "\"ฉันไม่เคยขอให้เธอมาช่วยเลยสักครั้ง\"", "\"ถ้าเป็นเมื่อก่อน ฉันคงหนีไปแล้ว\"",
+  "\"บางทีคำตอบอาจอยู่ใกล้กว่าที่เราคิด\"", "\"อย่าหันหลังกลับนะ ไม่ว่าจะได้ยินอะไรก็ตาม\"", "\"ขอบคุณที่ยังอยู่ตรงนี้\"",
+  "\"เรื่องนี้ยังไม่จบหรอก\"", "\"ฉันจำเสียงนั้นได้\""];
+const NARRATION = ["ลมเย็นพัดผ่านมาพร้อมกลิ่นฝนที่ยังไม่ทันตก", "เสียงฝีเท้าดังขึ้นจากปลายทางเดิน แล้วก็เงียบลงอย่างกะทันหัน",
+  "แสงสุดท้ายของวันทอดยาวลงบนพื้นไม้เก่า", "หัวใจเต้นแรงจนแทบได้ยินเสียงตัวเอง", "ไม่มีใครพูดอะไรอยู่นาน ราวกับทุกคนกำลังรอให้อีกฝ่ายเริ่มก่อน",
+  "ความทรงจำเก่า ๆ ไหลย้อนกลับมาเหมือนคลื่นที่ซัดเข้าฝั่ง", "เมืองทั้งเมืองยังหลับใหล มีเพียงไฟดวงเดียวที่ยังไม่ดับ",
+  "เธอกำมือแน่นจนเล็บจิกเข้าไปในเนื้อ", "รอยยิ้มนั้นดูอบอุ่นเกินกว่าจะเป็นของคนแปลกหน้า", "ทุกอย่างเกิดขึ้นเร็วเกินกว่าจะตั้งตัวทัน"];
 
 const charName = () => pick(NAME_A) + pick(NAME_B);
 
@@ -121,8 +152,8 @@ const charName = () => pick(NAME_A) + pick(NAME_B);
 // ชนิดข้อมูลที่สร้าง
 // ---------------------------------------------------------------------------
 type UserRow = {
-  user_id: string; username: string; pen_name: string | null; email: string; oauth_provider: "google"; oauth_id: string;
-  bio: string | null; age_verified: boolean; created_at: Date;
+  user_id: string; username: string; pen_name: string | null; email: string; password_hash: string;
+  bio: string | null; age_verified: boolean; age_verification_source: "self_declared"; created_at: Date;
 };
 type NovelRow = {
   novel_id: string; author_id: string; title: string; synopsis: string; introduction: string; cover_image_url: string;
@@ -132,9 +163,24 @@ type NovelRow = {
 };
 type ChapterRow = {
   chapter_id: string; novel_id: string; chapter_number: number; title: string; content: string; status: "published";
-  word_count: number; published_at: Date; created_at: Date;
+  word_count: number; price_coins: number; published_at: Date; created_at: Date;
 };
 type Interaction = { user: number; novel: number; t: number; latent: number; rating: number | null; liked: boolean; chaptersRead: number };
+type Purchase = { purchase_id: string; user: number; novel: number; chapter: number; price: number; at: Date };
+
+/** เนื้อหาตอนแบบยาว 10-16 ย่อหน้า ผสมบรรยาย + บทพูด (ให้หน้าอ่าน/นับคำ/ตัวอย่างตอนติดเหรียญดูสมจริง) */
+function chapterBody(g: Genre): string {
+  const n = 10 + Math.floor(rand() * 7);
+  const paras: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = rand();
+    if (r < 0.3) paras.push(`${pick(DIALOG)} ${charName()}พูดเบา ๆ ขณะมองไปที่${pick(g.nouns)}`);
+    else if (r < 0.65) paras.push(`${pick(NARRATION)} ${charName()}รู้ดีว่า${pick(g.nouns)}คือกุญแจสำคัญ และ${pick(g.hooks)}อาจไม่ใช่เรื่องบังเอิญ`);
+    else paras.push(`${pick(NARRATION)} ก่อนที่${charName()}จะตัดสินใจก้าวเข้าไปใกล้${pick(g.nouns)}อีกครั้ง ทั้งที่ใจหนึ่งยังลังเลอยู่`);
+  }
+  return paras.map((x) => `<p>${x}</p>`).join("");
+}
+const textLength = (html: string) => html.replace(/<[^>]+>/g, "").replace(/\s+/g, "").length;
 
 // ---------------------------------------------------------------------------
 // สร้างข้อมูล
@@ -151,9 +197,10 @@ function generate() {
     const username = `${role === "author" ? "sim_writer" : "sim_reader"}_${String(i).padStart(5, "0")}`;
     const day = rand() * (CFG.days - 20);
     return {
-      user_id: randomUUID(), username, email: `${username}@${DOMAIN}`, oauth_provider: "google", oauth_id: `scale-${username}`,
+      user_id: randomUUID(), username, email: `${username}@${DOMAIN}`, password_hash: "",
       pen_name: role === "author" || rand() < 0.15 ? `${charName()}${pick(["", "ฟิค", "หมึก", "ราตรี", "นิยาย"])}` : null,
-      bio: role === "author" ? `เขียนแนว${pick(GENRES).main}เป็นหลัก` : null, age_verified: rand() < 0.85, created_at: at(day),
+      bio: role === "author" ? `เขียนแนว${pick(GENRES).main}เป็นหลัก` : null, age_verified: rand() < 0.85,
+      age_verification_source: "self_declared", created_at: at(day),
     };
   };
 
@@ -272,23 +319,43 @@ function generate() {
     n.updated_at = at(Math.min(CFG.days - 0.5, novelDay[i] + chapterCount[i] * (2 + rand() * 6)));
   });
 
-  // ตอน
+  // ตอน — นิยายยาวบางเรื่องมีตอนติดเหรียญหลังตอนฟรีช่วงแรก
   const chapters: ChapterRow[] = [];
   const chapterIdOf: string[][] = [];
+  const chapterPrice: number[][] = [];
+  const freeUpTo = novels.map((_, i) => (chapterCount[i] >= 10 && rand() < CFG.paidNovelShare ? 5 + Math.floor(rand() * 4) : Infinity));
   novels.forEach((n, i) => {
     const g = GENRES[novelGenre[i]];
     const ids: string[] = [];
+    const prices: number[] = [];
+    const basePrice = pick([5, 9, 12, 15, 19, 25]);
     const span = (n.updated_at.getTime() - n.created_at.getTime()) / Math.max(1, chapterCount[i]);
     for (let c = 1; c <= chapterCount[i]; c++) {
-      const paras = Array.from({ length: 3 }, () => `<p>${charName()}มองไปที่${pick(g.nouns)}อยู่นาน ก่อนจะตัดสินใจว่า${pick(g.hooks)}อาจไม่ใช่เรื่องบังเอิญ</p>`).join("");
+      const content = chapterBody(g);
       const when = new Date(n.created_at.getTime() + span * (c - 1));
       const id = randomUUID();
+      const price = c > freeUpTo[i] ? basePrice : 0;
       ids.push(id);
+      prices.push(price);
       chapters.push({ chapter_id: id, novel_id: n.novel_id, chapter_number: c, title: chapterCount[i] === 1 ? n.title : `ตอนที่ ${c} ${pick(g.nouns)}`,
-        content: paras, status: "published", word_count: 1200 + Math.floor(rand() * 2400), published_at: when, created_at: when });
+        content, status: "published", word_count: textLength(content), price_coins: price, published_at: when, created_at: when });
     }
     chapterIdOf.push(ids);
+    chapterPrice.push(prices);
   });
+
+  // ซื้อตอน: คนที่ยอมจ่ายซื้อทุกตอนติดเหรียญที่อ่านถึง ส่วนคนที่ไม่จ่ายอ่านหยุดที่ตอนฟรีสุดท้าย
+  const spender = users.map(() => rand() < CFG.spenderShare);
+  const purchases: Purchase[] = [];
+  for (const x of interactions) {
+    const free = freeUpTo[x.novel];
+    if (x.chaptersRead <= free) continue;
+    if (!spender[x.user]) { x.chaptersRead = free; continue; }
+    for (let c = free + 1; c <= x.chaptersRead; c++) {
+      purchases.push({ purchase_id: randomUUID(), user: x.user, novel: x.novel, chapter: c - 1, price: chapterPrice[x.novel][c - 1],
+        at: at(Math.min(CFG.days - 0.02, x.t + (c - free) * 0.3 + rand() * 0.2)) });
+    }
+  }
 
   // ตัวละคร (3-5 ต่อเรื่อง) + ความสัมพันธ์
   const nodes: { node_id: string; novel_id: string; character_name: string; description: string; character_role: "protagonist" | "supporting" | "antagonist"; position_x: number; position_y: number }[] = [];
@@ -313,7 +380,7 @@ function generate() {
     }
   });
 
-  return { users, authors, novels, chapters, chapterIdOf, novelTags, interactions, nodes, edges, pref };
+  return { users, authors, novels, chapters, chapterIdOf, novelTags, interactions, nodes, edges, pref, purchases };
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +403,42 @@ function report(d: ReturnType<typeof generate>) {
   console.log(`รีวิวต่อคน: median ${q(revPer, 0.5)} | คนที่มีรีวิว >= 5 รายการ ${revPer.filter((x) => x >= 5).length}`);
   console.log(`การกระจายดาว 1-5: ${hist.join(" / ")}  (เฉลี่ย ${(reviews.reduce((a, b) => a + (b.rating ?? 0), 0) / reviews.length).toFixed(2)})`);
   console.log(`ความหนาแน่น user x novel: ${((100 * d.interactions.length) / (CFG.readers * CFG.novels)).toFixed(2)}%`);
+  const paidChapters = d.chapters.filter((c) => c.price_coins > 0).length;
+  console.log(`ตอนติดเหรียญ ${paidChapters} ตอน | การซื้อตอน ${d.purchases.length} ครั้ง (${d.purchases.reduce((a, p) => a + p.price, 0)} coin)`);
+}
+
+type Mood = "pos" | "neutral" | "neg";
+/** sentiment แบบเดียวกับที่ NLP worker ส่งกลับ (label + ความมั่นใจ + ขั้ว −1..1) — เว้นว่างถ้าใช้ --no-sentiment */
+function sentimentFor(mood: Mood) {
+  if (!WITH_SENTIMENT) return {};
+  const score = Number(clamp(0.72 + 0.12 * normal(), 0.4, 0.99).toFixed(3));
+  const polarity = mood === "pos" ? score : mood === "neg" ? -score : Number(clamp(0.1 * normal(), -0.3, 0.3).toFixed(3));
+  return { sentiment_label: mood, sentiment_score: score, sentiment_polarity: Number(polarity.toFixed(3)) };
+}
+
+/** บัญชีแนะนำสำหรับลองล็อกอิน — เลือกจากข้อมูลจริงที่เพิ่งสร้าง */
+function printAccounts(d: ReturnType<typeof generate>, tx: { user_id: string; type: string; amount: number }[]) {
+  const readersOf = new Map<string, number>();
+  for (const x of d.interactions) readersOf.set(d.novels[x.novel].author_id, (readersOf.get(d.novels[x.novel].author_id) ?? 0) + 1);
+  const earned = new Map<string, number>();
+  for (const r of tx) if (r.type === "chapter_sale") earned.set(r.user_id, (earned.get(r.user_id) ?? 0) + r.amount);
+  const perUser = new Map<number, number>();
+  for (const x of d.interactions) perUser.set(x.user, (perUser.get(x.user) ?? 0) + 1);
+  const byReaders = [...d.authors].sort((a, b) => (readersOf.get(b.user_id) ?? 0) - (readersOf.get(a.user_id) ?? 0))[0];
+  const byEarn = [...d.authors].sort((a, b) => (earned.get(b.user_id) ?? 0) - (earned.get(a.user_id) ?? 0))[0];
+  const heavy = [...perUser.entries()].sort((a, b) => b[1] - a[1])[0];
+  const typical = [...perUser.entries()].find(([, n]) => n >= 15 && n <= 25);
+  const buyer = new Set(d.purchases.map((p) => p.user));
+  const minor = d.users.findIndex((u, i) => !u.age_verified && (perUser.get(i) ?? 0) >= 5);
+  const rows: [string, string][] = [
+    ["นักเขียนที่มีคนอ่านมากที่สุด", byReaders.email],
+    ["นักเขียนรายได้จากตอนติดเหรียญสูงสุด", `${byEarn.email} (${earned.get(byEarn.user_id) ?? 0} coin)`],
+    ["นักอ่านตัวยง", `${d.users[heavy[0]].email} (${heavy[1]} เรื่อง)`],
+    ...(typical ? [["นักอ่านทั่วไป", `${d.users[typical[0]].email} (${typical[1]} เรื่อง${buyer.has(typical[0]) ? ", เคยซื้อตอน" : ""})`] as [string, string]] : []),
+    ...(minor >= 0 ? [["ยังไม่ยืนยันอายุ 18+", d.users[minor].email] as [string, string]] : []),
+  ];
+  console.log(`\nบัญชีแนะนำสำหรับลองล็อกอิน (รหัสผ่านทุกบัญชี: ${CFG.password})`);
+  for (const [label, v] of rows) console.log(`  ${label.padEnd(36)} ${v}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +454,11 @@ async function insert(d: ReturnType<typeof generate>) {
     // ลบชุดเดิม (ลำดับเดียวกับ seed-mock-novels.ts)
     const old = (await prisma.user.findMany({ where: { email: { endsWith: `@${DOMAIN}` } }, select: { user_id: true } })).map((u: { user_id: string }) => u.user_id);
     if (old.length) {
+      // ตารางที่ไม่ cascade ตามผู้ใช้ (ดู schema.prisma) ต้องลบก่อน
+      await prisma.withdrawalRequest.deleteMany({ where: { user_id: { in: old } } });
+      await prisma.walletTransaction.deleteMany({ where: { user_id: { in: old } } });
+      await prisma.donation.deleteMany({ where: { OR: [{ from_user_id: { in: old } }, { to_user_id: { in: old } }] } });
+      await prisma.comment.deleteMany({ where: { parent_comment_id: { not: null }, user_id: { in: old } } });
       await prisma.comment.deleteMany({ where: { user_id: { in: old } } });
       await prisma.review.deleteMany({ where: { user_id: { in: old } } });
       await prisma.novel.deleteMany({ where: { author_id: { in: old } } });
@@ -366,7 +474,9 @@ async function insert(d: ReturnType<typeof generate>) {
       return id;
     };
 
-    await chunk([...d.authors, ...d.users], (b) => prisma.user.createMany({ data: b }));
+    // ทุกบัญชีจำลองใช้รหัสผ่านเดียวกัน (bcrypt ครั้งเดียว) — ล็อกอินทดสอบด้วยอีเมล sim_xxx@scale.buddybook.local ได้
+    const password_hash = await bcrypt.hash(CFG.password, 10);
+    await chunk([...d.authors, ...d.users].map((u) => ({ ...u, password_hash })), (b) => prisma.user.createMany({ data: b }));
     await chunk(d.users.flatMap((u, i) => {
       const top = d.pref[i].map((p, g) => [p, g] as const).sort((a, b) => b[0] - a[0]).slice(0, 2);
       return top.map(([, g]) => ({ user_id: u.user_id, tag_id: tagId(GENRES[g].main) }));
@@ -399,17 +509,97 @@ async function insert(d: ReturnType<typeof generate>) {
     await chunk(it.filter((x) => x.rating !== null).map((x) => {
       const r = x.rating as number;
       return { user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, rating: r, comment_text: pick(REVIEW_TEXT[r]),
-        sentiment_label: r >= 4 ? "pos" as const : r === 3 ? "neutral" as const : "neg" as const,
-        sentiment_score: Number(clamp(0.15 + (r - 1) * 0.2 + 0.05 * normal(), 0, 1).toFixed(2)),
+        ...sentimentFor(r >= 4 ? "pos" : r === 3 ? "neutral" : "neg"),
         is_anonymous: rand() < 0.05, created_at: at(Math.min(CFG.days - 0.01, x.t + 1 + rand() * 10)) };
     }), (b) => prisma.review.createMany({ data: b, skipDuplicates: true }));
-    await chunk(it.filter(() => rand() < CFG.commentRate).map((x) => {
-      const ch = d.chapterIdOf[x.novel][Math.floor(rand() * Math.min(x.chaptersRead, d.chapterIdOf[x.novel].length))];
-      const mood = x.latent > 0.3 ? "pos" : x.latent < -0.5 ? "neg" : "neutral";
-      return { chapter_id: ch, user_id: U[x.user].user_id, content: pick(mood === "pos" ? COMMENT_POS : mood === "neg" ? COMMENT_NEG : COMMENT_NEU),
-        sentiment_label: mood as "pos" | "neg" | "neutral", sentiment_score: mood === "pos" ? 0.85 : mood === "neg" ? 0.25 : 0.5,
-        created_at: at(Math.min(CFG.days - 0.01, x.t + rand() * 15)) };
-    }), (b) => prisma.comment.createMany({ data: b }));
+    // คอมเมนต์ 1-3 ตอนต่อคน อารมณ์ตามความชอบเรื่อง (มีสุ่มสลับบ้าง) + นักเขียนตอบกลับบางส่วน
+    const comments: { comment_id: string; chapter_id: string; user_id: string; parent_comment_id: string | null; content: string; created_at: Date }[] = [];
+    const commentMood: Mood[] = [];
+    for (const x of it) {
+      if (rand() >= CFG.commentRate) continue;
+      const readable = Math.min(x.chaptersRead, d.chapterIdOf[x.novel].length);
+      for (let k = 0, m = 1 + Math.floor(rand() * 3); k < m; k++) {
+        const base: Mood = x.latent > 0.3 ? "pos" : x.latent < -0.5 ? "neg" : "neutral";
+        const mood: Mood = rand() < 0.2 ? pick(["pos", "neutral", "neg"] as const) : base;
+        const created = at(Math.min(CFG.days - 0.02, x.t + rand() * 15));
+        const id = randomUUID();
+        comments.push({ comment_id: id, chapter_id: d.chapterIdOf[x.novel][Math.floor(rand() * readable)], user_id: U[x.user].user_id,
+          parent_comment_id: null, content: pick(mood === "pos" ? COMMENT_POS : mood === "neg" ? COMMENT_NEG : COMMENT_NEU), created_at: created });
+        commentMood.push(mood);
+        if (rand() < CFG.authorReplyRate) {
+          comments.push({ comment_id: randomUUID(), chapter_id: comments[comments.length - 1].chapter_id, user_id: N[x.novel].author_id,
+            parent_comment_id: id, content: pick(AUTHOR_REPLY), created_at: new Date(Math.min(NOW - 60_000, created.getTime() + rand() * 2 * DAY)) });
+          commentMood.push("pos");
+        }
+      }
+    }
+    // พ่อก่อนลูก (reply อ้าง parent ที่ต้องมีอยู่แล้ว) — createMany ทีละ batch ตามลำดับใน array จึงปลอดภัย
+    await chunk(comments.map((c, i) => ({ ...c, ...sentimentFor(commentMood[i]) })), (b) => prisma.comment.createMany({ data: b }));
+
+    // ติดตามนักเขียนของเรื่องที่ชอบมาก
+    const follows = new Map<string, { follower_id: string; author_id: string; created_at: Date }>();
+    for (const x of it) {
+      if (!x.liked || x.latent < 0.8) continue;
+      const author_id = N[x.novel].author_id;
+      const key = `${U[x.user].user_id}:${author_id}`;
+      if (!follows.has(key)) follows.set(key, { follower_id: U[x.user].user_id, author_id, created_at: at(Math.min(CFG.days - 0.01, x.t + 0.5)) });
+    }
+    await chunk([...follows.values()], (b) => prisma.authorFollow.createMany({ data: b, skipDuplicates: true }));
+
+    // ซื้อตอน + ledger กระเป๋าเงิน: ผู้อ่านเติมเงินก่อนซื้อครั้งแรก, นักเขียนได้ส่วนแบ่งหลังหัก fee
+    // ยอดคงเหลือ (balance_after) ต้องเดินต่อกันตามเวลาของแต่ละคน — getBalance() อ่านแถวล่าสุด
+    const ledger = new Map<string, { type: "topup" | "chapter_purchase" | "chapter_sale"; amount: number; reference_id: string | null; created_at: Date }[]>();
+    const add = (uid: string, row: { type: "topup" | "chapter_purchase" | "chapter_sale"; amount: number; reference_id: string | null; created_at: Date }) => {
+      if (!ledger.has(uid)) ledger.set(uid, []);
+      ledger.get(uid)!.push(row);
+    };
+    const spent = new Map<number, { total: number; first: number }>();
+    for (const p of d.purchases) {
+      const s = spent.get(p.user) ?? { total: 0, first: Infinity };
+      s.total += p.price;
+      s.first = Math.min(s.first, p.at.getTime());
+      spent.set(p.user, s);
+    }
+    for (const [u, s] of spent) {
+      const topup = Math.ceil((s.total + 20 + rand() * 300) / 50) * 50;
+      add(U[u].user_id, { type: "topup", amount: topup, reference_id: null, created_at: new Date(s.first - (1 + rand() * 24) * 3_600_000) });
+    }
+    await chunk(d.purchases.map((p) => ({ purchase_id: p.purchase_id, user_id: U[p.user].user_id, chapter_id: d.chapterIdOf[p.novel][p.chapter],
+      price_coins: p.price, fee_coins: Math.floor((p.price * CFG.chapterFeePercent) / 100), created_at: p.at })),
+      (b) => prisma.chapterPurchase.createMany({ data: b, skipDuplicates: true }));
+    for (const p of d.purchases) {
+      const fee = Math.floor((p.price * CFG.chapterFeePercent) / 100);
+      add(U[p.user].user_id, { type: "chapter_purchase", amount: p.price, reference_id: p.purchase_id, created_at: p.at });
+      add(N[p.novel].author_id, { type: "chapter_sale", amount: p.price - fee, reference_id: p.purchase_id, created_at: new Date(p.at.getTime() + 1) });
+    }
+    const txRows: { user_id: string; type: "topup" | "chapter_purchase" | "chapter_sale"; amount: number; balance_after: number; reference_id: string | null; created_at: Date }[] = [];
+    for (const [user_id, rows] of ledger) {
+      rows.sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+      let bal = 0;
+      for (const r of rows) {
+        bal += r.type === "chapter_purchase" ? -r.amount : r.amount;
+        txRows.push({ user_id, ...r, balance_after: bal });
+      }
+    }
+    await chunk(txRows, (b) => prisma.walletTransaction.createMany({ data: b }));
+
+    // ยอดวิวรายวัน (กราฟในหน้าสถิตินักเขียน): ทุกตอนที่อ่าน = 1 วิว ในวันที่อ่าน
+    const views = new Map<string, { chapter_id: string; novel_id: string; day: Date; views: number }>();
+    for (const x of it) {
+      const n = Math.min(x.chaptersRead, d.chapterIdOf[x.novel].length);
+      for (let c = 0; c < n; c++) {
+        const day = new Date(Math.floor(Math.min(NOW - DAY / 2, START + (x.t + c * (0.2 + rand() * 0.8)) * DAY) / DAY) * DAY);
+        const chapter_id = d.chapterIdOf[x.novel][c];
+        const key = `${chapter_id}:${day.getTime()}`;
+        const v = views.get(key);
+        if (v) v.views += 1 + Math.floor(rand() * 2);
+        else views.set(key, { chapter_id, novel_id: N[x.novel].novel_id, day, views: 1 + Math.floor(rand() * 2) });
+      }
+    }
+    await chunk([...views.values()], (b) => prisma.chapterViewDaily.createMany({ data: b, skipDuplicates: true }), 5000);
+
+    console.log(`คอมเมนต์ ${comments.length} | ติดตามนักเขียน ${follows.size} | ธุรกรรมกระเป๋าเงิน ${txRows.length} | แถวยอดวิวรายวัน ${views.size}`);
+    printAccounts(d, txRows);
     console.log("เขียนลงฐานข้อมูลเสร็จ — อย่าลืมรัน sync ไป Neo4j");
   } finally {
     await prisma.$disconnect();
