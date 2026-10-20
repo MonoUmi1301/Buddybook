@@ -66,6 +66,22 @@ npm run dev              # เปิด api + web + stripe:listen พร้อ�
 # หรือแยกเอง: npm run dev:api / npm run dev:web / npm run stripe:listen คนละ terminal
 ```
 
+### ข้อมูลจำลองขนาดใหญ่ (สำหรับทดสอบมือ)
+
+```bash
+npm run seed:scale       # นักอ่าน 3,000 / นักเขียน 200 / นิยาย 800 / ตอน ~12,000 พร้อมรีวิว คอมเมนต์ ตอนติดเหรียญ ยอดวิว
+# ปรับขนาดได้: npm run seed:scale -- --users 1000 --novels 300   |  ให้ NLP worker วิเคราะห์เอง: -- --no-sentiment
+```
+
+- ทุกบัญชีล็อกอินด้วยอีเมล `sim_reader_xxxxx@scale.buddybook.local` / `sim_writer_xxxxx@scale.buddybook.local` รหัสผ่าน `buddy1234`
+  (จบแล้วสคริปต์พิมพ์บัญชีแนะนำ เช่น นักเขียนที่มีรายได้สูงสุด นักอ่านตัวยง บัญชีที่ยังไม่ยืนยันอายุ)
+- รันซ้ำได้ ลบชุด `@scale.buddybook.local` เดิมก่อนทุกครั้ง ไม่แตะบัญชีจริง
+- ระบบแนะนำต้อง sync เข้า Neo4j หลัง seed (หรือรอรอบอัตโนมัติทุก 6 ชม.) — เปิด api ไว้แล้วรันจาก root (PowerShell):
+  ```powershell
+  $t = (Select-String -Path apps\api\.env -Pattern '^INTERNAL_SERVICE_TOKEN=(.*)').Matches[0].Groups[1].Value.Trim('"')
+  Invoke-RestMethod -Method Post -Uri http://localhost:4000/api/v1/internal/recommendations/sync -Headers @{ 'x-internal-token' = $t }
+  ```
+
 ## งานเบื้องหลัง (Scheduler)
 
 api รันงานตามเวลาใน process ของตัวเอง (`apps/api/src/lib/scheduler.ts`) ไม่ต้องตั้ง cron แยก:
