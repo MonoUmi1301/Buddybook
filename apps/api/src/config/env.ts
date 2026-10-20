@@ -78,7 +78,8 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === "true")),
-  SCHEDULE_PUBLISH_INTERVAL_SEC: z.coerce.number().int().positive().default(60),
+  // เดิม 60 — ตอนที่ตั้งเวลาไว้เผยแพร่ช้ากว่าเวลาที่ตั้งได้เกือบนาที ลดเหลือ 15 วิ (query เบา: หาแถว scheduled ที่ถึงเวลา)
+  SCHEDULE_PUBLISH_INTERVAL_SEC: z.coerce.number().int().positive().default(15),
   SCHEDULE_TRASH_PURGE_INTERVAL_SEC: z.coerce.number().int().positive().default(3600),
   SCHEDULE_RECOMMENDATION_SYNC_INTERVAL_SEC: z.coerce.number().int().positive().default(6 * 3600),
   // ความถี่ที่เช็คว่ามี graph sync ล้มค้างอยู่ไหม (ค้างค่อย full resync — ไม่ค้างไม่ทำอะไร)

@@ -1,6 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // เพิ่มภายหลัง — ปิด client Router Cache ของหน้า dynamic (ค่าเดิมของ Next 14.2 = เก็บไว้ 30 วิ)
+  // เดิมกลับเข้าหน้าจัดการนิยายหลังลบ/สร้าง/ตั้งเวลาตอน จะได้หน้าเก่าจาก cache ต้องกดรีเฟรชเองถึงจะอัปเดต
+  experimental: {
+    staleTimes: { dynamic: 0 },
+  },
   images: {
     remotePatterns: [
       {
