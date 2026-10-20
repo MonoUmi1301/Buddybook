@@ -4,13 +4,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowDownUp, ChevronRight, Coins, Lock } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { formatThaiDate } from "@/lib/format";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/format";
 
 export interface ChapterListItem {
   chapter_id: string;
   chapter_number: number;
   title: string;
-  /** เจ้าของนิยายเห็นตอนที่ยังไม่เผยแพร่ด้วย (draft/scheduled/hidden) — คนอื่นเห็นแค่ published */
+  /** เจ้าของนิยายเห็นตอนที่ยังไม่เผยแพร่ด้วย (draft/scheduled/hidden) — คนอื่นเห็น published + scheduled
+   *  (ตอนที่ตั้งเวลาไว้แสดงเป็นตอนล็อก "จะเผยแพร่ ..." กดเข้าไปอ่านไม่ได้) */
   status: "draft" | "published" | "scheduled" | "hidden";
   word_count: number;
   published_at: string | null;
@@ -23,6 +24,8 @@ export interface ChapterListItem {
 interface ChapterListCardProps {
   novelId: string;
   chapters: ChapterListItem[];
+  /** เจ้าของนิยาย — กดเข้าตอนที่ตั้งเวลาไว้ได้ (ผู้อ่านทั่วไปเห็นเป็นตอนล็อก) */
+  isOwner?: boolean;
 }
 
 const PAGE_SIZE = 30;
@@ -34,7 +37,7 @@ const unpublishedLabel: Record<Exclude<ChapterListItem["status"], "published">, 
 };
 
 /** แท็บ "สารบัญ" — สลับเรียงตอนแรก/ตอนล่าสุดก่อน + แสดงทีละ 30 ตอนกันหน้ายาวเกิน */
-export function ChapterListCard({ novelId, chapters }: ChapterListCardProps) {
+export function ChapterListCard({ novelId, chapters, isOwner = false }: ChapterListCardProps) {
   const [newestFirst, setNewestFirst] = useState(false);
   const [visible, setVisible] = useState(PAGE_SIZE);
 
@@ -74,6 +77,26 @@ export function ChapterListCard({ novelId, chapters }: ChapterListCardProps) {
       <ol className="space-y-2">
         {sorted.slice(0, visible).map((ch) => {
           const date = ch.published_at ?? ch.scheduled_publish_at;
+          // ผู้อ่านทั่วไป: ตอนที่ตั้งเวลาไว้ยังอ่านไม่ได้ — แสดงเป็นแถวล็อก ไม่ใช่ลิงก์
+          if (ch.status === "scheduled" && !isOwner) {
+            return (
+              <li key={ch.chapter_id}>
+                <div className="flex items-center gap-4 rounded-card border border-dashed border-sky-300 bg-sky-500/5 px-4 py-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
+                    <Lock className="h-4 w-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-1 text-sm font-medium text-neutral-600">
+                      ตอนที่ {ch.chapter_number}: {ch.title}
+                    </p>
+                    <p className="mt-0.5 text-xs font-medium text-sky-600">
+                      {ch.scheduled_publish_at ? `เผยแพร่ ${formatThaiDateTime(ch.scheduled_publish_at)}` : "เร็ว ๆ นี้"}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            );
+          }
           return (
             <li key={ch.chapter_id}>
               <Link
@@ -88,7 +111,12 @@ export function ChapterListCard({ novelId, chapters }: ChapterListCardProps) {
                     {ch.title}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-neutral-400">
-                    {date && <span>{formatThaiDate(date)}</span>}
+                    {/* ตอนที่ตั้งเวลาไว้ (เจ้าของเห็นเท่านั้น) บอกวัน+เวลาที่จะเผยแพร่ แทนวันที่อย่างเดียว */}
+                    {ch.status === "scheduled" && ch.scheduled_publish_at ? (
+                      <span className="text-sky-600">จะเผยแพร่ {formatThaiDateTime(ch.scheduled_publish_at)}</span>
+                    ) : (
+                      date && <span>{formatThaiDate(date)}</span>
+                    )}
                     {ch.word_count > 0 && <span>· {ch.word_count.toLocaleString()} ตัวอักษร</span>}
                     {(ch.price_coins ?? 0) > 0 && (
                       <span

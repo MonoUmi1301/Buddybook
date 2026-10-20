@@ -16,6 +16,7 @@ import {
 } from "@/components/novel-detail/NovelCommentsSection";
 import type { CommentNode } from "@/components/novel-detail/CommentSection";
 import { AuthorCard } from "@/components/novel-detail/AuthorCard";
+import { OwnerPreviewBar } from "@/components/novel-detail/OwnerPreviewBar";
 import { ReaderSupportCard } from "@/components/gifts/ReaderSupportCard";
 import type { PublicGifts } from "@/lib/gifts";
 import { SideNovelList, type SideNovelItem } from "@/components/novel-detail/SideNovelList";
@@ -163,7 +164,10 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
   const publishedChapters = chapters
     .filter((c) => c.status === "published")
     .sort((a, b) => a.chapter_number - b.chapter_number);
-  const firstChapter = publishedChapters[0];
+  const isOwner = user?.user_id === novel.author.user_id;
+  // โหมดทดลองอ่าน: เจ้าของยังไม่มีตอนที่เผยแพร่ ก็กด "อ่านเลย" เปิดตอนแรก (ฉบับร่าง) ได้
+  const firstChapter =
+    publishedChapters[0] ?? (isOwner ? chapters.slice().sort((a, b) => a.chapter_number - b.chapter_number)[0] : undefined);
   const totalCharacters = publishedChapters.reduce((sum, c) => sum + (c.word_count ?? 0), 0);
   const lastPublishedAt = publishedChapters
     .map((c) => c.published_at)
@@ -215,6 +219,16 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50">
       <Navbar user={user} />
+      {isOwner && (
+        <OwnerPreviewBar
+          novelId={novel.novel_id}
+          notice={
+            novel.visibility && novel.visibility !== "published"
+              ? "นิยายเรื่องนี้ยังไม่เผยแพร่ — ตอนนี้มีแค่คุณที่เห็นหน้านี้"
+              : null
+          }
+        />
+      )}
 
       <main className="flex-1">
         {/* แถบไล่สีอ่อนโทนแบรนด์ด้านบน — ให้หัวเรื่องไม่ลอยบนพื้นเรียบ ๆ */}
@@ -263,7 +277,13 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
                   id: "chapters",
                   label: "สารบัญ",
                   count: publishedChapters.length,
-                  content: <ChapterListCard novelId={novel.novel_id} chapters={chapters} />,
+                  content: (
+                    <ChapterListCard
+                      novelId={novel.novel_id}
+                      chapters={chapters}
+                      isOwner={isOwner}
+                    />
+                  ),
                 },
                 {
                   id: "reviews",

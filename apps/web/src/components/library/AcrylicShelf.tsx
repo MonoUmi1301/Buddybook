@@ -31,6 +31,10 @@ interface AcrylicShelfProps {
   onRename?: () => void;
   onTint?: (tint: CollectionTint) => void;
   onDelete?: () => void;
+  /** ปลายทางเมื่อกดปก (ค่าเริ่มต้น: หน้านิยาย) — ชั้น "อ่านต่อ" ส่งไปตอนล่าสุดที่อ่าน */
+  hrefOf?: (novel: LibraryNovel) => string;
+  /** ป้ายเล็กมุมบนปก เช่น ความคืบหน้า "42%" — null = ไม่แสดง */
+  badgeOf?: (novel: LibraryNovel) => string | null;
 }
 
 const NEUTRAL_SHELF = "148 163 184";
@@ -39,7 +43,7 @@ const NEUTRAL_SHELF = "148 163 184";
  * ชั้นอะคริลิก — ปกนิยายยืนเรียงบนแผ่นอะคริลิกโปร่งแสงสีตามชั้นย่อย (CSS var --shelf)
  * แผ่นอะคริลิกอยู่ "หน้า" ปก 25% ล่าง และอยู่นอก scroller ปกจึงเลื่อนผ่านหลังแผ่นได้
  */
-export function AcrylicShelf({ group, onAdd, onRename, onTint, onDelete }: AcrylicShelfProps) {
+export function AcrylicShelf({ group, onAdd, onRename, onTint, onDelete, hrefOf, badgeOf }: AcrylicShelfProps) {
   const scrollerRef = React.useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const closeMenu = React.useCallback(() => setMenuOpen(false), []);
@@ -163,28 +167,36 @@ export function AcrylicShelf({ group, onAdd, onRename, onTint, onDelete }: Acryl
               ยังไม่มีนิยายในชั้นนี้{group.editable ? " — กด + เพื่อเพิ่ม" : ""}
             </p>
           ) : (
-            group.novels.map((novel, i) => (
-              <Link
-                key={novel.novel_id}
-                href={`/novels/${novel.novel_id}`}
-                title={novel.title}
-                className={cn(
-                  "group relative shrink-0 snap-start transition-transform duration-200 hover:z-10 hover:-translate-y-2 focus-visible:z-10 focus-visible:-translate-y-2 focus-visible:outline-none",
-                  i > 0 && "-ml-3 max-md:-ml-2"
-                )}
-                style={{ zIndex: group.novels.length - i }}
-              >
-                <Image
-                  src={coverOf(novel)}
-                  alt={novel.title}
-                  width={400}
-                  height={600}
-                  sizes="(max-width: 767px) 110px, (max-width: 1023px) 130px, 150px"
-                  draggable={false}
-                  className="aspect-[2/3] w-[150px] rounded-md object-cover shadow-md ring-1 ring-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary-400 max-lg:w-[130px] max-md:w-[110px]"
-                />
-              </Link>
-            ))
+            group.novels.map((novel, i) => {
+              const badge = badgeOf?.(novel);
+              return (
+                <Link
+                  key={novel.novel_id}
+                  href={hrefOf ? hrefOf(novel) : `/novels/${novel.novel_id}`}
+                  title={novel.title}
+                  className={cn(
+                    "group relative shrink-0 snap-start transition-transform duration-200 hover:z-10 hover:-translate-y-2 focus-visible:z-10 focus-visible:-translate-y-2 focus-visible:outline-none",
+                    i > 0 && "-ml-3 max-md:-ml-2"
+                  )}
+                  style={{ zIndex: group.novels.length - i }}
+                >
+                  <Image
+                    src={coverOf(novel)}
+                    alt={novel.title}
+                    width={400}
+                    height={600}
+                    sizes="(max-width: 767px) 110px, (max-width: 1023px) 130px, 150px"
+                    draggable={false}
+                    className="aspect-[2/3] w-[150px] rounded-md object-cover shadow-md ring-1 ring-black/5 group-focus-visible:ring-2 group-focus-visible:ring-primary-400 max-lg:w-[130px] max-md:w-[110px]"
+                  />
+                  {badge && (
+                    <span className="absolute left-2 top-2 rounded-pill bg-black/65 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      {badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })
           )}
         </div>
 

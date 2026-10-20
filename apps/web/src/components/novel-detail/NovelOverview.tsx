@@ -8,7 +8,7 @@ import {
 } from "@/lib/novelLabels";
 import type { NovelDetailData } from "@/components/novel-detail/NovelHero";
 import { CharacterIntro, type CharacterIntroItem } from "@/components/novel-detail/CharacterIntro";
-import { NovelTagList } from "@/components/novel-detail/NovelTagList";
+import { CharacterMapButton } from "@/components/novel-detail/CharacterMapButton";
 
 interface NovelOverviewProps {
   novel: NovelDetailData;
@@ -42,10 +42,18 @@ export function NovelOverview({ novel, characters, lastPublishedAt, totalCharact
         )}
       </div>
 
-      {(characters.length > 0 || novel.tags.length > 0 || novel.primary_tag) && (
+      {characters.length > 0 && (
         <div className="space-y-5">
-          {characters.length > 0 && <CharacterIntro characters={characters} />}
-          <NovelTagList novel={novel} />
+          {characters.length > 0 && (
+            <CharacterIntro
+              characters={characters}
+              action={
+                novel.character_map && novel.character_map.characters?.length > 0 ? (
+                  <CharacterMapButton map={novel.character_map} labeled />
+                ) : undefined
+              }
+            />
+          )}
         </div>
       )}
 

@@ -80,7 +80,7 @@ export function HomeContent({
           </div>
         )}
 
-        <ContinueReadingCoverflow items={continueReading} />
+        <ContinueReadingCoverflow items={continueReading} isLoggedIn={Boolean(user)} />
         <TrendingCoverflow slides={trendingSlides} seeAllHref={`/search?sort=views${modeSuffix}`} />
 
         <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

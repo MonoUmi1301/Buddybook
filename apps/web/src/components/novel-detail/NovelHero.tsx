@@ -5,8 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, BookPlus, Check, Eye, Heart, Star, Type } from "lucide-react";
 import { ShareButton } from "@/components/ui/ShareButton";
+import { CharacterMapButton, type PublicCharacterMap } from "@/components/novel-detail/CharacterMapButton";
 import { ReportButton } from "@/components/social/ReportButton";
 import { GiftButton } from "@/components/gifts/GiftButton";
+import { NovelChips } from "@/components/novel/NovelChips";
 import { cn } from "@/lib/cn";
 import { getPenName } from "@/lib/displayName";
 import { formatCompactNumber } from "@/lib/format";
@@ -22,6 +24,8 @@ import {
 } from "@/lib/novelLabels";
 
 export interface NovelDetailData {
+  /** published | private | pending_review ... — ใช้บอกเจ้าของในโหมดทดลองอ่าน */
+  visibility?: string;
   novel_id: string;
   title: string;
   synopsis: string | null;
@@ -30,6 +34,8 @@ export interface NovelDetailData {
   status: NovelStatus;
   legal_status: LegalStatus;
   content_rating: ContentRating;
+  format?: "multi_chapter" | "one_shot";
+  is_translated?: boolean;
   view_count: number;
   created_at: string;
   allow_donations: boolean;
@@ -47,6 +53,8 @@ export interface NovelDetailData {
   is_liked: boolean;
   // เพิ่มภายหลัง (audit fix) — ผู้เขียนซ่อนตัวเลขจำนวนหัวใจได้ ยังกดถูกใจได้ปกติ แค่ไม่โชว์ตัวเลข
   hide_like_count: boolean;
+  // เพิ่มภายหลัง — แผนผังตัวละครที่นักเขียนเผยแพร่ (null/ไม่มี = ไม่แสดงปุ่ม)
+  character_map?: PublicCharacterMap | null;
 }
 
 export interface NovelHeroStats {
@@ -167,6 +175,9 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
           </Link>
         </p>
 
+        {/* เพิ่มภายหลัง — ชิปรูปแบบ/หมวดหมู่/แท็ก กดแล้วไปค้นหาแท็กนั้น (เรตแสดงในป้ายด้านบนแล้ว) */}
+        <NovelChips novel={novel} linked showRating={false} className="mt-3" />
+
         <dl className="mt-5 grid grid-cols-2 divide-neutral-100 rounded-card border border-neutral-200 bg-white sm:grid-cols-4 sm:divide-x [&>*:nth-child(-n+2)]:border-b [&>*:nth-child(-n+2)]:border-neutral-100 sm:[&>*:nth-child(-n+2)]:border-b-0">
           <StatCell label="ยอดวิว" icon={Eye}>
             {formatCompactNumber(novel.view_count)}
@@ -265,6 +276,9 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
             {!novel.hide_like_count && <span>{formatCompactNumber(likeCount)}</span>}
           </button>
 
+          {novel.character_map && novel.character_map.characters?.length > 0 && (
+            <CharacterMapButton map={novel.character_map} />
+          )}
           <ShareButton title={novel.title} />
           {viewer?.user_id !== novel.author.user_id && (
             <ReportButton targetType="novel" targetId={novel.novel_id} isLoggedIn={isLoggedIn} variant="icon" className="px-2" />

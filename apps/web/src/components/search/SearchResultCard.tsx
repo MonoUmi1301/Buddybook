@@ -2,8 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Eye } from "lucide-react";
 import { StatPill } from "@/components/ui/StatPill";
+import { NovelChips, type NovelChipSource } from "@/components/novel/NovelChips";
 
-export interface SearchNovelItem {
+export interface SearchNovelItem extends NovelChipSource {
   novel_id: string;
   title: string;
   cover_image_url: string | null;
@@ -18,9 +19,8 @@ const statusLabel: Record<SearchNovelItem["status"], string> = {
 };
 
 /**
- * การ์ดผลค้นหาแนวนอน — ต่อกับ GET /novels/search จริง (novels.service.ts) จึงมีแค่
- * field ที่ endpoint นี้คืนจริง (title/cover/status/view_count) ไม่มี rating/แท็ก/ยอดไลก์
- * เหมือนดีไซน์ต้นฉบับ เพราะ endpoint จริงยังไม่ join ข้อมูลพวกนั้น ดู wf_empty_states.png
+ * การ์ดผลค้นหาแนวนอน — ต่อกับ GET /novels/search จริง (novels.service.ts) ดู wf_empty_states.png
+ * เพิ่มภายหลัง — ชิปแท็ก (รูปแบบ · เรต · หมวดหมู่ · แท็ก) แสดงสูงสุด 6 ชิป ที่เหลือรวมเป็น +N
  */
 export function SearchResultCard({ novel }: { novel: SearchNovelItem }) {
   return (
@@ -37,6 +37,7 @@ export function SearchResultCard({ novel }: { novel: SearchNovelItem }) {
         <h3 className="line-clamp-1 text-sm font-semibold text-neutral-900">{novel.title}</h3>
         <p className="text-xs font-medium text-primary-500">{statusLabel[novel.status]}</p>
         <StatPill icon={Eye} value={novel.view_count} />
+        <NovelChips novel={novel} max={6} className="mt-1" />
       </div>
     </Link>
   );

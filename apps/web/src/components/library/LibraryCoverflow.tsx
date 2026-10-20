@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Info, PlayCircle } from "lucide-react";
@@ -29,11 +30,67 @@ interface LibraryCoverflowProps {
   onStatusChange: (novelId: string, status: LibraryStatus) => void;
 }
 
+// ลดขนาดลงจากเดิม (230/190/190px) — ผู้ใช้บอกว่าเด่นเกินไป
 const layout = {
-  desktop: { cardWidth: "clamp(190px, 15vw, 230px)", rotate: 40, nav: true },
-  tablet: { cardWidth: "190px", rotate: 40, nav: true },
-  mobile: { cardWidth: "clamp(150px, 46vw, 190px)", rotate: 50, nav: false },
+  desktop: { cardWidth: "clamp(160px, 12vw, 190px)", rotate: 40, nav: true },
+  tablet: { cardWidth: "160px", rotate: 40, nav: true },
+  mobile: { cardWidth: "clamp(130px, 38vw, 160px)", rotate: 50, nav: false },
 } as const;
+
+/** มีแค่ 1–2 เรื่อง — coverflow 3D ดูโล่งและเด่นเกินไป ใช้การ์ดแนวนอนเล็ก ๆ แทน */
+const COMPACT_MAX = 2;
+
+function CompactList({ title, entries }: { title: string; entries: LibraryEntry[] }) {
+  return (
+    <section aria-labelledby="library-coverflow-heading">
+      <h2 id="library-coverflow-heading" className="text-h3 text-neutral-900 max-md:text-xl max-md:font-semibold">
+        {title} <span className="text-base font-normal text-neutral-400">({entries.length})</span>
+      </h2>
+      <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+        {entries.map((entry) => {
+          const percent = progressPercent(entry.progress, entry.novel.chapter_count);
+          return (
+            <li key={entry.novel.novel_id} className="flex gap-3 rounded-2xl border border-neutral-200 bg-white p-3">
+              <Link href={`/novels/${entry.novel.novel_id}`} className="relative h-24 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
+                <Image src={coverOf(entry.novel)} alt={`ปก ${entry.novel.title}`} fill sizes="64px" className="object-cover" />
+              </Link>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <Link
+                  href={`/novels/${entry.novel.novel_id}`}
+                  className="line-clamp-1 text-sm font-semibold text-neutral-900 hover:text-primary-600"
+                >
+                  {entry.novel.title}
+                </Link>
+                <p className="line-clamp-1 text-xs text-neutral-500">{getPenName(entry.novel.author)}</p>
+                <div className="mt-auto">
+                  <div className="flex justify-between text-[11px] text-neutral-500">
+                    <span>
+                      {entry.progress
+                        ? `ตอนที่ ${entry.progress.last_chapter_number} / ${entry.novel.chapter_count}`
+                        : `ยังไม่เริ่ม · ${entry.novel.chapter_count} ตอน`}
+                    </span>
+                    <span>{percent}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-pill bg-neutral-100">
+                    <div className="h-full rounded-pill bg-primary-500" style={{ width: `${percent}%` }} />
+                  </div>
+                </div>
+              </div>
+              <Link
+                href={continueHref(entry.novel.novel_id, entry.progress)}
+                aria-label={entry.progress ? `อ่านต่อ ${entry.novel.title}` : `เริ่มอ่าน ${entry.novel.title}`}
+                className="flex h-9 shrink-0 items-center gap-1.5 self-center rounded-pill border border-primary-300 px-3 text-xs font-semibold text-primary-600 transition-colors hover:bg-primary-50"
+              >
+                <PlayCircle className="h-4 w-4" />
+                <span className="max-sm:sr-only">{entry.progress ? "อ่านต่อ" : "เริ่มอ่าน"}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
 
 function metaFor(entry: LibraryEntry) {
   const { progress, novel } = entry;
@@ -59,6 +116,7 @@ export function LibraryCoverflow({ title, entries, onStatusChange }: LibraryCove
   React.useEffect(() => setActive(0), [key]);
 
   if (entries.length === 0) return null;
+  if (entries.length <= COMPACT_MAX) return <CompactList title={title} entries={entries} />;
 
   const slides: Slide[] = entries.map((entry) => ({
     src: coverOf(entry.novel),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, PlayCircle } from "lucide-react";
@@ -29,11 +29,46 @@ const layout = {
 } as const;
 
 /** "อ่านต่อ" หน้าแรก — จาก GET /library/continue-reading (ไม่ autoplay ตาม spec) */
-export function ContinueReadingCoverflow({ items }: { items: ContinueReadingItem[] }) {
+export function ContinueReadingCoverflow({
+  items: initialItems,
+  isLoggedIn = false,
+}: {
+  items: ContinueReadingItem[];
+  /** ล็อกอินอยู่ = ดึงรายการใหม่ฝั่ง client ด้วย (ดู effect ข้างล่าง) */
+  isLoggedIn?: boolean;
+}) {
   const router = useRouter();
   const { breakpoint } = useBreakpoint();
   const [active, setActive] = useState(0);
+  const [items, setItems] = useState(initialItems);
   const cfg = layout[breakpoint];
+
+  // อ่านจบแล้วกดย้อนกลับมาหน้าแรก รายการ "อ่านต่อ" ไม่อัปเดตจนกว่าจะรีเฟรช — ปุ่ม Back ใช้หน้าเดิมจาก
+  // Router Cache/bfcache (staleTimes ไม่มีผลกับ back/forward) และความคืบหน้าบันทึกแบบ async หลัง render ไปแล้ว
+  // จึงดึงใหม่เองตอน mount, ตอนกลับมาจาก bfcache และตอนสลับแท็บกลับมา
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let cancelled = false;
+    const refresh = () => {
+      fetch("/api/v1/library/continue-reading?limit=10", { cache: "no-store" })
+        .then((res) => (res.ok ? (res.json() as Promise<{ items: ContinueReadingItem[] }>) : null))
+        .then((json) => {
+          if (json && !cancelled) setItems(json.items);
+        })
+        .catch(() => undefined);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    refresh();
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [isLoggedIn]);
 
   if (items.length === 0) return null;
 

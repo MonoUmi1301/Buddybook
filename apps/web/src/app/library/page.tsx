@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { LibraryView, type LibraryFilter, type LibraryViewMode } from "@/components/library/LibraryView";
+import { LibraryView, type LibraryFilter } from "@/components/library/LibraryView";
 import { callApi } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
 import { getCurrentUser } from "@/lib/api/session";
@@ -10,8 +10,8 @@ import type { Collection, LibraryCounts, LibraryEntry } from "@/lib/library";
 const FILTERS: LibraryFilter[] = ["all", "reading", "up_next", "completed"];
 
 // หน้าชั้นหนังสือของผู้อ่าน — ดึงข้อมูลทั้งหมดฝั่ง server (GET /library + /collections) แล้วส่งให้ LibraryView
-// กรอง/สลับมุมมองฝั่ง client (เก็บใน URL ?status= & ?view=) ไม่ต้องยิง API ใหม่ทุกครั้งที่กดตัวกรอง
-export default async function LibraryPage({ searchParams }: { searchParams: { status?: string; view?: string } }) {
+// กรองสถานะฝั่ง client (เก็บใน URL ?status=) ไม่ต้องยิง API ใหม่ทุกครั้งที่กดตัวกรอง
+export default async function LibraryPage({ searchParams }: { searchParams: { status?: string } }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -32,7 +32,6 @@ export default async function LibraryPage({ searchParams }: { searchParams: { st
       : [];
 
   const initialFilter = FILTERS.includes(searchParams.status as LibraryFilter) ? (searchParams.status as LibraryFilter) : "all";
-  const initialView: LibraryViewMode = searchParams.view === "spines" ? "spines" : "shelves";
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -49,7 +48,6 @@ export default async function LibraryPage({ searchParams }: { searchParams: { st
             counts={library.counts}
             collections={collections}
             initialFilter={initialFilter}
-            initialView={initialView}
           />
         )}
       </main>

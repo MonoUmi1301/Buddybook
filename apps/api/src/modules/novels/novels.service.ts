@@ -112,6 +112,11 @@ export async function searchNovels({
         view_count: true,
         format: true,
         content_rating: true,
+        // เพิ่มภายหลัง — ชิปแท็กบนการ์ดผลค้นหา (หมวดหมู่หลัก/รอง + แท็กทั่วไป) เหมือนหน้าจัดการนิยาย
+        is_translated: true,
+        primary_tag: { select: { tag_id: true, name: true } },
+        secondary_tag: { select: { tag_id: true, name: true } },
+        novel_tags: { select: { tag: { select: { tag_id: true, name: true } } } },
         author: { select: { user_id: true, username: true, pen_name: true } },
       },
       orderBy: sort === "views" ? { view_count: "desc" } : { created_at: "desc" },
@@ -143,10 +148,11 @@ export async function searchNovels({
 
   // view_count เป็น BigInt ใน Postgres — res.json() (JSON.stringify) serialize BigInt ตรง ๆ ไม่ได้
   return {
-    novels: novels.map((n) => {
+    novels: novels.map(({ novel_tags, ...n }) => {
       const r = ratingByNovel.get(n.novel_id);
       return {
         ...n,
+        tags: novel_tags.map((t) => t.tag),
         view_count: Number(n.view_count),
         chapter_count: chapterCountByNovel.get(n.novel_id) ?? 0,
         rating: r?._avg.rating ?? 0,
@@ -407,7 +413,13 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
 export async function getWorldBuilding(novel_id: string, user_id: string) {
   const novel = await prisma.novel.findUnique({
     where: { novel_id },
-    select: { author_id: true, plot_notes: true, theme_notes: true, map_drawings: true },
+    select: {
+      author_id: true,
+      plot_notes: true,
+      theme_notes: true,
+      map_drawings: true,
+      character_map_published_at: true,
+    },
   });
   if (!novel) throw ApiError.notFound("Novel not found");
   if (novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
@@ -439,10 +451,18 @@ export async function getWorldBuilding(novel_id: string, user_id: string) {
       id: e.edge_id,
       source: e.source_node_id,
       target: e.target_node_id,
+      // จุดต่อเส้นที่ผู้ใช้ลากไว้ (บันทึกใน edge_style) — ไม่มี = ให้ react-flow เลือกเอง
+      sourceHandle: (e.edge_style as { source_handle?: string } | null)?.source_handle ?? undefined,
+      targetHandle: (e.edge_style as { target_handle?: string } | null)?.target_handle ?? undefined,
       label: e.edge_label ?? undefined,
       type: e.edge_type,
-      style: e.edge_style ?? undefined,
-      data: { relationship_type: e.relationship_type ?? undefined, description: e.description ?? undefined },
+      // edge_style = { color, arrow } ที่ผู้ใช้ตั้ง — ส่งใน data ให้ CharacterGraph แปลงเป็นสี/หัวลูกศรเอง
+      // (เดิมส่งเป็น style ของ react-flow ตรง ๆ ซึ่งไม่ใช่รูปแบบ CSS ที่ใช้ได้)
+      data: {
+        relationship_type: e.relationship_type ?? undefined,
+        description: e.description ?? undefined,
+        edge_style: e.edge_style ?? undefined,
+      },
     })),
     locations: locations.map((l) => ({
       location_id: l.location_id,
@@ -462,6 +482,8 @@ export async function getWorldBuilding(novel_id: string, user_id: string) {
       id: e.edge_id,
       source: e.source_location_id,
       target: e.target_location_id,
+      sourceHandle: e.source_handle ?? undefined,
+      targetHandle: e.target_handle ?? undefined,
     })),
     timeline_events: timelineEvents.map((t) => ({
       event_id: t.event_id,
@@ -477,7 +499,49 @@ export async function getWorldBuilding(novel_id: string, user_id: string) {
     plot_notes: novel.plot_notes ?? {},
     theme_notes: novel.theme_notes ?? {},
     map_drawings: novel.map_drawings ?? [],
+    character_map_published_at: novel.character_map_published_at,
   };
+}
+
+/** เพิ่มภายหลัง — PUT /novels/:novel_id/character-map เผยแพร่แผนผังตัวละครบนหน้านิยาย
+ *  เก็บ "สำเนา" ของแผนภาพ ณ ตอนนี้ (เฉพาะตัวละครที่วางบนแคนวาสแล้ว + เส้นที่ต่อระหว่างตัวที่วางแล้ว)
+ *  ในรูปเดียวกับ world-building (characters/edges) ให้หน้าผู้อ่านใช้ component วาดชุดเดียวกัน */
+export async function publishCharacterMap(novel_id: string, user_id: string) {
+  const world = await getWorldBuilding(novel_id, user_id);
+  const characters = world.characters
+    .filter((c) => c.position_x !== null && c.position_y !== null)
+    .map((c) => ({
+      node_id: c.node_id,
+      name: c.name,
+      avatar_url: c.avatar_url,
+      position_x: c.position_x,
+      position_y: c.position_y,
+    }));
+  const placed = new Set(characters.map((c) => c.node_id));
+  const edges = world.edges.filter((e) => placed.has(e.source) && placed.has(e.target));
+  if (characters.length === 0) throw ApiError.unprocessable("ยังไม่มีตัวละครบนแผนภาพ วางตัวละครก่อนจึงจะเผยแพร่ได้");
+
+  const published_at = new Date();
+  await prisma.novel.update({
+    where: { novel_id },
+    data: {
+      character_map_public: JSON.parse(JSON.stringify({ characters, edges })) as Prisma.InputJsonValue,
+      character_map_published_at: published_at,
+    },
+  });
+  return { character_map_published_at: published_at, character_count: characters.length, edge_count: edges.length };
+}
+
+/** เพิ่มภายหลัง — DELETE /novels/:novel_id/character-map ซ่อนแผนผังตัวละครจากหน้านิยาย */
+export async function unpublishCharacterMap(novel_id: string, user_id: string) {
+  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true } });
+  if (!novel) throw ApiError.notFound("Novel not found");
+  if (novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
+  await prisma.novel.update({
+    where: { novel_id },
+    data: { character_map_public: Prisma.DbNull, character_map_published_at: null },
+  });
+  return { character_map_published_at: null };
 }
 
 /** เพิ่มภายหลัง (audit fix) — บันทึกจริงสำหรับแท็บ Plot ของเครื่องมือ world-building
@@ -845,7 +909,14 @@ export async function purgeExpiredNovels(now = new Date()) {
 export async function getPrintPreview(novel_id: string, user_id: string) {
   const novel = await prisma.novel.findUnique({
     where: { novel_id },
-    select: { novel_id: true, title: true, synopsis: true, author_id: true, author: { select: { username: true, pen_name: true } } },
+    select: {
+      novel_id: true,
+      title: true,
+      synopsis: true,
+      cover_image_url: true,
+      author_id: true,
+      author: { select: { username: true, pen_name: true } },
+    },
   });
   if (!novel) throw ApiError.notFound("Novel not found");
   if (novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
@@ -857,7 +928,14 @@ export async function getPrintPreview(novel_id: string, user_id: string) {
   });
 
   return {
-    novel: { novel_id: novel.novel_id, title: novel.title, synopsis: novel.synopsis, author: novel.author },
+    novel: {
+      novel_id: novel.novel_id,
+      title: novel.title,
+      synopsis: novel.synopsis,
+      // เพิ่มภายหลัง — ใช้เป็นหน้าปกในพรีวิวแบบหนังสือ (BookPreview)
+      cover_image_url: novel.cover_image_url,
+      author: novel.author,
+    },
     chapters,
   };
 }
@@ -898,6 +976,9 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
       },
       _count: { select: { novel_likes: true } },
       deleted_at: true,
+      // เพิ่มภายหลัง — แผนผังตัวละครที่นักเขียนเผยแพร่ (null = ไม่แสดงปุ่มแผนผังบนหน้านิยาย)
+      character_map_public: true,
+      character_map_published_at: true,
     },
   });
 
@@ -915,9 +996,10 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
     ? Boolean(await prisma.novelLike.findUnique({ where: { user_id_novel_id: { user_id: viewer_id, novel_id } } }))
     : false;
 
-  const { novel_tags, view_count, _count, deleted_at: _deleted, ...rest } = novel;
+  const { novel_tags, view_count, _count, deleted_at: _deleted, character_map_public, ...rest } = novel;
   return {
     ...rest,
+    character_map: character_map_public ?? null,
     view_count: Number(view_count),
     tags: novel_tags.map((nt) => nt.tag),
     like_count: _count.novel_likes,

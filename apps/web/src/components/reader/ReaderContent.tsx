@@ -201,15 +201,16 @@ export function ReaderContent({
         </div>
       </div>
 
-      {/* sticky แทน fixed — ปุ่มลอยตามจอเฉพาะช่วงที่อ่านเนื้อหาอยู่ พอเลื่อนลงถึงคอมเมนต์ปุ่มจะหยุดที่ท้ายเนื้อหา
-          ไม่ลอยทับปุ่ม "ส่งคอมเมนต์" บนมือถืออีก (เจอจากเทสต์ responsive ที่ 390px) */}
-      <div className="pointer-events-none sticky bottom-6 z-30 mt-4 flex justify-end">
+      {/* fixed — ปุ่มอยู่กับที่มุมล่างขวาของจอเสมอ ไม่ขยับตามการเลื่อนหน้า (ผู้ใช้ขอ)
+          เดิมเป็น sticky ซึ่งพอเลื่อนเลยท้ายเนื้อหาปุ่มจะเลื่อนขึ้นไปกับหน้า
+          bottom-24 = ยกขึ้นเหนือปุ่มแชทคำถามที่พบบ่อย (FaqChatButton: bottom-5 + สูง 56px) ไม่ให้ทับกัน */}
+      <div className="pointer-events-none fixed bottom-24 right-4 z-30 sm:right-6">
       <div className="pointer-events-auto relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="ตั้งค่าการอ่าน"
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-500 text-base font-bold text-white shadow-lg transition-transform hover:scale-105 hover:bg-primary-600"
+        className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-500 text-lg font-bold text-white shadow-lg transition-transform hover:scale-105 hover:bg-primary-600"
       >
         Aa
       </button>

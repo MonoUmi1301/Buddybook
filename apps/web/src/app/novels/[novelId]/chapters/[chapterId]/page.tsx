@@ -6,6 +6,7 @@ import { CommentSection, type CommentNode } from "@/components/novel-detail/Comm
 import { ReaderContent } from "@/components/reader/ReaderContent";
 import { ReportButton } from "@/components/social/ReportButton";
 import { BackButton } from "@/components/ui/BackButton";
+import { OwnerPreviewBar } from "@/components/novel-detail/OwnerPreviewBar";
 import { callApi, type ApiResult } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
 import { getCurrentUser } from "@/lib/api/session";
@@ -32,7 +33,7 @@ interface ChapterDetail {
   chapter_number: number;
   title: string;
   content: string | null;
-  status: "draft" | "published";
+  status: "draft" | "published" | "scheduled" | "hidden";
   word_count: number;
   /** เพิ่มภายหลัง (ตอนติดเหรียญ) */
   price_coins: number;
@@ -45,8 +46,14 @@ interface ChapterListItem {
   chapter_id: string;
   chapter_number: number;
   title: string;
-  status: "draft" | "published";
+  status: "draft" | "published" | "scheduled" | "hidden";
 }
+
+const ownerChapterNotice: Record<Exclude<ChapterDetail["status"], "published">, string> = {
+  draft: "ตอนนี้เป็นฉบับร่าง — ผู้อ่านยังไม่เห็น",
+  scheduled: "ตอนนี้ตั้งเวลาเผยแพร่ไว้ — ผู้อ่านยังอ่านไม่ได้จนกว่าจะถึงเวลา",
+  hidden: "ตอนนี้ถูกซ่อนอยู่ — ผู้อ่านมองไม่เห็น",
+};
 
 // หน้าอ่านตอนนิยาย — ต่อกับ GET /chapters/:id + /chapters/:id/comments จริง ดู wf_novel_detail.png (ตอนที่ 1/2)
 export default async function ChapterReaderPage({
@@ -82,10 +89,12 @@ export default async function ChapterReaderPage({
   const chapter = chapterResult.json as ChapterDetail;
   if (chapter.novel_id !== params.novelId) notFound();
 
+  const isOwner = user?.user_id === novel.author.user_id;
+  // เจ้าของ (โหมดทดลองอ่าน) กดตอนก่อนหน้า/ถัดไปผ่านตอนที่ยังไม่เผยแพร่ได้ด้วย
   const chapters: ChapterListItem[] =
     !("error" in chaptersResult) && chaptersResult.status === 200
       ? (chaptersResult.json as { chapters: ChapterListItem[] }).chapters
-          .filter((c) => c.status === "published")
+          .filter((c) => isOwner || c.status === "published")
           .sort((a, b) => a.chapter_number - b.chapter_number)
       : [];
   const currentIndex = chapters.findIndex((c) => c.chapter_id === chapter.chapter_id);
@@ -100,6 +109,13 @@ export default async function ChapterReaderPage({
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Navbar user={user} />
+      {isOwner && (
+        <OwnerPreviewBar
+          novelId={novel.novel_id}
+          editChapterId={chapter.chapter_id}
+          notice={chapter.status !== "published" ? ownerChapterNotice[chapter.status] : null}
+        />
+      )}
 
       <main className="flex-1">
         <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
@@ -143,7 +159,7 @@ export default async function ChapterReaderPage({
         />
 
         <div className="mx-auto w-full max-w-3xl px-4 pb-8 sm:px-6 lg:px-8">
-          {user?.user_id !== novel.author.user_id && (
+          {!isOwner && (
             <div className="mt-4 flex justify-end">
               <ReportButton targetType="chapter" targetId={chapter.chapter_id} isLoggedIn={Boolean(user)} />
             </div>
