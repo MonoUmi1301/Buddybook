@@ -1,0 +1,70 @@
+{
+  "coin-checkout": {
+    "width": 560,
+    "height": 757
+  },
+  "coin-history": {
+    "width": 960,
+    "height": 230
+  },
+  "coin-menu": {
+    "width": 520,
+    "height": 620
+  },
+  "coin-unlock": {
+    "width": 710,
+    "height": 340
+  },
+  "coin-wallet": {
+    "width": 1280,
+    "height": 600
+  },
+  "comment": {
+    "width": 784,
+    "height": 295
+  },
+  "editor": {
+    "width": 1280,
+    "height": 860
+  },
+  "gift": {
+    "width": 1280,
+    "height": 800
+  },
+  "library": {
+    "width": 1280,
+    "height": 1000
+  },
+  "navbar": {
+    "width": 1280,
+    "height": 104
+  },
+  "notifications": {
+    "width": 720,
+    "height": 420
+  },
+  "novel-detail": {
+    "width": 1280,
+    "height": 440
+  },
+  "publish-choice": {
+    "width": 1280,
+    "height": 800
+  },
+  "reader-settings": {
+    "width": 1280,
+    "height": 800
+  },
+  "search": {
+    "width": 1280,
+    "height": 560
+  },
+  "write-dashboard": {
+    "width": 1280,
+    "height": 560
+  },
+  "write-new": {
+    "width": 800,
+    "height": 420
+  }
+}

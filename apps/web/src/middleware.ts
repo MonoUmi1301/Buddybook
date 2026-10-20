@@ -139,5 +139,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // fonts/ = ไฟล์ฟอนต์ self-hosted (public/fonts) ไม่ต้องผ่าน middleware — กันโดน redirect ไป /onboarding
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|fonts/).*)"],
 };
