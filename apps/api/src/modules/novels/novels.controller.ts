@@ -279,6 +279,17 @@ export async function listTrashBin(req: Request, res: Response) {
   res.status(200).json(result);
 }
 
+// เพิ่มภายหลัง — เผยแพร่/ซ่อนแผนผังตัวละครบนหน้านิยาย
+export async function publishCharacterMap(req: Request, res: Response) {
+  const { novel_id } = novelIdParamSchema.parse(req.params);
+  res.status(200).json(await novelsService.publishCharacterMap(novel_id, req.user!.user_id));
+}
+
+export async function unpublishCharacterMap(req: Request, res: Response) {
+  const { novel_id } = novelIdParamSchema.parse(req.params);
+  res.status(200).json(await novelsService.unpublishCharacterMap(novel_id, req.user!.user_id));
+}
+
 export async function worldBuilding(req: Request, res: Response) {
   const { novel_id } = novelIdParamSchema.parse(req.params);
   const result = await novelsService.getWorldBuilding(novel_id, req.user!.user_id);
@@ -339,6 +350,10 @@ const mapDrawingBodySchema = z.union([
     y: z.number(),
     rotation: z.number().optional(),
     scale: z.number().min(0.3).max(3).optional(),
+    // สีของสแตมป์ (ไม่ใส่ = สีเดิมของภาพ/ไอคอน)
+    color: z.string().trim().max(20).optional(),
+    // สร้างโดยระบบสุ่มแผนที่ (ประเภท) — ใช้ตอนสุ่มเฉพาะบางประเภท
+    gen: z.enum(["land", "terrain", "water", "labels", "settlements"]).optional(),
   }),
   // เพิ่มภายหลัง (audit fix) — Land Tool: แปรงระบายพื้นที่ดินแบบเพิ่ม/ลบ ต่างจาก "fill" เดิม
   // (ลากปิดรูปทรงตรง ๆ) ดู WorldMap.tsx ฝั่ง frontend สำหรับการ composite ผ่าน SVG mask
@@ -347,8 +362,49 @@ const mapDrawingBodySchema = z.union([
     kind: z.literal("land"),
     points: z.array(mapPointSchema).min(1).max(2000),
     brushSize: z.number().min(5).max(200),
-    mode: z.enum(["add", "subtract"]),
+    mode: z.enum(["add", "subtract", "water"]),
     color: z.string().trim().max(20),
+    // รูปร่างปิดที่ลากด้วยเครื่องมือ "วาดรูปร่าง" (เติมเต็มด้านใน) แทนเส้นแปรง
+    closed: z.boolean().optional(),
+  }),
+  // พื้นหลัง/มหาสมุทรของแผนที่ + เปิด-ปิดพื้นผิวแฟนตาซี (มีได้อันเดียว ดู MapTerrain.tsx ฝั่งเว็บ)
+  z.object({
+    id: z.string().min(1).max(100),
+    kind: z.literal("base"),
+    color: z.string().trim().max(20).nullable(),
+    texture: z.boolean().optional(),
+  }),
+  // ชิ้นส่วนแผนที่สำเร็จรูปจากคลัง (key ดู mapPieces.tsx ฝั่งเว็บ)
+  z.object({
+    id: z.string().min(1).max(100),
+    kind: z.literal("piece"),
+    piece: z.string().trim().min(1).max(40),
+    x: z.number(),
+    y: z.number(),
+    scale: z.number().min(0.1).max(10).optional(),
+    rotation: z.number().optional(),
+    flipX: z.boolean().optional(),
+    color: z.string().trim().max(20).optional(),
+    // สร้างโดยระบบสุ่มแผนที่ (ประเภท) — ใช้ตอนสุ่มเฉพาะบางประเภท
+    gen: z.enum(["land", "terrain", "water", "labels", "settlements"]).optional(),
+  }),
+  // ชื่อพื้นที่บนแผนที่ (ทวีป/อาณาจักร/ประเทศ/ภูมิภาค/เมือง) — attachTo = id ชิ้นส่วนที่ผูกอยู่
+  z.object({
+    id: z.string().min(1).max(100),
+    kind: z.literal("label"),
+    text: z.string().trim().max(80),
+    x: z.number(),
+    y: z.number(),
+    size: z.number().min(8).max(120),
+    color: z.string().trim().max(20),
+    font: z.enum(["serif", "sans", "sarabun"]),
+    rotation: z.number().optional(),
+    italic: z.boolean().optional(),
+    spacing: z.number().min(0).max(2).optional(),
+    category: z.enum(["continent", "kingdom", "country", "region", "city"]).optional(),
+    attachTo: z.string().max(100).optional(),
+    // สร้างโดยระบบสุ่มแผนที่ (ประเภท) — ใช้ตอนสุ่มเฉพาะบางประเภท
+    gen: z.enum(["land", "terrain", "water", "labels", "settlements"]).optional(),
   }),
 ]);
 const mapDrawingsBodySchema = z.array(mapDrawingBodySchema).max(2000);
@@ -384,7 +440,12 @@ const characterRoleEnum = z.enum(["protagonist", "antagonist", "supporting"]);
 
 const createCharacterBodySchema = z.object({
   character_name: z.string().trim().min(1).max(100),
-  avatar_url: z.string().url().optional(),
+  // รูปตัวละคร: URL เต็ม (Cloudinary) หรืออวาตาร์สำเร็จรูปในเว็บ "/characters/*.png" (ดู AddCharacterModal)
+  avatar_url: z
+    .string()
+    .url()
+    .or(z.string().regex(/^\/characters\/[\w-]+\.(png|jpe?g|webp|svg)$/))
+    .optional(),
   description: z.string().max(10000).optional(),
   character_role: characterRoleEnum.optional(),
   // เพิ่มภายหลัง (audit fix) — optional แล้ว: ไม่ส่งมา = ตัวละครยังไม่ถูกวางบนแคนวาส
@@ -408,6 +469,9 @@ const createEdgeBodySchema = z.object({
   description: z.string().max(10000).optional(),
   // เพิ่มภายหลัง (audit fix) — ผู้ใช้ขอเลือกรูปแบบเส้นได้ (ตรง/หักมุม/โค้ง)
   edge_type: z.enum(["default", "straight", "smoothstep"]).optional(),
+  // เพิ่มภายหลัง — จุดต่อเส้นที่ผู้ใช้ลาก (บน/ขวา/ล่าง/ซ้าย) เดิมไม่ได้บันทึก รีเฟรชแล้วเส้นย้ายจุดเอง
+  source_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
+  target_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
 });
 
 export async function createCharacterEdgeForNovel(req: Request, res: Response) {
@@ -444,6 +508,9 @@ export async function createLocationForNovel(req: Request, res: Response) {
 const createLocationEdgeBodySchema = z.object({
   source_location_id: z.string().uuid(),
   target_location_id: z.string().uuid(),
+  // เพิ่มภายหลัง — จุดต่อเส้น (บน/ขวา/ล่าง/ซ้าย) รีเฟรชแล้วเส้นอยู่ตำแหน่งเดิม
+  source_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
+  target_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
 });
 
 export async function createLocationEdgeForNovel(req: Request, res: Response) {

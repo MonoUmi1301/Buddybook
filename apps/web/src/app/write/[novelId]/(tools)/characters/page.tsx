@@ -7,6 +7,7 @@ import { getAccessToken } from "@/lib/api/auth";
 interface WorldBuildingResponse {
   characters: CharacterRecord[];
   edges: Edge[];
+  character_map_published_at?: string | null;
 }
 
 // แท็บ Character — ผังความสัมพันธ์ตัวละครแบบลาก-วางจริงด้วย @xyflow/react ดู wf_map_dm.png
@@ -24,5 +25,12 @@ export default async function CharactersPage({ params }: { params: { novelId: st
 
   const data = result.json as WorldBuildingResponse;
 
-  return <CharacterGraph novelId={params.novelId} initialCharacters={data.characters} initialEdges={data.edges} />;
+  return (
+    <CharacterGraph
+      novelId={params.novelId}
+      initialCharacters={data.characters}
+      initialEdges={data.edges}
+      initialPublishedAt={data.character_map_published_at ?? null}
+    />
+  );
 }

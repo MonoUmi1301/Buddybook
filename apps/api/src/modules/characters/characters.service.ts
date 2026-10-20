@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { moveToTrash } from "@/lib/trash";
 import { ApiError } from "@/utils/ApiError";
@@ -110,6 +111,8 @@ interface CreateEdgeInput {
   edge_label?: string;
   description?: string;
   edge_type?: string;
+  source_handle?: string;
+  target_handle?: string;
 }
 
 /** Reference implementation — POST /novels/:novel_id/character-edges
@@ -122,8 +125,14 @@ export async function createCharacterEdge(novel_id: string, user_id: string, inp
 
   await assertNovelOwner(novel_id, user_id);
 
+  // จุดต่อเส้นเก็บรวมใน edge_style (JSONB) คู่กับสี/หัวลูกศร — ไม่ต้องเพิ่มคอลัมน์ใหม่
+  const { source_handle, target_handle, ...rest } = input;
   const edge = await prisma.characterEdge.create({
-    data: { novel_id, ...input },
+    data: {
+      novel_id,
+      ...rest,
+      ...(source_handle || target_handle ? { edge_style: { source_handle, target_handle } } : {}),
+    },
     select: { edge_id: true, source_node_id: true, target_node_id: true },
   });
 
@@ -145,15 +154,55 @@ interface UpdateEdgeInput {
   edge_label?: string;
   description?: string;
   edge_type?: string;
+  edge_style?: { color: string; arrow: "none" | "end" | "start" | "both" };
+  source_node_id?: string;
+  target_node_id?: string;
+  source_handle?: string | null;
+  target_handle?: string | null;
 }
 
 export async function updateCharacterEdge(edge_id: string, user_id: string, input: UpdateEdgeInput) {
-  await getOwnedEdge(edge_id, user_id);
+  const existing = await getOwnedEdge(edge_id, user_id);
 
+  // edge_style เก็บหลายอย่างรวมกัน (สี/ลูกศร/จุดต่อเส้น) — รวมกับค่าเดิม ไม่เขียนทับทั้งก้อน
+  // ไม่งั้นแก้สีแล้วจุดต่อเส้นที่บันทึกไว้หาย
+  const { edge_style, source_handle, target_handle, ...rest } = input;
+  const prevStyle =
+    existing.edge_style && typeof existing.edge_style === "object" && !Array.isArray(existing.edge_style)
+      ? (existing.edge_style as Record<string, unknown>)
+      : {};
+
+  // ย้ายปลายเส้น (reconnect) — ตัวละครปลายทางต้องอยู่ในนิยายเรื่องเดียวกัน และห้ามโยงหาตัวเอง
+  const nextSource = rest.source_node_id ?? existing.source_node_id;
+  const nextTarget = rest.target_node_id ?? existing.target_node_id;
+  if (nextSource === nextTarget) throw ApiError.unprocessable("A character cannot be linked to itself");
+  if (rest.source_node_id || rest.target_node_id) {
+    const count = await prisma.characterNode.count({
+      where: { novel_id: existing.novel_id, node_id: { in: [nextSource, nextTarget] } },
+    });
+    if (count !== 2) throw ApiError.unprocessable("Character not found in this novel");
+  }
+
+  const styleChanged = edge_style !== undefined || source_handle !== undefined || target_handle !== undefined;
+  const nextStyle = {
+    ...prevStyle,
+    ...(edge_style ?? {}),
+    ...(source_handle !== undefined ? { source_handle } : {}),
+    ...(target_handle !== undefined ? { target_handle } : {}),
+  } as Prisma.InputJsonObject;
   const updated = await prisma.characterEdge.update({
     where: { edge_id },
-    data: input,
-    select: { edge_id: true, relationship_type: true, edge_label: true, description: true, edge_type: true },
+    data: { ...rest, ...(styleChanged ? { edge_style: nextStyle } : {}) },
+    select: {
+      edge_id: true,
+      source_node_id: true,
+      target_node_id: true,
+      relationship_type: true,
+      edge_label: true,
+      description: true,
+      edge_type: true,
+      edge_style: true,
+    },
   });
 
   return updated;

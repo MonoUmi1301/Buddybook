@@ -5,25 +5,13 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/cn";
-import { LOCATION_ICONS, type LocationIconKey } from "@/components/writer/LocationNode";
+import { LOCATION_ICONS, LOCATION_ICON_KEYS, MapAssetIcon, type LocationIconKey } from "@/components/writer/mapAssets";
 import { errorText } from "@/lib/formatApiError";
 
 interface AddLocationModalProps {
   onClose: () => void;
   onSubmit: (input: { name: string; icon: LocationIconKey; category?: string }) => Promise<void>;
 }
-
-const ICON_OPTIONS = Object.keys(LOCATION_ICONS) as LocationIconKey[];
-const ICON_LABELS: Record<LocationIconKey, string> = {
-  castle: "ปราสาท",
-  village: "หมู่บ้าน",
-  forest: "ป่า",
-  dungeon: "คุกใต้ดิน",
-  lake: "ทะเลสาบ",
-  volcano: "ภูเขาไฟ",
-  market: "ตลาด",
-  shrine: "วิหาร",
-};
 
 const CATEGORY_OPTIONS = ["ที่พักอาศัย", "ธรรมชาติ", "อันตราย", "ศักดิ์สิทธิ์"];
 
@@ -66,22 +54,26 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
 
         <p className="mb-1.5 text-xs font-medium text-neutral-500">ไอคอน</p>
         <div className="mb-4 grid grid-cols-4 gap-2">
-          {ICON_OPTIONS.map((key) => {
-            const IconComponent = LOCATION_ICONS[key];
+          {LOCATION_ICON_KEYS.map((key) => {
+            const asset = LOCATION_ICONS[key];
             const selected = icon === key;
             return (
               <button
                 key={key}
                 type="button"
                 onClick={() => setIcon(key)}
-                title={ICON_LABELS[key]}
+                title={asset.label}
                 className={cn(
                   "flex flex-col items-center gap-1 rounded-lg border p-2 transition-colors",
                   selected ? "border-primary-500 bg-primary-50" : "border-neutral-200 hover:border-neutral-300"
                 )}
               >
-                <IconComponent className={cn("h-6 w-6", selected ? "text-primary-500" : "text-neutral-500")} />
-                <span className="text-[10px] text-neutral-500">{ICON_LABELS[key]}</span>
+                <MapAssetIcon
+                  asset={asset}
+                  size={"src" in asset ? 36 : 24}
+                  className={selected ? "text-primary-500" : "text-neutral-500"}
+                />
+                <span className="text-[10px] text-neutral-500">{asset.label}</span>
               </button>
             );
           })}

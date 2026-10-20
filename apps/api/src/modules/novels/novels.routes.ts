@@ -36,6 +36,8 @@ router.get("/:novel_id/donations", attachUserIfPresent, asyncHandler(novelsContr
 router.get("/:novel_id/trash-bin", requireAuth, asyncHandler(novelsController.listTrashBin));
 router.get("/:novel_id/print-preview", requireAuth, asyncHandler(novelsController.printPreview));
 router.get("/:novel_id/world-building", requireAuth, asyncHandler(novelsController.worldBuilding));
+router.put("/:novel_id/character-map", requireAuth, asyncHandler(novelsController.publishCharacterMap));
+router.delete("/:novel_id/character-map", requireAuth, asyncHandler(novelsController.unpublishCharacterMap));
 router.patch("/:novel_id/plot-notes", requireAuth, asyncHandler(novelsController.updatePlotNotes));
 router.patch("/:novel_id/theme-notes", requireAuth, asyncHandler(novelsController.updateThemeNotes));
 router.patch("/:novel_id/map-drawings", requireAuth, asyncHandler(novelsController.updateMapDrawings));

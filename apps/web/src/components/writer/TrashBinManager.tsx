@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock3, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -21,6 +21,29 @@ const contentTypeLabel: Record<TrashItem["content_type"], string> = {
   location_edge: "เส้นทางบนแผนที่",
   timeline_event: "เหตุการณ์ไทม์ไลน์",
 };
+
+// หน้าที่ลบรายการนั้นมา — ชื่อตรงกับแท็บใน WriterSidebar (Plot/Theme เป็นโน้ต ยังไม่มีอะไรลงถังขยะ แต่แสดงไว้ให้ครบ)
+type TrashSource = "chapters" | "plot" | "characters" | "environment" | "base" | "theme";
+
+const sourceOf: Record<TrashItem["content_type"], TrashSource> = {
+  chapter: "chapters",
+  character_node: "characters",
+  character_edge: "characters",
+  location: "base",
+  location_edge: "base",
+  timeline_event: "environment",
+};
+
+const sourceLabel: Record<TrashSource, string> = {
+  chapters: "Chapters",
+  plot: "Plot",
+  characters: "Character",
+  environment: "Environment (ไทม์ไลน์)",
+  base: "Base",
+  theme: "Theme",
+};
+
+const sourceOrder: TrashSource[] = ["chapters", "plot", "characters", "environment", "base", "theme"];
 
 function snapshotTitle(item: TrashItem): string {
   const s = item.content_snapshot;
@@ -44,6 +67,20 @@ export function TrashBinManager({ items: initialItems }: { items: TrashItem[] })
   const [pendingDelete, setPendingDelete] = useState<TrashItem | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TrashSource | "all">("all");
+
+  const counts = useMemo(() => {
+    const c: Partial<Record<TrashSource, number>> = {};
+    for (const item of items) {
+      const src = sourceOf[item.content_type];
+      c[src] = (c[src] ?? 0) + 1;
+    }
+    return c;
+  }, [items]);
+
+  const activeFilter = filter;
+  const visibleItems =
+    activeFilter === "all" ? items : items.filter((i) => sourceOf[i.content_type] === activeFilter);
 
   async function handleRestore(item: TrashItem) {
     setBusyId(item.trash_id);
@@ -92,12 +129,48 @@ export function TrashBinManager({ items: initialItems }: { items: TrashItem[] })
     <div>
       {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
 
-      <ul className="divide-y divide-neutral-200 rounded-card border border-neutral-200">
-        {items.map((item) => (
+      <div className="mb-4 flex flex-wrap gap-2" role="tablist" aria-label="กรองตามหน้าที่ลบมา">
+        {(["all", ...sourceOrder] as const).map((key) => {
+          const active = activeFilter === key;
+          const count = key === "all" ? items.length : counts[key] ?? 0;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setFilter(key)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
+                active
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+              }`}
+            >
+              {key === "all" ? "ทั้งหมด" : sourceLabel[key]}
+              <span className={`text-xs ${active ? "text-white/70" : "text-neutral-400"}`}>{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {visibleItems.length === 0 && activeFilter !== "all" && (
+        <p className="rounded-card border border-dashed border-neutral-200 px-4 py-6 text-center text-sm text-neutral-500">
+          ไม่มีรายการที่ลบจากหน้า {sourceLabel[activeFilter]}
+        </p>
+      )}
+
+      <ul
+        className={`divide-y divide-neutral-200 rounded-card border border-neutral-200 ${
+          visibleItems.length === 0 ? "hidden" : ""
+        }`}
+      >
+        {visibleItems.map((item) => (
           <li key={item.trash_id} className="flex items-center gap-4 px-4 py-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-neutral-900">{snapshotTitle(item)}</p>
-              <p className="text-xs text-neutral-500">{contentTypeLabel[item.content_type]}</p>
+              <p className="text-xs text-neutral-500">
+                {contentTypeLabel[item.content_type]} · จากหน้า {sourceLabel[sourceOf[item.content_type]]}
+              </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5 text-xs text-amber-600">
               <Clock3 className="h-3.5 w-3.5" />

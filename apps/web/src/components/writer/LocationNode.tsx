@@ -3,15 +3,6 @@
 import { useState } from "react";
 import { Handle, NodeToolbar, Position, type NodeProps } from "@xyflow/react";
 import {
-  Castle,
-  Home,
-  Trees,
-  Skull,
-  Waves,
-  Flame,
-  Store,
-  Landmark,
-  MapPinned,
   BookOpen,
   Minus,
   Plus,
@@ -20,30 +11,13 @@ import {
   FlipHorizontal,
   ChevronsUp,
   ChevronsDown,
-  type LucideIcon,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { MAP_INK_FILTER, MapAssetIcon, getLocationAsset } from "@/components/writer/mapAssets";
 
-export type LocationIconKey =
-  | "castle"
-  | "village"
-  | "forest"
-  | "dungeon"
-  | "lake"
-  | "volcano"
-  | "market"
-  | "shrine";
-
-export const LOCATION_ICONS: Record<LocationIconKey, LucideIcon> = {
-  castle: Castle,
-  village: Home,
-  forest: Trees,
-  dungeon: Skull,
-  lake: Waves,
-  volcano: Flame,
-  market: Store,
-  shrine: Landmark,
-};
+// รายการภาพ/ไอคอนสถานที่ย้ายไปอยู่ที่ mapAssets.tsx — re-export ไว้ให้ไฟล์อื่นที่ import จากที่นี่ใช้ต่อได้
+export { LOCATION_ICONS, type LocationIconKey } from "@/components/writer/mapAssets";
 
 export interface LocationNodeData {
   name: string;
@@ -55,7 +29,19 @@ export interface LocationNodeData {
   onTransform?: (nodeId: string, patch: { scale?: number; rotation?: number; flip_x?: boolean }) => void;
   onLayerOrder?: (nodeId: string, direction: "front" | "back") => void;
   onOpenLore?: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => void;
   [key: string]: unknown;
+}
+
+// กรอบไอคอน (ก่อนคูณ scale) + ความสูงของป้ายชื่อรวมช่องไฟ — ใช้คำนวณขนาดโหนดจริงใน WorldMap
+// เพื่อให้ป้ายชื่อเลื่อนลงตามไอคอนที่ขยาย (เดิมใช้ CSS scale อย่างเดียว ไอคอนเลยขยายทับป้ายชื่อ)
+export const LOCATION_ICON_BOX = 64;
+const LABEL_BLOCK_HEIGHT = 28;
+const MIN_NODE_WIDTH = 88;
+
+export function locationNodeSize(scale: number): { width: number; height: number; iconBox: number } {
+  const iconBox = Math.round(LOCATION_ICON_BOX * scale);
+  return { width: Math.max(MIN_NODE_WIDTH, iconBox + 8), height: iconBox + LABEL_BLOCK_HEIGHT, iconBox };
 }
 
 const iconBtnClass =
@@ -67,11 +53,12 @@ const iconBtnClass =
  *  เพิ่มภายหลัง (audit fix) — เลือกแล้วมี NodeToolbar ให้ย่อ-ขยาย/หมุน/พลิก/จัดเลเยอร์ และปุ่ม
  *  "หมุดผูกฐานข้อมูล" (lore link) เปิดแผงเนื้อหา + ลิงก์ตอนที่เกี่ยวข้อง */
 export function LocationNode({ id, data, selected }: NodeProps) {
-  const { name, icon, scale = 1, rotation = 0, flipX = false, onRename, onTransform, onLayerOrder, onOpenLore } =
+  const { name, icon, scale = 1, rotation = 0, flipX = false, onRename, onTransform, onLayerOrder, onOpenLore, onDelete } =
     data as LocationNodeData;
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(name);
-  const IconComponent = LOCATION_ICONS[icon as LocationIconKey] ?? MapPinned;
+  const asset = getLocationAsset(icon);
+  const { iconBox } = locationNodeSize(scale);
 
   function commitRename() {
     setIsEditing(false);
@@ -87,7 +74,7 @@ export function LocationNode({ id, data, selected }: NodeProps) {
     "!h-3 !w-3 !border-2 !border-white !bg-brand-tan-dark !opacity-0 transition-opacity group-hover:!opacity-100";
 
   return (
-    <div className="group flex flex-col items-center gap-1.5">
+    <div className="group flex h-full w-full flex-col items-center gap-1.5">
       <NodeToolbar position={Position.Top} className="flex items-center gap-0.5 rounded-lg border border-neutral-200 bg-white p-1 shadow-lg">
         <button type="button" className={iconBtnClass} title="ย่อ" onClick={() => onTransform?.(id, { scale: Math.max(0.3, scale - 0.1) })}>
           <Minus className="h-4 w-4" />
@@ -120,16 +107,36 @@ export function LocationNode({ id, data, selected }: NodeProps) {
         >
           <BookOpen className="h-4 w-4" />
         </button>
+        <span className="mx-0.5 h-4 w-px bg-neutral-200" />
+        <button
+          type="button"
+          className={cn(iconBtnClass, "text-red-500 hover:bg-red-50")}
+          title="ลบสถานที่"
+          onClick={() => onDelete?.(id)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </NodeToolbar>
 
       <Handle type="source" position={Position.Top} id="top" className={handleClass} />
       <Handle type="source" position={Position.Left} id="left" className={handleClass} />
 
-      <div
-        className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-tan/30 shadow-md transition-transform"
-        style={{ transform: `scale(${scale}) rotate(${rotation}deg) ${flipX ? "scaleX(-1)" : ""}` }}
-      >
-        <IconComponent className="h-7 w-7 text-brand-tan-dark" />
+      {/* กล่องนอกจองพื้นที่จริงตามขนาดที่ขยายแล้ว ป้ายชื่อด้านล่างจึงถูกดันลงไม่ทับไอคอน */}
+      <div className="flex shrink-0 items-center justify-center" style={{ width: iconBox, height: iconBox }}>
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center transition-transform",
+            // ภาพวาดเองแสดงเต็มกรอบไม่มีพื้นหลัง ส่วนไอคอนเส้นยังอยู่ในกล่องสีแทนเหมือนเดิม
+            asset?.src ? "h-16 w-16" : "h-14 w-14 rounded-2xl bg-brand-tan/30 shadow-md"
+          )}
+          style={{
+            transform: `scale(${scale}) rotate(${rotation}deg) ${flipX ? "scaleX(-1)" : ""}`,
+            // เส้นสเก็ตช์บางและขอบโปร่งแสง พอวางบนพื้นภูมิประเทศจะจาง — ทำเส้นให้เข้ม + ขอบขาว
+            filter: asset?.src ? MAP_INK_FILTER : undefined,
+          }}
+        >
+          <MapAssetIcon asset={asset} size={asset?.src ? 64 : 28} resolution={512} className="text-brand-tan-dark" />
+        </div>
       </div>
 
       {isEditing ? (
@@ -152,7 +159,7 @@ export function LocationNode({ id, data, selected }: NodeProps) {
           onDoubleClick={() => setIsEditing(true)}
           title="ดับเบิลคลิกเพื่อแก้ไขชื่อ"
           className={cn(
-            "cursor-text rounded-pill bg-white px-2 py-0.5 text-xs font-medium text-neutral-700 shadow-sm",
+            "cursor-text whitespace-nowrap rounded-pill bg-white px-2 py-0.5 text-xs font-medium text-neutral-700 shadow-sm",
             selected && "ring-2 ring-primary-400"
           )}
         >

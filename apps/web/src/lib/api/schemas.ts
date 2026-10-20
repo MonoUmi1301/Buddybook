@@ -351,9 +351,15 @@ export const autosaveChapterSchema = z.object({
   base_updated_at: z.string().datetime({ offset: true }).optional(),
 });
 
+// รูปตัวละคร: URL เต็ม (Cloudinary) หรืออวาตาร์สำเร็จรูปในเว็บ "/characters/*.png" — ต้องตรงกับฝั่ง API
+const characterAvatarSchema = z
+  .string()
+  .url()
+  .or(z.string().regex(/^\/characters\/[\w-]+\.(png|jpe?g|webp|svg)$/));
+
 export const createCharacterSchema = z.object({
   character_name: z.string().trim().min(1).max(100),
-  avatar_url: z.string().url().optional(),
+  avatar_url: characterAvatarSchema.optional(),
   description: z.string().max(10000).optional(),
   character_role: characterRoleEnum.optional(),
   // เพิ่มภายหลัง (audit fix) — optional แล้ว: ไม่ส่งมา = ยังไม่วางบนแคนวาส (อยู่ในแถบ "รอวาง")
@@ -364,7 +370,7 @@ export const createCharacterSchema = z.object({
 export const updateCharacterSchema = z
   .object({
     character_name: z.string().trim().min(1).max(100).optional(),
-    avatar_url: z.string().url().optional(),
+    avatar_url: characterAvatarSchema.optional(),
     description: z.string().max(10000).optional(),
     character_role: characterRoleEnum.optional(),
     position_x: z.number().optional(),
@@ -385,6 +391,9 @@ export const createCharacterEdgeSchema = z.object({
   description: z.string().max(10000).optional(),
   // เพิ่มภายหลัง (audit fix) — ผู้ใช้ขอเลือกรูปแบบเส้นได้ (ตรง/หักมุม/โค้ง)
   edge_type: edgeTypeEnum.optional(),
+  // เพิ่มภายหลัง — จุดต่อเส้นที่ผู้ใช้ลาก (บน/ขวา/ล่าง/ซ้าย) เดิมไม่ได้บันทึก รีเฟรชแล้วเส้นย้ายจุดเอง
+  source_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
+  target_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
 });
 
 export const updateCharacterEdgeSchema = z
@@ -393,13 +402,38 @@ export const updateCharacterEdgeSchema = z
     edge_label: z.string().trim().max(100).optional(),
     description: z.string().max(10000).optional(),
     edge_type: edgeTypeEnum.optional(),
+    // ลากปลายเส้นไปต่อจุดใหม่ (reconnect) — ต้องตรงกับ updateEdgeBodySchema ฝั่ง API
+    source_node_id: uuid.optional(),
+    target_node_id: uuid.optional(),
+    source_handle: z.enum(["top", "right", "bottom", "left"]).nullable().optional(),
+    target_handle: z.enum(["top", "right", "bottom", "left"]).nullable().optional(),
+    // สีเส้น + หัวลูกศร — ต้องตรงกับ updateEdgeBodySchema ฝั่ง API
+    edge_style: z
+      .object({
+        color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        arrow: z.enum(["none", "end", "start", "both"]),
+      })
+      .optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
 export const createLocationEdgeSchema = z.object({
   source_location_id: uuid,
   target_location_id: uuid,
+  // เพิ่มภายหลัง — จุดต่อเส้น (บน/ขวา/ล่าง/ซ้าย) รีเฟรชแล้วเส้นอยู่ตำแหน่งเดิม
+  source_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
+  target_handle: z.enum(["top", "right", "bottom", "left"]).optional(),
 });
+
+// เพิ่มภายหลัง — ลากปลายเส้นทางบนแผนที่ไปต่อจุด/สถานที่ใหม่ (reconnect)
+export const updateLocationEdgeSchema = z
+  .object({
+    source_location_id: uuid.optional(),
+    target_location_id: uuid.optional(),
+    source_handle: z.enum(["top", "right", "bottom", "left"]).nullable().optional(),
+    target_handle: z.enum(["top", "right", "bottom", "left"]).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
 export const createLocationSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -422,6 +456,8 @@ export const updateLocationSchema = z
     pos_y: z.number().optional(),
     // เพิ่มภายหลัง (audit fix) — ย่อ-ขยาย/หมุน/พลิก/ลำดับซ้อนทับ + หมุดผูกฐานข้อมูล (lore link)
     scale: z.number().min(0.3).max(3).optional(),
+    // สีของสแตมป์ (ไม่ใส่ = สีเดิมของภาพ/ไอคอน)
+    color: z.string().trim().max(20).optional(),
     rotation: z.number().min(-360).max(360).optional(),
     flip_x: z.boolean().optional(),
     z_index: z.number().int().min(-1000).max(1000).optional(),
@@ -469,6 +505,10 @@ export const mapDrawingsSchema = z.array(
       y: z.number(),
       rotation: z.number().optional(),
       scale: z.number().min(0.3).max(3).optional(),
+      // สีของสแตมป์ (ไม่ใส่ = สีเดิมของภาพ/ไอคอน)
+      color: z.string().trim().max(20).optional(),
+      // สร้างโดยระบบสุ่มแผนที่ (ประเภท) — ใช้ตอนสุ่มเฉพาะบางประเภท
+      gen: z.enum(["land", "terrain", "water", "labels", "settlements"]).optional(),
     }),
     // เพิ่มภายหลัง (audit fix) — Land Tool: แปรงระบายพื้นที่ดินแบบเพิ่ม/ลบ (ต่างจาก "fill" เดิมที่
     // เป็นการลากปิดรูปทรงตรง ๆ) ดู WorldMap.tsx DrawingLayer สำหรับการ composite ผ่าน SVG mask
@@ -477,8 +517,49 @@ export const mapDrawingsSchema = z.array(
       kind: z.literal("land"),
       points: z.array(mapPointSchema).min(1).max(2000),
       brushSize: z.number().min(5).max(200),
-      mode: z.enum(["add", "subtract"]),
+      mode: z.enum(["add", "subtract", "water"]),
       color: z.string().trim().max(20),
+      // รูปร่างปิดที่ลากด้วยเครื่องมือ "วาดรูปร่าง" (เติมเต็มด้านใน) แทนเส้นแปรง
+      closed: z.boolean().optional(),
+    }),
+    // พื้นหลัง/มหาสมุทรของแผนที่ + เปิด-ปิดพื้นผิวแฟนตาซี (มีได้อันเดียว ดู MapTerrain.tsx ฝั่งเว็บ)
+    z.object({
+      id: z.string().min(1).max(100),
+      kind: z.literal("base"),
+      color: z.string().trim().max(20).nullable(),
+      texture: z.boolean().optional(),
+    }),
+    // ชิ้นส่วนแผนที่สำเร็จรูปจากคลัง (key ดู mapPieces.tsx ฝั่งเว็บ)
+    z.object({
+      id: z.string().min(1).max(100),
+      kind: z.literal("piece"),
+      piece: z.string().trim().min(1).max(40),
+      x: z.number(),
+      y: z.number(),
+      scale: z.number().min(0.1).max(10).optional(),
+      rotation: z.number().optional(),
+      flipX: z.boolean().optional(),
+      color: z.string().trim().max(20).optional(),
+      // สร้างโดยระบบสุ่มแผนที่ (ประเภท) — ใช้ตอนสุ่มเฉพาะบางประเภท
+      gen: z.enum(["land", "terrain", "water", "labels", "settlements"]).optional(),
+    }),
+    // ชื่อพื้นที่บนแผนที่ (ทวีป/อาณาจักร/ประเทศ/ภูมิภาค/เมือง) — attachTo = id ชิ้นส่วนที่ผูกอยู่
+    z.object({
+      id: z.string().min(1).max(100),
+      kind: z.literal("label"),
+      text: z.string().trim().max(80),
+      x: z.number(),
+      y: z.number(),
+      size: z.number().min(8).max(120),
+      color: z.string().trim().max(20),
+      font: z.enum(["serif", "sans", "sarabun"]),
+      rotation: z.number().optional(),
+      italic: z.boolean().optional(),
+      spacing: z.number().min(0).max(2).optional(),
+      category: z.enum(["continent", "kingdom", "country", "region", "city"]).optional(),
+      attachTo: z.string().max(100).optional(),
+      // สร้างโดยระบบสุ่มแผนที่ (ประเภท) — ใช้ตอนสุ่มเฉพาะบางประเภท
+      gen: z.enum(["land", "terrain", "water", "labels", "settlements"]).optional(),
     }),
   ])
 ).max(2000);

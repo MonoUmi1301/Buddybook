@@ -14,7 +14,8 @@ interface QuillEditorProps {
 // Rich text editor สำหรับเขียนตอนนิยาย ใช้ quill ตรง ๆ (ไม่มี react-quill wrapper เป็น dependency)
 // toolbar อ้างอิงจาก icon.pdf ในโฟลเดอร์ buddybook_real (กลุ่ม format ที่ Quill รองรับ built-in)
 export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillEditorProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  // กล่องครอบที่ React ดูแล — ตัว editor และ toolbar ที่ Quill สร้างจะอยู่ข้างในนี้ทั้งหมด
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const quillRef = useRef<Quill | null>(null);
 
   // audit fix — ปุ่มรูปเดิมไม่มี handler เอง ใช้พฤติกรรม default ของ Quill คือฝัง base64 ของไฟล์
@@ -27,9 +28,17 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
   uploadRef.current = upload;
 
   useEffect(() => {
-    if (!containerRef.current || quillRef.current) return;
+    const wrapper = wrapperRef.current;
+    if (!wrapper || quillRef.current) return;
 
-    const quill = new Quill(containerRef.current, {
+    // Quill แทรก toolbar เป็น "พี่น้อง" ไว้ก่อน element ที่ส่งให้ ถ้าส่ง div ที่ React render ตรง ๆ
+    // toolbar จะไปค้างใน parent — พอ remount (เช่นกด "กู้คืนฉบับในเครื่อง" ที่เปลี่ยน key) toolbar เก่า
+    // ไม่ถูกลบ เลยขึ้นซ้ำ 2 แถว จึงสร้าง div ให้ Quill เองภายใน wrapper แล้วล้างทิ้งทั้งหมดตอน unmount
+    const editorEl = document.createElement("div");
+    editorEl.className = "min-h-[400px] bg-white";
+    wrapper.appendChild(editorEl);
+
+    const quill = new Quill(editorEl, {
       theme: "snow",
       placeholder,
       modules: {
@@ -73,8 +82,13 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
     quill.on("text-change", () => onChange?.(quill.root.innerHTML));
     quillRef.current = quill;
 
+    return () => {
+      quill.off("text-change");
+      quillRef.current = null;
+      wrapper.innerHTML = "";
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={containerRef} className="min-h-[400px] bg-white" />;
+  return <div ref={wrapperRef} />;
 }

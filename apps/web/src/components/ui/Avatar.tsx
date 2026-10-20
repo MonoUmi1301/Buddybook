@@ -9,6 +9,9 @@ interface AvatarProps {
   /** แสดงตัวอักษรแรกของ alt แทนไอคอนคนเมื่อไม่มีรูป */
   initialFallback?: boolean;
   className?: string;
+  /** ขนาดรูปที่ขอจาก image optimizer (ค่า sizes ของ next/image) — ใช้ตอนรูปถูกขยายด้วย CSS/ซูม
+   *  เช่นโหนดตัวละครบนแคนวาส ไม่งั้นได้รูปเล็กแค่ขนาดกล่อง แล้วแตกตอนซูม */
+  sizes?: string;
 }
 
 const sizeClasses = {
@@ -28,7 +31,7 @@ function initialOf(name: string) {
   return (chars[0] ?? "?").toUpperCase();
 }
 
-export function Avatar({ src, alt, size = "md", initialFallback = false, className }: AvatarProps) {
+export function Avatar({ src, alt, size = "md", initialFallback = false, className, sizes }: AvatarProps) {
   return (
     <div
       className={cn(
@@ -38,7 +41,7 @@ export function Avatar({ src, alt, size = "md", initialFallback = false, classNa
       )}
     >
       {src ? (
-        <Image src={src} alt={alt} fill sizes={imageSizes[size]} className="object-cover" />
+        <Image src={src} alt={alt} fill sizes={sizes ?? imageSizes[size]} quality={90} className="object-cover" />
       ) : initialFallback ? (
         <span
           role="img"

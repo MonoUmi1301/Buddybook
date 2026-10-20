@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
+import { BookOpen, Eye, EyeOff, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
 import { EditNovelForm } from "@/components/writer/EditNovelForm";
@@ -54,6 +54,21 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
   const router = useRouter();
   const [novel, setNovel] = useState(initialNovel);
   const [chapters, setChapters] = useState(initialChapters);
+  // useState ใช้ค่าเริ่มต้นแค่ครั้งแรก — ถ้า server ส่งข้อมูลใหม่มา (router.refresh / กลับเข้าหน้าเดิม)
+  // ต้องตามค่าใหม่ด้วย ไม่งั้นรายการตอนค้างเป็นของเก่าจนกว่าจะรีเฟรชทั้งหน้า
+  useEffect(() => setNovel(initialNovel), [initialNovel]);
+  useEffect(() => setChapters(initialChapters), [initialChapters]);
+
+  // ดึงข้อมูลล่าสุดจากเซิร์ฟเวอร์ทุกครั้งที่เข้าหน้านี้ + ตอนกลับมาที่แท็บ — Next 14 ใช้หน้าเก่าจาก
+  // Router Cache เสมอเมื่อกด Back/Forward (ไม่สน staleTimes) ทำให้ตอนที่เพิ่งสร้าง/ลบไม่โผล่จนกว่าจะรีเฟรชเอง
+  useEffect(() => {
+    router.refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [router]);
   const [editing, setEditing] = useState(false);
   const [busyChapterId, setBusyChapterId] = useState<string | null>(null);
   const [pendingDeleteChapter, setPendingDeleteChapter] = useState<ManagedChapter | null>(null);
@@ -179,9 +194,17 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
             <div className="flex items-start justify-between gap-3">
               <h1 className="min-w-0 break-words text-xl font-semibold text-neutral-900 sm:text-h3">{novel.title}</h1>
               {/* จอแคบเหลือแค่ไอคอน ให้ชื่อเรื่องมีที่พอ (ชื่อปุ่มยังอยู่สำหรับ screen reader) */}
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="shrink-0">
-                <Pencil className="h-3.5 w-3.5" /> <span className="sr-only sm:not-sr-only">แก้ไขข้อมูล</span>
-              </Button>
+              <div className="flex shrink-0 gap-2">
+                {/* โหมดทดลองอ่าน — เปิดหน้านิยายแบบที่ผู้อ่านเห็น (อ่านตอนร่างได้ ไม่นับยอดวิว) */}
+                <Link href={`/novels/${novel.novel_id}`}>
+                  <Button variant="outline" size="sm">
+                    <BookOpen className="h-3.5 w-3.5" /> <span className="sr-only sm:not-sr-only">ทดลองอ่าน</span>
+                  </Button>
+                </Link>
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="h-3.5 w-3.5" /> <span className="sr-only sm:not-sr-only">แก้ไขข้อมูล</span>
+                </Button>
+              </div>
             </div>
 
             {novel.synopsis && <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{novel.synopsis}</p>}
@@ -268,6 +291,13 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
                     </p>
                   </div>
                   <Tag color={badge.color}>{badge.label}</Tag>
+                  <Link
+                    href={`/novels/${novel.novel_id}/chapters/${chapter.chapter_id}`}
+                    className="text-xs font-medium text-neutral-500 hover:text-neutral-700"
+                    title="ทดลองอ่านตอนนี้แบบที่ผู้อ่านเห็น"
+                  >
+                    อ่าน
+                  </Link>
                   <Link
                     href={`/write/${novel.novel_id}/chapters/${chapter.chapter_id}`}
                     className="text-xs font-medium text-primary-500 hover:text-primary-600"

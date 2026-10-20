@@ -53,6 +53,23 @@ export async function remove(req: Request, res: Response) {
 
 const edgeIdParamSchema = z.object({ edge_id: z.string().uuid() });
 
+// เพิ่มภายหลัง — PATCH /location-edges/:edge_id ย้ายปลายเส้นทาง (reconnect) ไม่ต้องลบแล้วลากใหม่
+const updateEdgeBodySchema = z
+  .object({
+    source_location_id: z.string().uuid().optional(),
+    target_location_id: z.string().uuid().optional(),
+    source_handle: z.enum(["top", "right", "bottom", "left"]).nullable().optional(),
+    target_handle: z.enum(["top", "right", "bottom", "left"]).nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
+
+export async function updateEdge(req: Request, res: Response) {
+  const { edge_id } = edgeIdParamSchema.parse(req.params);
+  const body = updateEdgeBodySchema.parse(req.body);
+  const edge = await locationsService.updateLocationEdge(edge_id, req.user!.user_id, body);
+  res.status(200).json(edge);
+}
+
 export async function removeEdge(req: Request, res: Response) {
   const { edge_id } = edgeIdParamSchema.parse(req.params);
   const trash = await locationsService.deleteLocationEdge(edge_id, req.user!.user_id);

@@ -123,6 +123,8 @@ export async function deleteLocation(location_id: string, user_id: string) {
 interface CreateLocationEdgeInput {
   source_location_id: string;
   target_location_id: string;
+  source_handle?: string;
+  target_handle?: string;
 }
 
 /** เพิ่มภายหลัง (audit fix) — เส้นทาง/ถนนเชื่อมสถานที่ พอร์ตมาจาก buddybook_demo/tool_map
@@ -135,10 +137,49 @@ export async function createLocationEdge(novel_id: string, user_id: string, inpu
 
   const edge = await prisma.locationEdge.create({
     data: { novel_id, ...input },
-    select: { edge_id: true, source_location_id: true, target_location_id: true },
+    select: { edge_id: true, source_location_id: true, target_location_id: true, source_handle: true, target_handle: true },
   });
 
   return edge;
+}
+
+interface UpdateLocationEdgeInput {
+  source_location_id?: string;
+  target_location_id?: string;
+  source_handle?: string | null;
+  target_handle?: string | null;
+}
+
+/** เพิ่มภายหลัง — PATCH /location-edges/:edge_id ย้ายปลายเส้นทางไปจุด/สถานที่ใหม่ (reconnect) */
+export async function updateLocationEdge(edge_id: string, user_id: string, input: UpdateLocationEdgeInput) {
+  const edge = await prisma.locationEdge.findUnique({
+    where: { edge_id },
+    include: { novel: { select: { author_id: true } } },
+  });
+  if (!edge) throw ApiError.notFound("Location edge not found");
+  if (edge.novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
+
+  const nextSource = input.source_location_id ?? edge.source_location_id;
+  const nextTarget = input.target_location_id ?? edge.target_location_id;
+  if (nextSource === nextTarget) throw ApiError.unprocessable("A location cannot be linked to itself");
+  if (input.source_location_id || input.target_location_id) {
+    const count = await prisma.location.count({
+      where: { novel_id: edge.novel_id, location_id: { in: [nextSource, nextTarget] } },
+    });
+    if (count !== 2) throw ApiError.unprocessable("Location not found in this novel");
+  }
+
+  return prisma.locationEdge.update({
+    where: { edge_id },
+    data: input,
+    select: {
+      edge_id: true,
+      source_location_id: true,
+      target_location_id: true,
+      source_handle: true,
+      target_handle: true,
+    },
+  });
 }
 
 export async function deleteLocationEdge(edge_id: string, user_id: string) {

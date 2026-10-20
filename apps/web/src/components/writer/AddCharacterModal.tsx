@@ -14,11 +14,15 @@ interface AddCharacterModalProps {
   onSubmit: (input: { name: string; avatarUrl?: string }) => Promise<void>;
 }
 
-// เพิ่มภายหลัง (audit fix) — สำหรับคนที่ยังไม่มีรูปตัวละครของตัวเองแต่อยากได้ avatar ไว้ก่อน
-// (จะได้ลากโยงเส้นความสัมพันธ์บนแคนวาสให้ดูออกง่ายขึ้น ไม่ต้องรอมีรูปจริง) ใช้ i.pravatar.cc ซึ่ง
-// whitelist ไว้ใน next.config.mjs remotePatterns อยู่แล้วแต่ยังไม่เคยมีจุดใช้งานจริงในโค้ด
-const PRESET_AVATAR_IDS = [12, 5, 33, 47, 25, 60, 15, 68];
-const presetAvatarUrl = (id: number) => `https://i.pravatar.cc/150?img=${id}`;
+// อวาตาร์ตัวละครสำเร็จรูป (วาดเองสำหรับ BuddyBook) สำหรับคนที่ยังไม่มีรูปตัวละครของตัวเอง — ไฟล์อยู่ใน
+// apps/web/public/characters/ เก็บลง DB เป็น path ในเว็บ (API รับ "/characters/*.png" ได้)
+// เดิมใช้รูปคนจริงจาก i.pravatar.cc — เปลี่ยนเป็นภาพวาดของโปรเจกต์แทน (ผู้ใช้ขอ)
+const PRESET_AVATARS = [
+  { src: "/characters/top.png", label: "Top" },
+  { src: "/characters/bottom.png", label: "Bottom" },
+  { src: "/characters/seme.png", label: "Seme" },
+  { src: "/characters/uke.png", label: "Uke" },
+];
 
 /** ป๊อปอัพเพิ่มตัวละคร — เดิม QuickAddPopover มีแค่ช่องกรอกชื่อ ไม่มีทางใส่รูป avatar เลย
  *  (CharacterNode.tsx รองรับ avatarUrl อยู่แล้วแต่ไม่มี UI ไหนตั้งค่าได้จริง) ใช้
@@ -82,21 +86,21 @@ export function AddCharacterModal({ onClose, onSubmit }: AddCharacterModalProps)
 
         <p className="mb-1.5 text-center text-xs text-neutral-400">หรือเลือกอวาตาร์ตัวอย่าง (เผื่อยังไม่มีรูปตัวละคร)</p>
         <div className="mb-4 flex flex-wrap justify-center gap-2">
-          {PRESET_AVATAR_IDS.map((id) => {
-            const url = presetAvatarUrl(id);
-            const selected = avatarUrl === url;
+          {PRESET_AVATARS.map(({ src, label }) => {
+            const selected = avatarUrl === src;
             return (
               <button
-                key={id}
+                key={src}
                 type="button"
-                onClick={() => setAvatarUrl(url)}
-                aria-label={`เลือกอวาตาร์ตัวอย่าง ${id}`}
+                onClick={() => setAvatarUrl(src)}
+                aria-label={`เลือกอวาตาร์ตัวอย่าง ${label}`}
+                title={label}
                 className={cn(
-                  "relative h-10 w-10 shrink-0 overflow-hidden rounded-full ring-2 transition-colors",
+                  "relative h-12 w-12 shrink-0 overflow-hidden rounded-full ring-2 transition-colors",
                   selected ? "ring-primary-500" : "ring-transparent hover:ring-neutral-300"
                 )}
               >
-                <Image src={url} alt="" fill sizes="40px" className="object-cover" />
+                <Image src={src} alt="" fill sizes="48px" className="object-cover" />
               </button>
             );
           })}

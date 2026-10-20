@@ -149,7 +149,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
         return;
       }
 
-      router.push(`/write/${json.novel_id}/choose`);
+      router.push(`/write/${json.novel_id}/publish`);
       router.refresh();
     } catch {
       setError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง");

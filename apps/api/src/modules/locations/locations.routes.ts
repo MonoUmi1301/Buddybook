@@ -15,4 +15,5 @@ export default router;
 // location_edges — เส้นทาง/ถนนเชื่อมระหว่างสถานที่ (พอร์ตมาจาก buddybook_demo/tool_map)
 export const locationEdgesRouter = Router();
 locationEdgesRouter.use(requireAuth);
+locationEdgesRouter.patch("/:edge_id", asyncHandler(locationsController.updateEdge));
 locationEdgesRouter.delete("/:edge_id", asyncHandler(locationsController.removeEdge));

@@ -11,6 +11,7 @@ import { PublishChoiceModal, type PublishChoice } from "@/components/writer/Publ
 import { formatApiError } from "@/lib/formatApiError";
 import { countCharacters, estimatePageCount } from "@/lib/textStats";
 import { type LocalDraft, chapterDraftKey, clearDraft, readDraft, writeDraft } from "@/lib/draftStore";
+import { formatThaiDateTime } from "@/lib/format";
 
 // Quill แตะ DOM ตรง ๆ ตอน construct — โหลดแบบ ssr:false (ทำได้เฉพาะใน Client Component)
 // ตาม pattern มาตรฐานของ Next.js App Router
@@ -32,6 +33,8 @@ interface ChapterEditorFormProps {
   initialPriceCoins?: number;
   /** gap 2.5 — updated_at ของตอนบนเซิร์ฟเวอร์ตอนเปิดหน้า (ใช้ตรวจการแก้ไขชนกันข้ามแท็บ) */
   initialUpdatedAt?: string | null;
+  /** เวลาที่ตั้งเผยแพร่ไว้ (ISO) เมื่อ status=scheduled */
+  initialScheduledAt?: string | null;
 }
 
 const MAX_CHAPTER_PRICE = 1000;
@@ -67,12 +70,15 @@ export function ChapterEditorForm({
   initialStatus = "draft",
   initialPriceCoins = 0,
   initialUpdatedAt = null,
+  initialScheduledAt = null,
 }: ChapterEditorFormProps) {
   const router = useRouter();
   const [chapterId, setChapterId] = useState(initialChapterId);
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [chapterStatus, setChapterStatus] = useState(initialStatus);
+  // เวลาที่ตั้งเผยแพร่ไว้ (status=scheduled) — แสดงที่หัวหน้าให้รู้ว่าจะเผยแพร่เมื่อไร
+  const [scheduledAt, setScheduledAt] = useState<string | null>(initialScheduledAt);
   const [isPaid, setIsPaid] = useState(initialPriceCoins > 0);
   const [priceCoins, setPriceCoins] = useState(initialPriceCoins > 0 ? initialPriceCoins : 10);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
@@ -161,7 +167,9 @@ export function ChapterEditorForm({
   async function persist(
     status: "draft" | "published" | "scheduled",
     scheduledPublishAt?: string,
-    onError?: (message: string) => void
+    onError?: (message: string) => void,
+    /** false = กำลังจะออกจากหน้านี้ต่อ (เผยแพร่/ตั้งเวลา) ไม่ต้องเปลี่ยน URL ไป /chapters/[id] */
+    stayOnPage = true
   ): Promise<boolean> {
     setErrorMessage(null);
 
@@ -202,7 +210,10 @@ export function ChapterEditorForm({
         dirtyRef.current = false;
         setChapterId(json.chapter_id);
         setChapterStatus(status);
-        router.replace(`/write/${novelId}/chapters/${json.chapter_id}`);
+        setScheduledAt(status === "scheduled" ? scheduledPublishAt ?? null : null);
+        // เดิม replace เสมอ — ตอนกด "เผยแพร่" ของตอนใหม่ จะมี replace นี้ยิงซ้อนกับ push ไปหน้าจัดการนิยาย
+        // แล้ว navigation สองอันแย่งกัน ทำให้หน้าจัดการนิยายได้ข้อมูลเก่าที่ยังไม่มีตอนนี้
+        if (stayOnPage) router.replace(`/write/${novelId}/chapters/${json.chapter_id}`);
         return true;
       }
 
@@ -226,6 +237,7 @@ export function ChapterEditorForm({
       dirtyRef.current = false;
       markSynced(sent, json.updated_at);
       setChapterStatus(status);
+      setScheduledAt(status === "scheduled" ? scheduledPublishAt ?? null : null);
       return true;
     } catch {
       (onError ?? setErrorMessage)("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง");
@@ -242,9 +254,12 @@ export function ChapterEditorForm({
   async function handlePublishConfirm(choice: PublishChoice, scheduledPublishAt?: string) {
     setPublishing(true);
     setPublishError(null);
-    const ok = await persist(choice, scheduledPublishAt, setPublishError);
+    const ok = await persist(choice, scheduledPublishAt, setPublishError, false);
     setPublishing(false);
-    if (ok) router.push("/write");
+    // เผยแพร่/ตั้งเวลาเสร็จแล้วกลับไปหน้าจัดการนิยายเรื่องนี้เลย (เดิมไป /write ต้องเลือกเรื่องใหม่อีกรอบ)
+    // ไม่ต้อง router.refresh() ก่อน — มันโหลดหน้าเขียนตอนนี้ใหม่ทั้งหน้าทั้งที่กำลังจะออก (ช้า) ส่วนความสดของ
+    // หน้าจัดการนิยายได้จาก staleTimes.dynamic=0 ใน next.config.mjs + NovelManagementPanel refresh ตอนเข้าหน้าแล้ว
+    if (ok) router.push(`/write/${novelId}`);
   }
 
   /** ส่งเนื้อหาล่าสุดขึ้นเซิร์ฟเวอร์ (ถ้ามีอะไรค้าง) — ใช้ร่วมกันโดย timer 30 วิ, กลับมาออนไลน์ และตอนปิดแท็บ */
@@ -363,7 +378,8 @@ export function ChapterEditorForm({
           <span className="font-medium text-primary-500">
             ตอนที่ {chapterNumber}
             {chapterStatus === "published" && " (เผยแพร่แล้ว)"}
-            {chapterStatus === "scheduled" && " (รอเผยแพร่)"}
+            {chapterStatus === "scheduled" &&
+              (scheduledAt ? ` (จะเผยแพร่ ${formatThaiDateTime(scheduledAt)})` : " (รอเผยแพร่)")}
             {chapterStatus === "hidden" && " (ถูกซ่อน)"}
             {chapterStatus === "draft" && " (ร่าง)"}
           </span>

@@ -1,9 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { BookOpen, Wand2 } from "lucide-react";
+import { ArrowLeft, BookOpen, Wand2 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { PublishVisibilityChoice } from "@/components/writer/PublishVisibilityChoice";
 import { callApi } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
 import { getCurrentUser } from "@/lib/api/session";
@@ -15,7 +14,8 @@ interface NovelSummary {
   author: { user_id: string };
 }
 
-// หลังสร้างนิยายเสร็จ (Phase C) — ให้เลือกว่าจะไปเขียนตอนแรกเลย หรือไปเครื่องมือช่วยแต่งนิยายก่อน
+// หลังสร้างนิยายเสร็จ ขั้นที่ 2/2 — ให้เลือกว่าจะไปเขียนตอนแรกเลย หรือไปเครื่องมือช่วยแต่งนิยายก่อน
+// (ขั้นที่ 1 เลือกสถานะการเผยแพร่ แยกไปอยู่ที่ /write/[novelId]/publish)
 export default async function ChooseNextStepPage({ params }: { params: { novelId: string } }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -31,8 +31,9 @@ export default async function ChooseNextStepPage({ params }: { params: { novelId
       <Navbar user={user} />
 
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:px-8">
-        <h1 className="text-h2 text-neutral-900">สร้าง &ldquo;{novel.title}&rdquo; สำเร็จแล้ว!</h1>
-        <p className="mt-2 text-sm text-neutral-500">อยากเริ่มยังไงต่อดี?</p>
+        <p className="text-xs font-medium text-primary-500">ขั้นที่ 2 จาก 2</p>
+        <h1 className="mt-2 text-h2 text-neutral-900">อยากเริ่ม &ldquo;{novel.title}&rdquo; ยังไงดี?</h1>
+        <p className="mt-2 text-sm text-neutral-500">เลือกได้เลย กลับมาทำอีกอย่างทีหลังก็ได้</p>
 
         <div className="mt-8 grid w-full gap-4 sm:grid-cols-2">
           <Link
@@ -54,11 +55,14 @@ export default async function ChooseNextStepPage({ params }: { params: { novelId
           </Link>
         </div>
 
-        <PublishVisibilityChoice novelId={novel.novel_id} initialVisibility={novel.visibility} />
-
-        <Link href={`/write/${novel.novel_id}`} className="mt-8 text-sm text-neutral-400 hover:text-neutral-600">
-          ข้ามไปหน้าจัดการนิยาย
-        </Link>
+        <div className="mt-8 flex items-center gap-6 text-sm">
+          <Link href={`/write/${novel.novel_id}/publish`} className="inline-flex items-center gap-1 text-neutral-400 hover:text-neutral-600">
+            <ArrowLeft className="h-3.5 w-3.5" /> ย้อนกลับ
+          </Link>
+          <Link href={`/write/${novel.novel_id}`} className="text-neutral-400 hover:text-neutral-600">
+            ข้ามไปหน้าจัดการนิยาย
+          </Link>
+        </div>
       </main>
 
       <Footer />

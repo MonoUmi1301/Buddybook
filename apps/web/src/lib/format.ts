@@ -13,6 +13,14 @@ export function formatThaiDate(iso: string | Date): string {
   return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: THAI_TIME_ZONE });
 }
 
+/** วันที่และเวลาแบบไทย เช่น 20 ต.ค. 2569 18:00 น. — ใช้กับเวลาตั้งเผยแพร่ตอน */
+export function formatThaiDateTime(iso: string | Date): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric", timeZone: THAI_TIME_ZONE });
+  const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: THAI_TIME_ZONE });
+  return `${date} ${time} น.`;
+}
+
 /** เดือน-ปีแบบไทย เช่น พฤษภาคม 2569 — ใช้กับ "เข้าร่วมเมื่อ" */
 export function formatThaiMonthYear(iso: string | Date): string {
   return new Date(iso).toLocaleDateString("th-TH", { month: "long", year: "numeric", timeZone: THAI_TIME_ZONE });
