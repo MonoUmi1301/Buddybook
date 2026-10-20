@@ -1,3 +1,4 @@
+import type { TextareaHTMLAttributes } from "react";
 import { BearPeek } from "@/components/gifts/BearPeek";
 import type { CardTemplate } from "@/lib/donate-assets";
 import { cn } from "@/lib/cn";
@@ -12,6 +13,10 @@ interface LetterCardProps {
   placeholder?: string;
   size?: "full" | "mini";
   className?: string;
+  /** ส่งมาเมื่อให้พิมพ์ข้อความลงบนการ์ดได้โดยตรง (GiftDialog) — บรรทัดข้อความกลายเป็น textarea */
+  onMessageChange?: (value: string) => void;
+  /** props เสริมของ textarea ตอนแก้ไขได้ (id, maxLength, aria-*) */
+  inputProps?: Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange">;
 }
 
 /**
@@ -19,7 +24,17 @@ interface LetterCardProps {
  * ใช้ทั้งพรีวิวตอนเขียน, หน้ายืนยัน และ (เฟสถัดไป) กล่องจดหมายนักเขียน/การ์ดสาธารณะ
  * ข้อความแสดงเป็น plain text เท่านั้น (whitespace-pre-line) ไม่มี HTML
  */
-export function LetterCard({ template, recipientName, message, signature, placeholder, size = "full", className }: LetterCardProps) {
+export function LetterCard({
+  template,
+  recipientName,
+  message,
+  signature,
+  placeholder,
+  size = "full",
+  className,
+  onMessageChange,
+  inputProps,
+}: LetterCardProps) {
   const mini = size === "mini";
   const body = message.trim();
 
@@ -66,15 +81,31 @@ export function LetterCard({ template, recipientName, message, signature, placeh
           ถึง {recipientName}
         </p>
 
-        <p
-          className={cn(
-            "gift-card__line mt-1 whitespace-pre-line break-words",
-            mini ? "line-clamp-4 min-h-[3.5em]" : "min-h-[7em]",
-            !body && "opacity-50"
-          )}
-        >
-          {body || placeholder || ""}
-        </p>
+        {onMessageChange ? (
+          // พิมพ์บนการ์ดตรง ๆ — field-sizing ให้สูงตามเนื้อหา (เบราว์เซอร์ที่ไม่รองรับจะเลื่อนในช่องแทน)
+          <textarea
+            {...inputProps}
+            value={message}
+            onChange={(e) => onMessageChange(e.target.value)}
+            placeholder={placeholder}
+            rows={4}
+            className={cn(
+              "gift-card__line mt-1 block min-h-[7em] w-full resize-none break-words border-0 bg-transparent p-0 text-base text-inherit",
+              "[field-sizing:content] placeholder:text-current placeholder:opacity-50 focus:outline-none focus:ring-0 md:text-sm",
+              inputProps?.className
+            )}
+          />
+        ) : (
+          <p
+            className={cn(
+              "gift-card__line mt-1 whitespace-pre-line break-words",
+              mini ? "line-clamp-4 min-h-[3.5em]" : "min-h-[7em]",
+              !body && "opacity-50"
+            )}
+          >
+            {body || placeholder || ""}
+          </p>
+        )}
 
         <p
           className={cn(

@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/cn";
 import { NOTIFICATION_ICON, timeAgo, type NotificationItem } from "@/lib/notifications";
+
+// เดิม 30 วิ — รวมกับรอบ cron เผยแพร่ตอนตั้งเวลา ผู้ใช้รู้สึกว่าต้องรีเฟรชเอง ลดเหลือ 10 วิ (เรียกเฉพาะตอนแท็บเปิดอยู่)
+const NOTIFICATION_POLL_MS = 10_000;
 
 const tabFilter: Record<"updates" | "comments" | "activity", NotificationItem["type"][]> = {
   // เพิ่มภายหลัง (audit fix) — new_chapter (นิยายที่เก็บไว้ในชั้นหนังสือมีตอนใหม่) เข้าแท็บ "อัปเดต"
@@ -33,12 +37,49 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
   const ref = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
 
-  useEffect(() => {
+  // เดิมดึงครั้งเดียวตอน mount — แจ้งเตือนใหม่ (เช่นตอนที่ตั้งเวลาไว้เพิ่งเผยแพร่) ต้องรีเฟรชหน้าถึงจะเห็น
+  // ตอนนี้ดึงซ้ำทุก 30 วิขณะแท็บเปิดอยู่ + ทันทีที่กลับมาที่แท็บ + ตอนกดเปิดกระดิ่ง
+  // (เลือก polling แทน WebSocket/SSE เพราะ API เป็น Express ธรรมดาผ่าน proxy ของ Next — ง่ายและพอสำหรับแจ้งเตือน)
+  // จำ id ที่เคยเห็นแล้ว — แจ้งเตือนใหม่ที่เพิ่งเข้ามาระหว่างเปิดหน้าอยู่จะเด้ง toast มุมจอด้วย (ไม่ใช่แค่จุดบนกระดิ่ง)
+  // รอบแรกตอนเปิดหน้าไม่เด้ง (ของที่ค้างอยู่แล้วดูได้จากกระดิ่ง)
+  const seenIdsRef = useRef<Set<string> | null>(null);
+  const refresh = useCallback(() => {
     fetch("/api/v1/notifications")
-      .then((r) => (r.ok ? r.json() : { notifications: [] }))
-      .then((data) => setNotifications(data.notifications ?? []))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const list: NotificationItem[] = data.notifications ?? [];
+        const seen = seenIdsRef.current;
+        if (seen) {
+          const fresh = list.filter((n) => !n.is_read && !seen.has(n.notification_id));
+          // เด้งไม่เกิน 3 อันต่อรอบ กันจอรก
+          fresh.slice(0, 3).forEach((n) => toast(n.content));
+          // มีแจ้งเตือนใหม่ (เช่นตอนที่ตั้งเวลาไว้เพิ่งเผยแพร่) = ข้อมูลบนหน้าอาจเปลี่ยน — ดึงข้อมูลหน้าปัจจุบันใหม่
+          // (router.refresh โหลด server component ใหม่โดยไม่ล้าง state ของฟอร์มที่กรอกค้างอยู่)
+          if (fresh.length > 0) router.refresh();
+        }
+        seenIdsRef.current = new Set([...(seen ?? []), ...list.map((n) => n.notification_id)]);
+        setNotifications(list);
+      })
       .catch(() => {});
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    refresh();
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, NOTIFICATION_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [refresh]);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -70,7 +111,10 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
         variant={theme}
         aria-label="การแจ้งเตือน"
         showDot={hasUnread}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) refresh();
+          setOpen((v) => !v);
+        }}
         aria-expanded={open}
         aria-haspopup="menu"
       >

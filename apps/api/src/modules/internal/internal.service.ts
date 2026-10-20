@@ -102,7 +102,13 @@ export async function purgeExpiredTrash() {
 export async function publishScheduledChapters() {
   const due = await prisma.chapter.findMany({
     where: { status: "scheduled", scheduled_publish_at: { lte: new Date() } },
-    select: { chapter_id: true, chapter_number: true, title: true, novel_id: true, novel: { select: { author_id: true } } },
+    select: {
+      chapter_id: true,
+      chapter_number: true,
+      title: true,
+      novel_id: true,
+      novel: { select: { author_id: true, title: true } },
+    },
   });
 
   if (due.length === 0) return { published_count: 0 };
@@ -115,6 +121,17 @@ export async function publishScheduledChapters() {
   await Promise.all(
     due.map((c) => notifyLibraryOfNewChapter(c.novel_id, c.novel.author_id, c))
   );
+
+  // เพิ่มภายหลัง — แจ้งนักเขียนด้วยว่าตอนที่ตั้งเวลาไว้เผยแพร่แล้ว (เดิมเผยแพร่เงียบ ๆ นักเขียนไม่รู้เลย
+  // เพราะ notifyLibraryOfNewChapter ตั้งใจไม่แจ้งเตือนตัวผู้เขียนเอง)
+  await prisma.notification.createMany({
+    data: due.map((c) => ({
+      user_id: c.novel.author_id,
+      type: "system" as const,
+      content: `ตอนที่ ${c.chapter_number} ${c.title} ของ "${c.novel.title}" เผยแพร่ตามเวลาที่ตั้งไว้แล้ว`,
+      link_url: `/novels/${c.novel_id}/chapters/${c.chapter_id}`,
+    })),
+  });
 
   return { published_count: due.length };
 }

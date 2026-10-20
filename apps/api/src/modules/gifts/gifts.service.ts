@@ -685,7 +685,8 @@ export async function thankGift(user_id: string, donation_id: string, rawMessage
         user_id: row.from_user_id,
         type: "donation",
         content: `${author ? displayName(author) : "นักเขียน"} ตอบขอบคุณของขวัญของคุณ: ${thank_message}`,
-        link_url: row.novel_id ? `/novels/${row.novel_id}` : null,
+        // เปิดหน้าของขวัญที่ส่ง เลื่อนไปที่การ์ดใบนี้ — คำขอบคุณแสดงใต้การ์ด
+        link_url: `/gifts/sent#gift-${donation_id}`,
       },
     }),
   ]);

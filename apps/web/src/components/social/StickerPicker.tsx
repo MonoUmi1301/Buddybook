@@ -7,14 +7,25 @@ import { cn } from "@/lib/cn";
 import { STICKERS, findSticker, stickerSrc, type StickerId } from "@/lib/stickers";
 
 /** แสดงสติกเกอร์ในคอมเมนต์/รีวิว — id ที่ไม่รู้จัก (เช่นสติกเกอร์ที่ถูกถอดออกไปแล้ว) จะไม่แสดงอะไร */
-export function StickerImage({ id, size = 120, className }: { id: string | null | undefined; size?: number; className?: string }) {
+export function StickerImage({
+  id,
+  size = 120,
+  className,
+  showTitle = true,
+}: {
+  id: string | null | undefined;
+  size?: number;
+  className?: string;
+  /** tooltip ชื่อสติกเกอร์ตอนชี้ — ในตัวเลือกปิดไว้ เพราะมีกล่องขยายพร้อมชื่ออยู่แล้ว */
+  showTitle?: boolean;
+}) {
   const sticker = findSticker(id);
   if (!sticker) return null;
   return (
     <Image
       src={stickerSrc(sticker.id)}
       alt={sticker.label}
-      title={sticker.label}
+      title={showTitle ? sticker.label : undefined}
       width={size}
       height={size}
       className={cn("select-none", className)}
@@ -32,10 +43,15 @@ interface StickerPickerProps {
 /** ปุ่มหน้ายิ้ม + popover เลือกสติกเกอร์ (เลือกได้ 1 ตัวต่อคอมเมนต์/รีวิว) */
 export function StickerPicker({ value, onChange, align = "left" }: StickerPickerProps) {
   const [open, setOpen] = useState(false);
+  // สติกเกอร์ที่เมาส์ชี้/โฟกัสอยู่ — ขยายให้ดูชัดในกล่องข้าง ๆ (รูปในตารางเล็กจนอ่านตัวหนังสือยาก)
+  const [preview, setPreview] = useState<StickerId | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPreview(null);
+      return;
+    }
     function onPointerDown(e: PointerEvent) {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     }
@@ -76,6 +92,10 @@ export function StickerPicker({ value, onChange, align = "left" }: StickerPicker
               type="button"
               role="option"
               aria-selected={value === s.id}
+              onPointerEnter={(e) => e.pointerType === "mouse" && setPreview(s.id)}
+              onPointerLeave={() => setPreview((p) => (p === s.id ? null : p))}
+              onFocus={() => setPreview(s.id)}
+              onBlur={() => setPreview((p) => (p === s.id ? null : p))}
               onClick={() => {
                 onChange(value === s.id ? null : s.id);
                 setOpen(false);
@@ -85,9 +105,22 @@ export function StickerPicker({ value, onChange, align = "left" }: StickerPicker
                 value === s.id && "bg-primary-50 ring-2 ring-primary-400"
               )}
             >
-              <StickerImage id={s.id} size={80} className="h-20 w-20" />
+              <StickerImage id={s.id} size={80} className="h-20 w-20" showTitle={false} />
             </button>
           ))}
+          {preview && (
+            // กล่องขยายวางข้างป๊อปโอเวอร์ ไม่บังตาราง — จอแคบไม่มีที่ (และไม่มี hover) เลยซ่อนไว้
+            <div
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute bottom-0 hidden w-56 rounded-card border border-neutral-200 bg-white p-3 shadow-lg md:block",
+                align === "left" ? "left-full ml-2" : "right-full mr-2"
+              )}
+            >
+              <StickerImage id={preview} size={200} className="mx-auto h-48 w-48 max-w-none object-contain" showTitle={false} />
+              <p className="mt-1 text-center text-xs text-neutral-500">{findSticker(preview)?.label}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -6,6 +6,9 @@ export const STICKERS = [
   { id: "fluffy", label: "ฟินนน~" },
   { id: "amhere", label: "มาแล้วจ้าา" },
   { id: "sosad", label: "หมอนเปียกน้ำตา" },
+  { id: "shock", label: "ช็อกไปเลย!" },
+  { id: "slay", label: "ปังมากแม่!" },
+  { id: "nocomment", label: "ไม่มีคอมเมนต์…" },
 ] as const;
 
 export type StickerId = (typeof STICKERS)[number]["id"];

@@ -127,7 +127,19 @@ export async function listNovelChapters(novel_id: string, requester_id?: string)
   const isOwner = assertNovelVisible(novel, requester_id);
 
   const chapters = await prisma.chapter.findMany({
-    where: { novel_id, ...(isOwner ? {} : { status: "published" as ChapterStatus }) },
+    // เพิ่มภายหลัง — ผู้อ่านเห็นตอนที่ตั้งเวลาเผยแพร่ไว้ด้วย (แค่ชื่อ/เวลา ไม่มีเนื้อหา — list นี้ไม่ select content
+    // อยู่แล้ว และ GET /chapters/:id ยังตอบ 404 กับตอนที่ยังไม่เผยแพร่) เพื่อแสดงเป็นตอนล็อก "จะเผยแพร่ ..."
+    where: {
+      novel_id,
+      ...(isOwner
+        ? {}
+        : {
+            OR: [
+              { status: "published" as ChapterStatus },
+              { status: "scheduled" as ChapterStatus, scheduled_publish_at: { not: null } },
+            ],
+          }),
+    },
     select: {
       chapter_id: true,
       chapter_number: true,
@@ -581,17 +593,22 @@ interface CreateCommentInput {
 /** Reference implementation — POST /chapters/:chapter_id/comments
  *  sentiment_label เป็น null เสมอตอน insert — Python NLP Worker จะ UPDATE กลับมาแบบ async ทีหลัง */
 export async function createComment(chapter_id: string, user_id: string, input: CreateCommentInput) {
-  const chapter = await prisma.chapter.findUnique({ where: { chapter_id }, select: { chapter_id: true } });
+  const chapter = await prisma.chapter.findUnique({
+    where: { chapter_id },
+    select: { chapter_id: true, novel_id: true, chapter_number: true, novel: { select: { title: true, author_id: true } } },
+  });
   if (!chapter) throw ApiError.notFound("Chapter not found");
 
+  let parentAuthorId: string | null = null;
   if (input.parent_comment_id) {
     const parent = await prisma.comment.findUnique({
       where: { comment_id: input.parent_comment_id },
-      select: { chapter_id: true },
+      select: { chapter_id: true, user_id: true },
     });
     if (!parent || parent.chapter_id !== chapter_id) {
       throw ApiError.badRequest("Invalid parent_comment_id");
     }
+    parentAuthorId = parent.user_id;
   }
 
   const comment = await prisma.comment.create({
@@ -605,7 +622,40 @@ export async function createComment(chapter_id: string, user_id: string, input: 
     select: { comment_id: true, content: true, sticker_id: true, sentiment_label: true, created_at: true },
   });
 
+  await notifyCommentRecipients(chapter, user_id, parentAuthorId);
+
   return comment;
+}
+
+/** แจ้งเตือนคอมเมนต์ใหม่: ผู้เขียนนิยายได้ "comment", เจ้าของคอมเมนต์ที่ถูกตอบได้ "reply"
+ *  ไม่แจ้งเตือนตัวเอง และถ้าผู้เขียนคือคนที่ถูกตอบก็ได้แค่ "reply" อันเดียว
+ *  แจ้งเตือนพังไม่ควรทำให้คอมเมนต์ที่บันทึกแล้วล้ม — เลยกลืน error ไว้ */
+async function notifyCommentRecipients(
+  chapter: { chapter_id: string; novel_id: string; chapter_number: number; novel: { title: string; author_id: string } },
+  commenter_id: string,
+  parentAuthorId: string | null,
+) {
+  try {
+    const commenter = await prisma.user.findUnique({
+      where: { user_id: commenter_id },
+      select: { username: true, pen_name: true },
+    });
+    const name = commenter?.pen_name || commenter?.username || "มีผู้อ่าน";
+    const link_url = `/novels/${chapter.novel_id}/chapters/${chapter.chapter_id}`;
+    const where = `"${chapter.novel.title}" ตอนที่ ${chapter.chapter_number}`;
+
+    const data: Prisma.NotificationCreateManyInput[] = [];
+    if (parentAuthorId && parentAuthorId !== commenter_id) {
+      data.push({ user_id: parentAuthorId, type: "reply", content: `${name} ตอบกลับคอมเมนต์ของคุณใน ${where}`, link_url });
+    }
+    const author_id = chapter.novel.author_id;
+    if (author_id !== commenter_id && author_id !== parentAuthorId) {
+      data.push({ user_id: author_id, type: "comment", content: `${name} คอมเมนต์ใน ${where}`, link_url });
+    }
+    if (data.length) await prisma.notification.createMany({ data });
+  } catch (err) {
+    console.error("[comments] failed to create notification", err);
+  }
 }
 
 export async function restoreChapterVersion(chapter_id: string, version_id: string, user_id: string) {

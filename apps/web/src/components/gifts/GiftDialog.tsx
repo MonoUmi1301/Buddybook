@@ -548,8 +548,34 @@ export function GiftDialog({ target, viewerName, initialGiftSlug, draft, onClose
                 recipientName={target.authorName}
                 message={message}
                 signature={displaySignature}
-                placeholder="ข้อความของคุณจะแสดงตรงนี้"
+                placeholder="พิมพ์ข้อความถึงนักเขียนตรงนี้ได้เลย (ไม่บังคับ)"
+                onMessageChange={onMessageChange}
+                inputProps={{
+                  id: "gift-message",
+                  maxLength: CARD_MESSAGE_MAX * 2,
+                  "aria-label": "ข้อความถึงนักเขียน (ไม่บังคับ)",
+                  "aria-describedby": "gift-message-hint",
+                  "aria-invalid": messageCount > CARD_MESSAGE_MAX || (error?.kind === "field" && error.field === "message"),
+                }}
               />
+
+              <div className="mt-1.5 flex items-start justify-between gap-3">
+                <p id="gift-message-hint" className="text-xs text-gift-muted">
+                  {emojiNotice ? "การ์ดรองรับเฉพาะตัวอักษร อีโมจิจะถูกตัดออก " : ""}
+                  ห้ามใส่ลิงก์ อีเมล หรือเบอร์โทร
+                </p>
+                <span
+                  className={cn("shrink-0 text-xs tabular-nums", messageCount > CARD_MESSAGE_MAX ? "font-semibold text-red-600 dark:text-red-400" : "text-gift-muted")}
+                  aria-live="polite"
+                >
+                  {messageCount}/{CARD_MESSAGE_MAX}
+                </span>
+              </div>
+              {error?.kind === "field" && (error.field === "message" || error.field === "signature_name") && (
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+                  {error.message}
+                </p>
+              )}
 
               <fieldset className="mt-5">
                 <legend className="text-sm font-semibold">แบบการ์ด</legend>
@@ -570,39 +596,6 @@ export function GiftDialog({ target, viewerName, initialGiftSlug, draft, onClose
                   ))}
                 </div>
               </fieldset>
-
-              <div className="mt-4">
-                <div className="flex items-baseline justify-between">
-                  <label htmlFor="gift-message" className="text-sm font-semibold">
-                    ข้อความถึงนักเขียน <span className="font-normal text-gift-muted">(ไม่บังคับ)</span>
-                  </label>
-                  <span
-                    className={cn("text-xs tabular-nums", messageCount > CARD_MESSAGE_MAX ? "font-semibold text-red-600 dark:text-red-400" : "text-gift-muted")}
-                    aria-live="polite"
-                  >
-                    {messageCount}/{CARD_MESSAGE_MAX}
-                  </span>
-                </div>
-                <textarea
-                  id="gift-message"
-                  value={message}
-                  onChange={(e) => onMessageChange(e.target.value)}
-                  rows={4}
-                  maxLength={CARD_MESSAGE_MAX * 2}
-                  aria-describedby="gift-message-hint"
-                  aria-invalid={messageCount > CARD_MESSAGE_MAX || (error?.kind === "field" && error.field === "message")}
-                  className="mt-1.5 w-full resize-none rounded-xl border border-gift-edge bg-gift-surface px-3 py-2.5 text-base leading-relaxed focus:border-gift-bear focus:outline-none md:text-sm"
-                />
-                <p id="gift-message-hint" className="mt-1 text-xs text-gift-muted">
-                  {emojiNotice ? "การ์ดรองรับเฉพาะตัวอักษร อีโมจิจะถูกตัดออก " : ""}
-                  ห้ามใส่ลิงก์ อีเมล หรือเบอร์โทร
-                </p>
-                {error?.kind === "field" && (error.field === "message" || error.field === "signature_name") && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
-                    {error.message}
-                  </p>
-                )}
-              </div>
 
               <div className="mt-4">
                 <label htmlFor="gift-signature" className="text-sm font-semibold">
