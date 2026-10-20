@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
-import { syncInterestedIn, deleteUserGraphNode } from "@/lib/graphSync";
+import { syncInterestedIn, deleteUserGraphNode, deleteNovelGraphNode } from "@/lib/graphSync";
 import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
 
 /** Reference implementation ที่สอง — แสดง pattern การใช้ req.user จาก requireAuth */
@@ -108,20 +108,40 @@ export async function deleteMe(req: Request, res: Response) {
     if (!matches) throw ApiError.unauthorized("รหัสผ่านไม่ถูกต้อง");
   }
 
-  await prisma.user.update({
-    where: { user_id },
-    data: {
-      username: `ผู้ใช้ที่ถูกลบ_${user_id.slice(0, 8)}`,
-      email: `deleted+${user_id}@buddybook.invalid`,
-      password_hash: null,
-      oauth_provider: null,
-      oauth_id: null,
-      avatar_url: null,
-      bio: null,
-      updated_at: new Date(),
-    },
+  // เพิ่มภายหลัง — นิยายของบัญชีที่ลบต้องไม่โผล่ต่อในหน้าสาธารณะ (เดิมเปลี่ยนแค่ชื่อเป็น "ผู้ใช้ที่ถูกลบ"
+  // นิยายยังเผยแพร่อยู่) — ย้ายทุกเรื่องลงถังขยะแบบเดียวกับ deleteNovel (visibility=private + จำค่าเดิม)
+  // แล้ว scheduler purge-expired-trash ลบถาวรเมื่อครบ 30 วัน (เรื่องที่มีคนซื้อตอนไปแล้วจะถูกซ่อนไว้ ไม่ลบถาวร)
+  const now = new Date();
+  const ownNovels = await prisma.novel.findMany({
+    where: { author_id: user_id, deleted_at: null },
+    select: { novel_id: true, visibility: true },
   });
 
+  await prisma.$transaction([
+    ...ownNovels.map((n) =>
+      prisma.novel.update({
+        where: { novel_id: n.novel_id },
+        data: { deleted_at: now, visibility_before_delete: n.visibility, visibility: "private", updated_at: now },
+      })
+    ),
+    prisma.user.update({
+      where: { user_id },
+      data: {
+        username: `ผู้ใช้ที่ถูกลบ_${user_id.slice(0, 8)}`,
+        email: `deleted+${user_id}@buddybook.invalid`,
+        password_hash: null,
+        oauth_provider: null,
+        oauth_id: null,
+        avatar_url: null,
+        bio: null,
+        updated_at: now,
+      },
+    }),
+  ]);
+
+  for (const n of ownNovels) {
+    deleteNovelGraphNode(n.novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
+  }
   deleteUserGraphNode(user_id).catch((err) => console.error("Neo4j deleteUserGraphNode failed:", err));
 
   res.status(204).send();

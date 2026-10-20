@@ -159,6 +159,9 @@ async function recreateFromSnapshot(
           novel_id: snapshot.novel_id as string,
           source_location_id: snapshot.source_location_id as string,
           target_location_id: snapshot.target_location_id as string,
+          // กู้คืนจุดต่อเส้นด้วย (snapshot เก่าก่อนมีคอลัมน์นี้ = undefined → null)
+          source_handle: (snapshot.source_handle as string | null) ?? undefined,
+          target_handle: (snapshot.target_handle as string | null) ?? undefined,
           created_at: new Date(snapshot.created_at as string),
         },
         select: { edge_id: true },
