@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * ตรวจว่าแอปกำลังใช้ฐานข้อมูลไหน และแต่ละที่มีข้อมูลอะไรอยู่ — ใช้ตอน "ข้อมูลหาย" / "ต้องสมัครใหม่"
+ * ตรวจว่าแอปกำลังใช้ฐานข้อมูลไหน และ Postgres ทุกตัวในเครื่องมีข้อมูลอะไรอยู่ — ใช้ตอน "ข้อมูลหาย" / "ต้องสมัครใหม่"
  *   npm run db:check
- * อ่าน DATABASE_URL จาก apps/api/.env (และจาก environment ถ้าตั้งทับไว้) แล้วลองทั้งพอร์ต 5432 (Postgres ในเครื่อง)
- * และ 5525 (Postgres ใน Docker) ด้วยชื่อผู้ใช้/รหัสผ่านเดียวกัน — พิมพ์แค่จำนวน ไม่พิมพ์อีเมลหรือรหัสผ่าน
+ * อ่าน DATABASE_URL จาก apps/api/.env (และจาก environment ถ้าตั้งทับไว้) แล้วไล่ลองทุกพอร์ตที่ Postgres มักใช้
+ * ด้วยชื่อผู้ใช้/รหัสผ่านเดียวกัน แสดงทุกฐานข้อมูลบนแต่ละเครื่องที่มีตาราง users — พิมพ์แค่จำนวน ไม่พิมพ์อีเมล/รหัสผ่าน
+ * อ่านอย่างเดียว ไม่แก้ข้อมูลใด ๆ
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -33,28 +34,50 @@ console.log("");
 
 const base = fromEnv ?? fromFile;
 if (!base) process.exit(1);
-const candidates = new Set([base]);
-for (const port of ["5432", "5525"]) candidates.add(base.replace(/:(\d+)\//, `:${port}/`));
+const appUrl = new URL(base);
+const withDb = (port, db) => {
+  const u = new URL(base);
+  u.port = String(port);
+  u.pathname = `/${db}`;
+  return u.toString();
+};
 
-for (const url of candidates) {
-  const prisma = new PrismaClient({ datasourceUrl: url, log: [] });
-  const label = url === base ? `${mask(url)}  ← แอปใช้อันนี้` : mask(url);
+const ports = [...new Set([appUrl.port || "5432", "5432", "5433", "5434", "5525", "5526"])];
+for (const port of ports) {
+  const admin = new PrismaClient({ datasourceUrl: withDb(port, "postgres"), log: [] });
+  let dbs;
+  let version = "";
   try {
-    const real = { email: { not: { endsWith: ".buddybook.local" } } };
-    const [users, realUsers, published, realNovels, latest] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: real }),
-      prisma.novel.count({ where: { visibility: "published", deleted_at: null } }),
-      prisma.novel.count({ where: { author: real } }),
-      prisma.user.findFirst({ where: real, orderBy: { created_at: "desc" }, select: { created_at: true } }),
-    ]);
-    console.log(label);
-    console.log(`  ผู้ใช้ทั้งหมด ${users} (บัญชีจริง ${realUsers}, ล่าสุดสมัคร ${latest?.created_at.toISOString() ?? "-"})`);
-    console.log(`  นิยายเผยแพร่ ${published} (นิยายของบัญชีจริง ${realNovels})`);
+    dbs = (await admin.$queryRaw`SELECT datname::text AS datname FROM pg_database WHERE NOT datistemplate ORDER BY datname`).map((r) => r.datname);
+    version = (await admin.$queryRaw`SELECT current_setting('server_version') AS v`)[0].v;
   } catch (err) {
-    console.log(`${label}\n  เชื่อมต่อไม่ได้: ${String(err.message ?? err).split("\n").filter(Boolean).pop()}`);
-  } finally {
-    await prisma.$disconnect();
+    const msg = String(err.message ?? err);
+    if (/authentication|password/i.test(msg)) console.log(`พอร์ต ${port}: มี Postgres แต่รหัสผ่านใน .env ใช้กับตัวนี้ไม่ได้`);
+    if (process.env.DEBUG_DB_CHECK) console.log(port, msg);
+    await admin.$disconnect();
+    continue;
+  }
+  await admin.$disconnect();
+  console.log(`พอร์ต ${port}: PostgreSQL ${version} — ฐานข้อมูล: ${dbs.join(", ")}`);
+  for (const db of dbs) {
+    const prisma = new PrismaClient({ datasourceUrl: withDb(port, db), log: [] });
+    try {
+      const [row] = await prisma.$queryRaw`
+        SELECT count(*)::int AS users,
+               count(*) FILTER (WHERE email NOT LIKE '%.buddybook.local')::int AS real_users,
+               max(created_at) FILTER (WHERE email NOT LIKE '%.buddybook.local') AS latest,
+               min(created_at) AS first,
+               (SELECT count(*)::int FROM novels) AS novels
+          FROM users`;
+      const inUse = String(port) === (appUrl.port || "5432") && `/${db}` === appUrl.pathname ? "  ← แอปใช้อันนี้" : "";
+      console.log(`  ${db}${inUse}`);
+      console.log(`    ผู้ใช้ ${row.users} (บัญชีจริง ${row.real_users}) · นิยาย ${row.novels}`);
+      console.log(`    ผู้ใช้คนแรกสร้าง ${row.first?.toISOString() ?? "-"} · บัญชีจริงล่าสุด ${row.latest?.toISOString() ?? "-"}`);
+    } catch {
+      // ฐานข้อมูลนี้ไม่มีตาราง users ของ BuddyBook — ข้าม
+    } finally {
+      await prisma.$disconnect();
+    }
   }
   console.log("");
 }
