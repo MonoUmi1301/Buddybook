@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * ตรวจว่าแอปกำลังใช้ฐานข้อมูลไหน และ Postgres ทุกตัวในเครื่องมีข้อมูลอะไรอยู่ — ใช้ตอน "ข้อมูลหาย" / "ต้องสมัครใหม่"
- *   npm run db:check
+ *   npm run db:check             (ลองพอร์ตอื่นเพิ่ม: npm run db:check -- 1301)
  * อ่าน DATABASE_URL จาก apps/api/.env (และจาก environment ถ้าตั้งทับไว้) แล้วไล่ลองทุกพอร์ตที่ Postgres มักใช้
  * ด้วยชื่อผู้ใช้/รหัสผ่านเดียวกัน แสดงทุกฐานข้อมูลบนแต่ละเครื่องที่มีตาราง users — พิมพ์แค่จำนวน ไม่พิมพ์อีเมล/รหัสผ่าน
  * อ่านอย่างเดียว ไม่แก้ข้อมูลใด ๆ
@@ -42,7 +42,9 @@ const withDb = (port, db) => {
   return u.toString();
 };
 
-const ports = [...new Set([appUrl.port || "5432", "5432", "5433", "5434", "5525", "5526"])];
+// พอร์ตเพิ่มเติมส่งท้ายคำสั่งได้: npm run db:check -- 1301 5544
+const extra = process.argv.slice(2).filter((a) => /^\d+$/.test(a));
+const ports = [...new Set([appUrl.port || "5432", ...extra, "5432", "5433", "5434", "5525", "5526"])];
 for (const port of ports) {
   const admin = new PrismaClient({ datasourceUrl: withDb(port, "postgres"), log: [] });
   let dbs;
