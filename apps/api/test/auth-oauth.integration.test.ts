@@ -167,6 +167,30 @@ describe("usernames for accounts without an email", () => {
   });
 });
 
+describe("usernames from the provider's display name", () => {
+  it("names a Facebook/Google account after its display name, not the email", async () => {
+    const email = `fbname_${tag}@example.com`;
+    try {
+      await loginOrRegisterWithOAuth(profile({ provider: "facebook", sub: `fb_${tag}`, email, name: `Hobi Kawaii ${tag}` }));
+      const created = await prisma.user.findUnique({ where: { email }, select: { username: true } });
+      expect(created?.username).toBe(`Hobi_Kawaii_${tag}`);
+    } finally {
+      await prisma.user.deleteMany({ where: { email } });
+    }
+  });
+
+  it("uses the email prefix when the provider sends only a placeholder name", async () => {
+    const email = `fbnoname${tag}@example.com`;
+    try {
+      await loginOrRegisterWithOAuth(profile({ provider: "facebook", sub: `fb2_${tag}`, email, name: "Facebook User" }));
+      const created = await prisma.user.findUnique({ where: { email }, select: { username: true } });
+      expect(created?.username).toBe(`fbnoname${tag}`);
+    } finally {
+      await prisma.user.deleteMany({ where: { email } });
+    }
+  });
+});
+
 describe("email normalization", () => {
   it("logs in regardless of email case and surrounding spaces", async () => {
     const user = await createUser("login");

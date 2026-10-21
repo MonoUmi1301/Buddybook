@@ -317,10 +317,15 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
     } else {
       // ผลทดสอบ #9 — LINE ไม่ส่งอีเมลมา ระบบใช้อีเมลแทน line_<sub>@line.buddybook.local ซึ่งเดิมกลายเป็น
       // username "line_U…" ที่อ่านไม่ออก — ใช้ชื่อแสดงของบัญชี LINE แทน (แก้ทีหลังได้ในหน้าตั้งค่า)
+      // ทุก provider (Google / Facebook / LINE) ตั้ง username จากชื่อที่แสดงในบัญชีนั้นก่อน เหมือนกันทั้งหมด —
+      // ใช้ prefix ของอีเมลก็ต่อเมื่อ provider ไม่ส่งชื่อมา (ค่า default "Facebook User" / "LINE User" ไม่นับ)
       const placeholderEmail = email.endsWith(".buddybook.local");
-      const username = placeholderEmail
-        ? await generateUniqueUsername(profile.name, { unicode: true })
-        : await generateUniqueUsername(email.split("@")[0]);
+      const displayName = profile.name?.trim() ?? "";
+      const hasRealName = displayName.length > 0 && !/^(Facebook|LINE|Google) User$/i.test(displayName);
+      const username =
+        hasRealName || placeholderEmail
+          ? await generateUniqueUsername(hasRealName ? displayName : "", { unicode: true })
+          : await generateUniqueUsername(email.split("@")[0]);
       user = await prisma.user.create({
         data: {
           username,
