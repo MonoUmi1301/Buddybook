@@ -10,6 +10,9 @@ from dataclasses import dataclass
 
 import target
 
+# ความยาวสูงสุดที่ส่งเข้าโมเดล (token) — ดูเหตุผลใน load()
+MAX_TOKENS = 416
+
 SentimentLabel = str  # "pos" | "neg" | "neutral" — ตรงกับ enum SentimentLabel ใน Prisma schema
 
 
@@ -45,7 +48,9 @@ class SentimentAnalyzer:
             model=self._model_path,
             tokenizer=self._model_path,
             truncation=True,
-            max_length=512,
+            # ไม่ใช่ 512: WangchanBERTa (CamemBERT) เริ่มนับตำแหน่งที่ 2 ใช้ได้จริงแค่ 510 token
+            # ใส่ 512 แล้วคอมเมนต์ยาว ๆ ทำให้โมเดลพัง (IndexError) และวนพังทั้งคิว — 416 ตามที่ WangchanBERTa แนะนำ
+            max_length=MAX_TOKENS,
         )
 
     def analyze(self, text: str, character_names: list[str] | None = None, use_target: bool = True) -> SentimentResult:

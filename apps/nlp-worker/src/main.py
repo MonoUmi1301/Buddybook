@@ -29,8 +29,13 @@ def process_queue(client: ApiClient, analyzer: SentimentAnalyzer) -> int:
     items = client.fetch_pending_queue()
 
     for item in items:
-        # character_names: ชื่อตัวละครของนิยายเรื่องนั้น (api รุ่นเก่าไม่ส่งมา = ใช้แค่คำเรียกบทบาท)
-        result = analyzer.analyze(item["content"], item.get("character_names"))
+        # ข้อความเดียวพัง (เช่นยาวผิดปกติ) ต้องไม่ทำให้ทั้งคิวค้าง — ข้ามไป รอบหน้าจะลองใหม่ ส่วนอันอื่นวิเคราะห์ต่อได้
+        try:
+            # character_names: ชื่อตัวละครของนิยายเรื่องนั้น (api รุ่นเก่าไม่ส่งมา = ใช้แค่คำเรียกบทบาท)
+            result = analyzer.analyze(item["content"], item.get("character_names"))
+        except Exception:
+            logger.exception("analyze failed for %s %s — skipped", item["target_type"], item["target_id"])
+            continue
         client.submit_sentiment(item["target_type"], item["target_id"], result.label, result.score, result.polarity)
         logger.info(
             "%s %s -> %s (conf %.2f, polarity %+.2f)%s",
