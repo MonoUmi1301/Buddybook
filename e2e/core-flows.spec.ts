@@ -222,8 +222,10 @@ test("3. reader: read chapter, comment + review, sentiment computed, shows in wr
 
   const [s3, stats] = await api(request, "writer", "GET", `/me/stats/novels/${novel_id}`);
   expect(s3).toBe(200);
-  expect(stats.sentiment.counts.pos).toBeGreaterThanOrEqual(2);
-  expect(stats.sentiment.avg_polarity).toBeGreaterThan(0);
+  // หน้านักเขียนเห็นเฉพาะฝั่งบวก (ตัวเลขเชิงลบอยู่ที่หลังบ้านแอดมิน)
+  expect(stats.feedback.liked).toBeGreaterThanOrEqual(2);
+  const [, adminView] = await api(request, "admin", "GET", "/admin/reports/sentiment");
+  expect(adminView.counts.pos).toBeGreaterThanOrEqual(2);
   // ผู้อ่านดูสถิติของนิยายที่ไม่ใช่ของตัวเองไม่ได้
   expect([403, 404]).toContain((await api(request, "reader", "GET", `/me/stats/novels/${novel_id}`))[0]);
 

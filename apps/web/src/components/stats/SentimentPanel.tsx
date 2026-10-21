@@ -1,107 +1,79 @@
 "use client";
 
 import { useState } from "react";
-import { CHART, formatThaiShortDate, type KeywordCount, type NovelStats } from "@/components/stats/types";
-
-// ถ้อยคำฝั่งลบตั้งใจให้นุ่ม — หน้าสถิติมีไว้ให้กำลังใจนักเขียน ไม่ใช่นับคำติ
-const LABELS = { pos: "ชอบ", neutral: "เป็นกลาง", neg: "ยังไม่ถูกใจ" } as const;
-
-function polarityText(p: number | null): string {
-  if (p === null) return "ยังไม่มีข้อมูล";
-  if (p >= 0.3) return "ผู้อ่านส่วนใหญ่ชอบ";
-  if (p <= -0.3) return "ผู้อ่านบางส่วนยังไม่ถูกใจ ลองอ่านคอมเมนต์ล่าสุดดู";
-  return "ความเห็นของผู้อ่านหลากหลาย";
-}
+import { CHART, formatThaiShortDate, type NovelStats } from "@/components/stats/types";
 
 /**
- * gap 3.5 — Social listening ภายในแพลตฟอร์ม: ผู้อ่านรู้สึกอย่างไรกับเรื่องนี้ และพูดถึงอะไร
- * สัดส่วน = แถบซ้อน 3 ส่วน (บวก/กลาง/ลบ) พร้อมป้ายตัวเลข (ไม่พึ่งสีอย่างเดียว)
- * แนวโน้มรายสัปดาห์ = แท่งสองทิศจากเส้นศูนย์ (บวกขึ้น/ลบลง) สเกลคงที่ −1..1
+ * gap 3.5 — สิ่งที่ผู้อ่านพูดถึงเรื่องนี้ (วิเคราะห์ด้วยโมเดล Sentiment ภาษาไทย + ป้ายเป้าหมายจาก NLP worker)
+ * ตั้งใจแสดงเฉพาะฝั่งที่เป็นกำลังใจ: ข้อความที่ชอบ, ข้อความที่อินกับเรื่อง/ตัวละคร, ตัวละครที่ถูกพูดถึง, คำที่ผู้อ่านชม
+ * จำนวนเชิงลบ/ค่าเฉลี่ยความรู้สึกไม่ถูกส่งมาที่หน้านี้เลย — ดูได้ที่หลังบ้านแอดมิน (/admin/sentiment)
  */
-export function SentimentPanel({ sentiment, keywords, engagement }: Pick<NovelStats, "sentiment" | "keywords" | "engagement">) {
-  const { counts, avg_polarity, weekly } = sentiment;
-  const analysed = counts.pos + counts.neutral + counts.neg;
+export function SentimentPanel({ feedback }: Pick<NovelStats, "feedback">) {
+  const { liked, immersed, pending, characters, keywords, weekly } = feedback;
   const [activeWeek, setActiveWeek] = useState<number | null>(null);
+  const maxWeek = Math.max(1, ...weekly.map((w) => w.liked));
 
   return (
     <section className="rounded-card border border-neutral-200 p-4 sm:p-5">
-      <h2 className="text-base font-semibold text-neutral-900">ผู้อ่านรู้สึกอย่างไร</h2>
+      <h2 className="text-base font-semibold text-neutral-900">ผู้อ่านพูดถึงเรื่องนี้</h2>
       <p className="mb-4 text-xs text-neutral-500">
         วิเคราะห์จากคอมเมนต์และรีวิวของผู้อ่านด้วยโมเดล Sentiment Analysis ภาษาไทย
-        {counts.pending > 0 && ` · รอวิเคราะห์อีก ${counts.pending} ข้อความ`}
+        {pending > 0 && ` · รอวิเคราะห์อีก ${pending.toLocaleString("th-TH")} ข้อความ`}
       </p>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div>
-          <p className="text-3xl font-semibold tabular-nums text-neutral-900">
-            {avg_polarity === null ? "–" : `${avg_polarity > 0 ? "+" : ""}${avg_polarity.toFixed(2)}`}
-          </p>
-          <p className="text-sm text-neutral-600">{polarityText(avg_polarity)}</p>
-          <p className="mt-0.5 text-xs text-neutral-500">คะแนนความรู้สึกเฉลี่ย (−1 ไม่ชอบมาก ถึง +1 ชอบมาก)</p>
-
-          {analysed > 0 ? (
-            <>
-              <div className="mt-4 flex h-3 w-full gap-[2px] overflow-hidden rounded-full" aria-hidden>
-                {(["pos", "neutral", "neg"] as const).map((k) =>
-                  counts[k] > 0 ? (
-                    <span
-                      key={k}
-                      style={{ width: `${(counts[k] / analysed) * 100}%`, backgroundColor: k === "pos" ? CHART.positive : k === "neg" ? CHART.negative : CHART.neutral }}
-                    />
-                  ) : null
-                )}
-              </div>
-              <ul className="mt-3 space-y-1.5 text-sm">
-                {(["pos", "neutral", "neg"] as const).map((k) => (
-                  <li key={k} className="flex items-center gap-2 text-neutral-700">
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
-                      style={{ backgroundColor: k === "pos" ? CHART.positive : k === "neg" ? CHART.negative : CHART.neutral }}
-                    />
-                    <span className="flex-1">{LABELS[k]}</span>
-                    <span className="tabular-nums text-neutral-900">{counts[k].toLocaleString("th-TH")}</span>
-                    <span className="w-12 text-right tabular-nums text-neutral-500">{Math.round((counts[k] / analysed) * 100)}%</span>
+        <div className="space-y-4">
+          <div>
+            <p className="text-3xl font-semibold tabular-nums text-neutral-900">{liked.toLocaleString("th-TH")}</p>
+            <p className="text-sm text-neutral-600">ข้อความที่ผู้อ่านบอกว่าชอบ</p>
+          </div>
+          <div>
+            <p className="text-2xl font-semibold tabular-nums text-neutral-900">{immersed.toLocaleString("th-TH")}</p>
+            <p className="text-sm text-neutral-600">ข้อความที่ผู้อ่านอินกับเรื่องหรือตัวละคร</p>
+          </div>
+          {characters.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-neutral-600">ตัวละครที่ผู้อ่านพูดถึงบ่อย</p>
+              <ul className="flex flex-wrap gap-1.5">
+                {characters.map((c) => (
+                  <li key={c.name} className="rounded-pill bg-primary-50 px-2.5 py-0.5 text-xs text-primary-700">
+                    {c.name} <span className="tabular-nums text-primary-400">×{c.count}</span>
                   </li>
                 ))}
               </ul>
-            </>
-          ) : (
-            <p className="mt-4 rounded-lg bg-neutral-50 px-3 py-4 text-center text-sm text-neutral-500">ยังไม่มีคอมเมนต์ที่วิเคราะห์แล้ว</p>
+            </div>
+          )}
+          {liked === 0 && pending === 0 && (
+            <p className="rounded-lg bg-neutral-50 px-3 py-4 text-center text-sm text-neutral-500">
+              ยังไม่มีความคิดเห็นจากผู้อ่าน ลองชวนผู้อ่านคอมเมนต์ท้ายตอนดูนะ
+            </p>
           )}
         </div>
 
         <div>
-          <h3 className="mb-2 text-sm font-medium text-neutral-800">แนวโน้มรายสัปดาห์ (8 สัปดาห์ล่าสุด)</h3>
+          <h3 className="mb-2 text-sm font-medium text-neutral-800">ข้อความที่ชอบรายสัปดาห์ (8 สัปดาห์ล่าสุด)</h3>
           <div className="relative" onMouseLeave={() => setActiveWeek(null)}>
-            <div className="flex h-32 gap-1.5">
-              {weekly.map((w, i) => {
-                const p = w.avg_polarity;
-                const h = p === null ? 0 : Math.abs(p) * 50;
-                return (
-                  <button
-                    key={w.week_start}
-                    type="button"
-                    aria-label={`สัปดาห์ ${formatThaiShortDate(w.week_start)}: ${p === null ? "ไม่มีข้อมูล" : p.toFixed(2)} (${w.count} ข้อความ)`}
-                    onMouseEnter={() => setActiveWeek(i)}
-                    onFocus={() => setActiveWeek(i)}
-                    onClick={() => setActiveWeek(i)}
-                    className="relative min-w-0 flex-1 focus:outline-none"
-                  >
-                    <span className="absolute inset-x-0 top-1/2 border-t border-neutral-300" />
-                    {p !== null && (
-                      <span
-                        className={p >= 0 ? "absolute inset-x-0 rounded-t-[4px]" : "absolute inset-x-0 rounded-b-[4px]"}
-                        style={{
-                          height: `${Math.max(2, h)}%`,
-                          ...(p >= 0 ? { bottom: "50%" } : { top: "50%" }),
-                          backgroundColor: p >= 0 ? CHART.positive : CHART.negative,
-                          opacity: activeWeek === null || activeWeek === i ? 1 : 0.45,
-                        }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex h-28 items-end gap-1.5 border-b border-neutral-200">
+              {weekly.map((w, i) => (
+                <button
+                  key={w.week_start}
+                  type="button"
+                  aria-label={`สัปดาห์ ${formatThaiShortDate(w.week_start)}: ${w.liked} ข้อความ`}
+                  onMouseEnter={() => setActiveWeek(i)}
+                  onFocus={() => setActiveWeek(i)}
+                  onClick={() => setActiveWeek(i)}
+                  className="flex h-full min-w-0 flex-1 items-end focus:outline-none"
+                >
+                  <span
+                    className="w-full rounded-t-[4px]"
+                    style={{
+                      height: `${w.liked === 0 ? 0 : Math.max(4, (w.liked / maxWeek) * 100)}%`,
+                      backgroundColor: CHART.positive,
+                      opacity: activeWeek === null || activeWeek === i ? 1 : 0.45,
+                    }}
+                  />
+                </button>
+              ))}
             </div>
             {activeWeek !== null && (
               <div
@@ -109,9 +81,7 @@ export function SentimentPanel({ sentiment, keywords, engagement }: Pick<NovelSt
                 className="pointer-events-none absolute -top-1 z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg bg-neutral-900 px-2.5 py-1.5 text-xs text-white shadow-lg"
                 style={{ left: `${((activeWeek + 0.5) / weekly.length) * 100}%` }}
               >
-                เริ่ม {formatThaiShortDate(weekly[activeWeek].week_start)} ·{" "}
-                {weekly[activeWeek].avg_polarity === null ? "ไม่มีข้อมูล" : <strong className="tabular-nums">{weekly[activeWeek].avg_polarity!.toFixed(2)}</strong>}{" "}
-                ({weekly[activeWeek].count} ข้อความ)
+                เริ่ม {formatThaiShortDate(weekly[activeWeek].week_start)} · <strong className="tabular-nums">{weekly[activeWeek].liked}</strong> ข้อความ
               </div>
             )}
             <div className="mt-1 flex text-[11px] text-neutral-500">
@@ -123,69 +93,22 @@ export function SentimentPanel({ sentiment, keywords, engagement }: Pick<NovelSt
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <KeywordList title="คำที่ผู้อ่านพูดถึงในแง่บวก" items={keywords.positive} />
-            <Engagement engagement={engagement} />
+          <div className="mt-5">
+            <h3 className="mb-2 text-sm font-medium text-neutral-800">คำที่ผู้อ่านชมบ่อย</h3>
+            {keywords.length === 0 ? (
+              <p className="text-xs text-neutral-400">ยังไม่มีคำที่ถูกพูดถึงซ้ำ</p>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5">
+                {keywords.map((k) => (
+                  <li key={k.term} className="rounded-pill border border-neutral-200 px-2.5 py-0.5 text-xs text-neutral-700">
+                    {k.term} <span className="tabular-nums text-neutral-400">×{k.count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-/** ผู้อ่านอินกับเรื่องแค่ไหน — จากป้ายเป้าหมายของ NLP worker (target.py) นับเฉพาะข้อความเชิงบวก */
-function Engagement({ engagement }: { engagement: NovelStats["engagement"] }) {
-  const { positive, immersed, share, characters } = engagement;
-  return (
-    <div>
-      <h3 className="mb-2 text-sm font-medium text-neutral-800">ผู้อ่านอินกับเรื่องนี้</h3>
-      {positive === 0 || share === null ? (
-        <p className="text-xs text-neutral-400">ยังไม่มีคอมเมนต์เชิงบวกที่วิเคราะห์แล้ว</p>
-      ) : (
-        <>
-          <p className="text-sm text-neutral-700">
-            <span className="text-lg font-semibold tabular-nums text-neutral-900">{Math.round(share * 100)}%</span> ของคอมเมนต์ที่ชอบ
-            พูดถึงตัวละครหรือบอกว่าอินกับเหตุการณ์
-            <span className="block text-xs text-neutral-500">
-              {immersed.toLocaleString("th-TH")} จาก {positive.toLocaleString("th-TH")} ข้อความ
-            </span>
-          </p>
-          {characters.length > 0 && (
-            <>
-              <p className="mt-3 text-xs font-medium text-neutral-600">ตัวละครที่ผู้อ่านพูดถึงบ่อย</p>
-              <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                {characters.map((c) => (
-                  <li key={c.name} className="rounded-pill bg-primary-50 px-2.5 py-0.5 text-xs text-primary-700">
-                    {c.name} <span className="tabular-nums text-primary-400">×{c.count}</span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function KeywordList({ title, items }: { title: string; items: KeywordCount[] }) {
-  return (
-    <div>
-      <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-neutral-800">
-        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART.positive }} />
-        {title}
-      </h3>
-      {items.length === 0 ? (
-        <p className="text-xs text-neutral-400">ยังไม่มีคำที่ถูกพูดถึงซ้ำ</p>
-      ) : (
-        <ul className="flex flex-wrap gap-1.5">
-          {items.map((k) => (
-            <li key={k.term} className="rounded-pill border border-neutral-200 px-2.5 py-0.5 text-xs text-neutral-700">
-              {k.term} <span className="tabular-nums text-neutral-400">×{k.count}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Banknote, Flag, Gift, LayoutDashboard, ScrollText, ShieldAlert, Tag, Users, type LucideIcon, Headset } from "lucide-react";
+import { Banknote, Flag, Gift, LayoutDashboard, ScrollText, ShieldAlert, Tag, Users, type LucideIcon, Headset, MessagesSquare } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface AdminTab {
@@ -14,6 +14,7 @@ interface AdminTab {
 
 const tabs: AdminTab[] = [
   { href: "/admin", label: "ภาพรวม", icon: LayoutDashboard },
+  { href: "/admin/sentiment", label: "ความรู้สึกผู้อ่าน", icon: MessagesSquare },
   { href: "/admin/novels", label: "นิยายรอตรวจสอบ", icon: ScrollText },
   { href: "/admin/users", label: "ผู้ใช้งาน", icon: Users },
   { href: "/admin/tags", label: "จัดการแท็ก", icon: Tag },

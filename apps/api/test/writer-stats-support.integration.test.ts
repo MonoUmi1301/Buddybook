@@ -96,16 +96,26 @@ describe("writer stats", () => {
     expect(ch2).toMatchObject({ chapter_number: 2, views: 1, comments: 2, readers_reached: 1 });
     expect(ch3).toMatchObject({ chapter_number: 3, views: 0, readers_reached: 0 });
 
-    expect(s.sentiment.counts).toEqual({ pos: 3, neg: 1, neutral: 0, pending: 0 });
-    expect(s.sentiment.avg_polarity).toBeCloseTo((0.9 + 0.5 - 0.8 + 0.9) / 4, 1);
-    expect(s.sentiment.weekly).toHaveLength(8);
-    expect(s.keywords.positive.map((k: { term: string }) => k.term)).toContain("พล็อต");
-    // ไม่ส่งคำจากคอมเมนต์เชิงลบให้หน้านักเขียน
-    expect(s.keywords.negative).toBeUndefined();
+    // หน้านักเขียนได้เฉพาะฝั่งบวก: 3 ข้อความที่ชอบ (2 คอมเมนต์ติดป้ายตัวละคร + รีวิว "สนุกดี")
+    // คอมเมนต์เชิงลบ (ที่มีชื่อตัวละครด้วย) ไม่ถูกนับ และไม่มีตัวเลขเชิงลบ/ค่าเฉลี่ยความรู้สึกหลุดออกมาเลย
+    expect(s.feedback).toMatchObject({ liked: 3, immersed: 2, pending: 0 });
+    expect(s.feedback.characters).toEqual([{ name: "ลิเลีย", count: 1 }]);
+    expect(s.feedback.weekly).toHaveLength(8);
+    expect(s.feedback.weekly.at(-1).liked).toBe(3);
+    expect(s.feedback.keywords.map((k: { term: string }) => k.term)).toContain("พล็อต");
+    expect(s.sentiment).toBeUndefined();
+    expect(JSON.stringify(s)).not.toMatch(/"neg"|avg_polarity|น่าเบื่อ/);
+  });
 
-    // บวก 3 ข้อความ (2 คอมเมนต์ติดป้ายตัวละคร + รีวิว "สนุกดี" ไม่มีป้าย) — คอมเมนต์ลบที่มีชื่อตัวละครไม่ถูกนับ
-    expect(s.engagement).toMatchObject({ positive: 3, immersed: 2, share: 0.67 });
-    expect(s.engagement.characters).toEqual([{ name: "ลิเลีย", count: 1 }]);
+  it("keeps the full picture (negatives included) for admins only", async () => {
+    expect((await h.api("GET", "/admin/reports/sentiment", author.token)).status).toBe(403);
+    const admin = await h.createUser("stats_admin", { role: "admin" });
+    const res = await h.api("GET", "/admin/reports/sentiment", admin.token);
+    expect(res.status).toBe(200);
+    expect(res.json.counts.neg).toBeGreaterThanOrEqual(1);
+    expect(res.json.targets.work.neg).toBeGreaterThanOrEqual(1);
+    expect(res.json).toHaveProperty("avg_polarity");
+    expect(Array.isArray(res.json.novels_needing_attention)).toBe(true);
   });
 
   it("is only visible to the author", async () => {

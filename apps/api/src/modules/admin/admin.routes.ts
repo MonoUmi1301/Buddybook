@@ -41,6 +41,7 @@ router.patch("/tags/:tag_id", asyncHandler(adminController.updateTag));
 router.delete("/tags/:tag_id", asyncHandler(adminController.deleteTag));
 
 router.get("/reports/stats", asyncHandler(adminController.stats));
+router.get("/reports/sentiment", asyncHandler(adminController.sentimentOverview));
 
 // เพิ่มภายหลัง (Gift donations) — แคตตาล็อกของขวัญ + การ์ดที่นักเขียนรายงาน
 router.get("/gifts", asyncHandler(giftsController.adminList));

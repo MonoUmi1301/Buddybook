@@ -43,18 +43,13 @@ export async function getMyNovelsOverview(user_id: string) {
 
   const since = thaiDay(new Date(Date.now() - 6 * DAY_MS));
   // จำนวนผู้อ่าน/ถูกใจ/รีวิว/ตอน นับเฉพาะเรื่องของฉัน (ดู lib/novelCounts.ts — _count ใน findMany สแกนทั้งตาราง)
-  const [views7d, ratings, polarity, readers, likes, reviews, chapters] = await Promise.all([
+  const [views7d, ratings, readers, likes, reviews, chapters] = await Promise.all([
     prisma.chapterViewDaily.groupBy({
       by: ["novel_id"],
       where: { novel_id: { in: ids }, day: { gte: new Date(since) } },
       _sum: { views: true },
     }),
     prisma.review.groupBy({ by: ["novel_id"], where: { novel_id: { in: ids } }, _avg: { rating: true } }),
-    prisma.review.groupBy({
-      by: ["novel_id"],
-      where: { novel_id: { in: ids }, sentiment_polarity: { not: null } },
-      _avg: { sentiment_polarity: true },
-    }),
     countReadersByNovel(ids),
     countLikesByNovel(ids),
     countReviewsByNovel(ids),
@@ -62,7 +57,6 @@ export async function getMyNovelsOverview(user_id: string) {
   ]);
   const v7 = new Map(views7d.map((v) => [v.novel_id, v._sum.views ?? 0]));
   const rating = new Map(ratings.map((r) => [r.novel_id, r._avg.rating]));
-  const pol = new Map(polarity.map((p) => [p.novel_id, p._avg.sentiment_polarity]));
 
   return {
     novels: novels.map((n) => ({
@@ -77,7 +71,6 @@ export async function getMyNovelsOverview(user_id: string) {
       reviews: reviews.get(n.novel_id) ?? 0,
       chapters: chapters.get(n.novel_id) ?? 0,
       avg_rating: round(rating.get(n.novel_id), 1),
-      avg_polarity: round(pol.get(n.novel_id)),
     })),
   };
 }
@@ -182,36 +175,11 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
       at: r.created_at,
     })),
   ];
-  const counts = { pos: 0, neg: 0, neutral: 0, pending: 0 };
-  for (const f of feedback) counts[f.label ?? "pending"] += 1;
-  const analysed = feedback.filter((f) => f.polarity !== null);
-  const avg_polarity = analysed.length
-    ? analysed.reduce((a, f) => a + (f.polarity as number), 0) / analysed.length
-    : null;
-
-  const weekly = [];
-  for (let w = SENTIMENT_WEEKS - 1; w >= 0; w--) {
-    const end = new Date(now.getTime() - w * 7 * DAY_MS);
-    const start = new Date(end.getTime() - 7 * DAY_MS);
-    const inWeek = analysed.filter((f) => f.at > start && f.at <= end);
-    weekly.push({
-      week_start: thaiDay(new Date(start.getTime() + DAY_MS)),
-      count: inWeek.length,
-      avg_polarity: inWeek.length ? round(inWeek.reduce((a, f) => a + (f.polarity as number), 0) / inWeek.length) : null,
-    });
-  }
-
-  const recent = feedback.filter((f) => f.at >= sentimentSince);
-  // ไม่ส่งคำจากคอมเมนต์เชิงลบให้หน้านักเขียน — ตั้งใจให้หน้าสถิติเป็นกำลังใจ ไม่ใช่รวมคำติ
-  const keywords = {
-    positive: topKeywords(recent.filter((f) => f.label === "pos").map((f) => f.text)),
-    all: topKeywords(recent.map((f) => f.text)),
-  };
-
-  // ผู้อ่านอินกับเรื่องแค่ไหน: ในคอมเมนต์/รีวิวเชิงบวก มีกี่ข้อความที่พูดถึงตัวละครหรือบอกว่าอินกับเหตุการณ์
-  // (ป้ายจาก target.py ใน NLP worker — ป้าย "work" ไม่ใช้ที่นี่) + ตัวละครที่ถูกพูดถึงบ่อยในแง่บวก
-  // ข้อความที่วิเคราะห์ก่อนมีป้ายจะนับเป็น "ไม่ได้ระบุ" — ให้ worker วิเคราะห์ใหม่ (ล้าง sentiment_label) ถ้าอยากได้ตัวเลขครบ
+  // หน้านักเขียนแสดงเฉพาะฝั่งที่เป็นกำลังใจ: มีกี่ข้อความที่ชอบ/อินกับเรื่อง ตัวละครที่ถูกพูดถึง และคำที่ผู้อ่านชม
+  // จำนวนเชิงลบ/เป็นกลาง และค่าเฉลี่ยความรู้สึก (ติดลบได้) ไม่ส่งให้นักเขียนเลย — ดูได้ที่หลังบ้าน (GET /admin/reports/sentiment)
   const positive = feedback.filter((f) => f.label === "pos");
+  const pending = feedback.filter((f) => f.label === null).length;
+  // ป้ายจาก target.py ใน NLP worker (ป้าย "work" ไม่ใช้ที่นี่) — ข้อความที่วิเคราะห์ก่อนมีป้ายนับเป็นไม่ระบุ
   const immersed = positive.filter((f) => f.target === "character" || f.target === "immersion").length;
   const names = [...new Set(characterNodes.map((n) => n.character_name.trim()).filter((n) => n.length >= 2))];
   const characters = names
@@ -219,11 +187,24 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
     .filter((c) => c.count > 0)
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
-  const engagement = {
-    positive: positive.length,
+
+  const weekly = [];
+  for (let w = SENTIMENT_WEEKS - 1; w >= 0; w--) {
+    const end = new Date(now.getTime() - w * 7 * DAY_MS);
+    const start = new Date(end.getTime() - 7 * DAY_MS);
+    weekly.push({
+      week_start: thaiDay(new Date(start.getTime() + DAY_MS)),
+      liked: positive.filter((f) => f.at > start && f.at <= end).length,
+    });
+  }
+
+  const feedbackSummary = {
+    liked: positive.length,
     immersed,
-    share: positive.length ? round(immersed / positive.length) : null,
+    pending,
     characters,
+    keywords: topKeywords(positive.filter((f) => f.at >= sentimentSince).map((f) => f.text)),
+    weekly,
   };
 
   const salesNet = (purchases._sum.price_coins ?? 0) - (purchases._sum.fee_coins ?? 0);
@@ -246,9 +227,7 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
     },
     daily_views,
     chapters: chapterRows,
-    sentiment: { counts, avg_polarity: round(avg_polarity), weekly },
-    keywords,
-    engagement,
+    feedback: feedbackSummary,
   };
 }
 

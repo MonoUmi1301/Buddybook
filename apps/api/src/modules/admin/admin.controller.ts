@@ -100,3 +100,8 @@ export async function stats(_req: Request, res: Response) {
   const result = await adminService.getStats();
   res.status(200).json(result);
 }
+
+/** GET /admin/reports/sentiment — ความรู้สึกผู้อ่านทั้งแพลตฟอร์ม รวมฝั่งลบที่ไม่แสดงให้นักเขียน */
+export async function sentimentOverview(_req: Request, res: Response) {
+  res.status(200).json(await adminService.getSentimentOverview());
+}

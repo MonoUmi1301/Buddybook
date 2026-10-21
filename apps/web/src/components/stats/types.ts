@@ -10,7 +10,6 @@ export interface NovelOverviewRow {
   reviews: number;
   chapters: number;
   avg_rating: number | null;
-  avg_polarity: number | null;
 }
 
 export interface NovelStats {
@@ -40,18 +39,14 @@ export interface NovelStats {
     purchases: number;
     readers_reached: number;
   }[];
-  sentiment: {
-    counts: { pos: number; neg: number; neutral: number; pending: number };
-    avg_polarity: number | null;
-    weekly: { week_start: string; count: number; avg_polarity: number | null }[];
-  };
-  keywords: { positive: KeywordCount[]; all: KeywordCount[] };
-  /** ผู้อ่านอินกับเรื่องแค่ไหน — สัดส่วนข้อความเชิงบวกที่พูดถึงตัวละคร/บอกว่าอินกับเหตุการณ์ + ตัวละครที่ถูกพูดถึงบ่อย */
-  engagement: {
-    positive: number;
+  /** สิ่งที่ผู้อ่านพูดถึง — เฉพาะฝั่งที่เป็นกำลังใจ (ตัวเลขเชิงลบอยู่ที่หลังบ้านแอดมินเท่านั้น) */
+  feedback: {
+    liked: number;
     immersed: number;
-    share: number | null;
+    pending: number;
     characters: { name: string; count: number }[];
+    keywords: KeywordCount[];
+    weekly: { week_start: string; liked: number }[];
   };
 }
 
