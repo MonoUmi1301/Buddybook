@@ -35,5 +35,25 @@ class FromScoresTest(unittest.TestCase):
         self.assertAlmostEqual(r.polarity, 0.0)
 
 
+
+
+class TemperatureTest(unittest.TestCase):
+    def test_keeps_label_and_softens_confidence(self):
+        raw = scores(0.02, 0.97, 0.01)
+        plain = SentimentAnalyzer.from_scores(raw)
+        soft = SentimentAnalyzer.from_scores(raw, temperature=1.5)
+        self.assertEqual(plain.label, soft.label)
+        self.assertLess(soft.score, plain.score)
+        self.assertLess(abs(soft.polarity), abs(plain.polarity))
+
+    def test_probabilities_sum_to_one(self):
+        p = SentimentAnalyzer.probabilities(scores(0.6, 0.3, 0.1), temperature=2.0)
+        self.assertAlmostEqual(sum(p.values()), 1.0, places=6)
+
+    def test_temperature_one_is_unchanged(self):
+        raw = scores(0.6, 0.3, 0.1)
+        self.assertEqual(SentimentAnalyzer.probabilities(raw, 1.0), SentimentAnalyzer.probabilities(raw))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -44,9 +44,9 @@ def process_queue(client: ApiClient, analyzer: SentimentAnalyzer) -> int:
 def main() -> None:
     config = load_config()
     client = ApiClient(config.api_base_url, config.internal_service_token)
-    analyzer = SentimentAnalyzer(config.model_path)
+    analyzer = SentimentAnalyzer(config.model_path, config.temperature)
 
-    logger.info("Loading fine-tuned WangchanBERTa model from %s", config.model_path)
+    logger.info("Loading fine-tuned WangchanBERTa model from %s (temperature %.2f)", config.model_path, config.temperature)
     analyzer.load()
     logger.info("Model loaded — worker started, polling every %ss", config.poll_interval_seconds)
 

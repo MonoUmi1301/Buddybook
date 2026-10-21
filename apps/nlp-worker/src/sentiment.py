@@ -5,6 +5,7 @@ BuddyBook NLP Worker — WangchanBERTa sentiment wrapper
 เพื่อไม่ให้เสียเวลาโหลดโมเดลซ้ำทุกรอบ poll — สำคัญมากเพราะ WangchanBERTa โหลดช้า
 """
 
+import math
 from dataclasses import dataclass
 
 import target
@@ -28,8 +29,11 @@ class SentimentAnalyzer:
     ผลบนชุดทดสอบแยกดู eval/evaluate.py และ docs/evaluation.md
     """
 
-    def __init__(self, model_path: str):
+    def __init__(self, model_path: str, temperature: float = 1.0):
         self._model_path = model_path
+        # temperature scaling — โมเดลมั่นใจเกินจริง (P ≈ 0.99 แม้ทายผิด) ค่า T > 1 ทำให้ความน่าจะเป็นนุ่มลง
+        # label ที่ทายไม่เปลี่ยน แต่ขั้วไม่ติด ±1 ตอนโมเดลไม่แน่ใจ หาค่าด้วย eval/calibrate.py
+        self._temperature = temperature
         self._pipe = None  # โหลดจริงตอนเรียก .load() เพื่อไม่ให้ import ช้าตอน test
 
     def load(self) -> None:
@@ -52,7 +56,7 @@ class SentimentAnalyzer:
         scores = self._pipe(text, top_k=None)
         if scores and isinstance(scores[0], list):  # บางเวอร์ชันของ transformers ห่อเป็น list ซ้อน
             scores = scores[0]
-        result = self.from_scores(scores)
+        result = self.from_scores(scores, self._temperature)
         return self.apply_target(text, result, character_names) if use_target else result
 
     @staticmethod
@@ -69,12 +73,24 @@ class SentimentAnalyzer:
         )
 
     @classmethod
-    def from_scores(cls, scores: list[dict]) -> SentimentResult:
-        """แปลงผลดิบ [{label, score}, ...] เป็นผลลัพธ์ — แยกเป็น pure function เพื่อทดสอบได้โดยไม่ต้องโหลดโมเดล"""
+    def probabilities(cls, scores: list[dict], temperature: float = 1.0) -> dict[str, float]:
+        """ผลดิบ [{label, score}, ...] → {pos, neg, neutral} หลัง temperature scaling: softmax(log p / T)"""
         probs: dict[str, float] = {}
         for s in scores:
             mapped = cls._map_label(s["label"])
             probs[mapped] = probs.get(mapped, 0.0) + float(s["score"])
+        if temperature != 1.0:
+            logits = {k: math.log(max(v, 1e-12)) / temperature for k, v in probs.items()}
+            top = max(logits.values())
+            exp = {k: math.exp(v - top) for k, v in logits.items()}
+            total = sum(exp.values())
+            probs = {k: v / total for k, v in exp.items()}
+        return probs
+
+    @classmethod
+    def from_scores(cls, scores: list[dict], temperature: float = 1.0) -> SentimentResult:
+        """แปลงผลดิบ [{label, score}, ...] เป็นผลลัพธ์ — แยกเป็น pure function เพื่อทดสอบได้โดยไม่ต้องโหลดโมเดล"""
+        probs = cls.probabilities(scores, temperature)
         best = max(probs, key=probs.get)
         polarity = max(-1.0, min(1.0, probs.get("pos", 0.0) - probs.get("neg", 0.0)))
         return SentimentResult(label=best, score=probs[best], polarity=polarity)

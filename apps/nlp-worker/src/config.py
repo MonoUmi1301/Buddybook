@@ -15,6 +15,7 @@ class Config:
     poll_interval_seconds: int
     batch_size: int
     model_path: str
+    temperature: float
 
 
 def load_config() -> Config:
@@ -35,4 +36,6 @@ def load_config() -> Config:
         poll_interval_seconds=int(os.getenv("POLL_INTERVAL_SECONDS", "10")),
         batch_size=int(os.getenv("BATCH_SIZE", "20")),
         model_path=model_path,
+        # ค่าจาก eval/calibrate.py ของโมเดลที่ใช้อยู่ (1.0 = ไม่ปรับ เหมือนเดิม)
+        temperature=float(os.getenv("SENTIMENT_TEMPERATURE", "1.0")),
     )

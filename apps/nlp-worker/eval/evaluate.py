@@ -134,12 +134,12 @@ def raw_scores(model_path: str, rows: list[dict], cache_path: str | None) -> lis
     return [per_model[r["text"]] for r in rows]
 
 
-def run_model(model_path: str, rows: list[dict], use_target: bool = True, cache_path: str | None = None) -> tuple[list[str], list[float]]:
+def run_model(model_path: str, rows: list[dict], use_target: bool = True, cache_path: str | None = None, temperature: float = 1.0) -> tuple[list[str], list[float]]:
     from sentiment import SentimentAnalyzer
 
     preds, polarities = [], []
     for r, scores in zip(rows, raw_scores(model_path, rows, cache_path)):
-        result = SentimentAnalyzer.from_scores(scores)
+        result = SentimentAnalyzer.from_scores(scores, temperature)
         if use_target:
             names = [n for n in (r.get("characters") or "").split("|") if n]
             result = SentimentAnalyzer.apply_target(r["text"], result, names)
@@ -227,6 +227,7 @@ def main() -> None:
     ap.add_argument("--no-target", action="store_true", help="วัดโมเดลล้วน ไม่ใช้กฎ target.py")
     ap.add_argument("--compare-target", action="store_true", help="รายงานทั้งแบบไม่มีและมีกฎ target.py")
     ap.add_argument("--cache", help="ไฟล์ json เก็บผลดิบของโมเดล (รันซ้ำเร็วขึ้น)")
+    ap.add_argument("--temperature", type=float, default=1.0, help="temperature scaling (ดู eval/calibrate.py) — มีผลกับขั้ว ไม่เปลี่ยน label")
     args = ap.parse_args()
 
     rows = read_csv(args.test)
@@ -243,7 +244,7 @@ def main() -> None:
         base = os.path.basename(os.path.normpath(path))
         variants = [(base, False), (f"{base}+target", True)] if args.compare_target else [(base if args.no_target else f"{base}+target", not args.no_target)]
         for name, use_target in variants:
-            preds, polarity = run_model(path, rows, use_target, args.cache)
+            preds, polarity = run_model(path, rows, use_target, args.cache, args.temperature)
             results[name] = {"preds": preds, "polarity": polarity, "metrics": evaluate(rows, preds)}
             m = results[name]["metrics"]
             print(f"{name}: accuracy {pct(m['accuracy'])}  macro-F1 {m['macro_f1']:.3f}", file=sys.stderr)
