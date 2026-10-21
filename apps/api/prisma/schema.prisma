@@ -97,6 +97,14 @@ enum SentimentLabel {
   neutral
 }
 
+/// เพิ่มภายหลัง — ความรู้สึกในข้อความพุ่งไปที่อะไร (กฎ apps/nlp-worker/src/target.py ติดให้ ไม่เปลี่ยน label ของโมเดล)
+/// หน้าสถิตินักเขียนใช้เฉพาะฝั่งบวก (ผู้อ่านอินกับเรื่อง/ตัวละคร) — "work" เก็บไว้เฉย ๆ ไม่แสดงให้นักเขียนเห็น
+enum SentimentTarget {
+  character
+  immersion
+  work
+}
+
 enum CharacterRole {
   protagonist
   antagonist
@@ -664,6 +672,7 @@ model Comment {
   /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 (บวก = ชอบ, ลบ = ไม่ชอบ) ที่ระบบแนะนำใช้จริง
   /// sentiment_score ข้างบนเป็นแค่ "ความมั่นใจ" ของ label ที่โมเดลทาย (0..1) ไม่ใช่ขั้ว — ดู lib/sentiment.ts
   sentiment_polarity Float?
+  sentiment_target SentimentTarget?
   created_at        DateTime        @default(now()) @db.Timestamptz(6)
 
   chapter        Chapter   @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
@@ -690,6 +699,7 @@ model Review {
   sentiment_score Float?
   /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 ดูคำอธิบายที่ Comment.sentiment_polarity
   sentiment_polarity Float?
+  sentiment_target SentimentTarget?
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนรีวิวเลือกไม่เปิดเผยตัวตนได้ (username/avatar จะไม่ถูกส่ง
   /// ออกไปให้คนอื่นเห็นตอนอ่านรีวิว) ยังต้องเก็บ user_id จริงไว้เสมอ เพื่อคุม @@unique ด้านล่าง
   /// (รีวิวได้เรื่องละ 1 ครั้ง) และให้เจ้าของรีวิวแก้ไข/ลบของตัวเองได้ตามปกติ

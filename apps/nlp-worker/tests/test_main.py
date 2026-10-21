@@ -24,12 +24,14 @@ class FakeClient:
     def __init__(self, items):
         self.items = items
         self.submitted = []
+        self.targets = []
 
     def fetch_pending_queue(self):
         return self.items
 
-    def submit_sentiment(self, target_type, target_id, label, score, polarity):
+    def submit_sentiment(self, target_type, target_id, label, score, polarity, sentiment_target=None):
         self.submitted.append(target_id)
+        self.targets.append(sentiment_target)
 
 
 class FakeResult:
@@ -56,6 +58,11 @@ class ProcessQueueTest(unittest.TestCase):
     def test_queue_of_only_failing_items_returns_zero_so_worker_sleeps(self):
         client = FakeClient([item(1, "boom"), item(2, "boom")])
         self.assertEqual(process_queue(client, FakeAnalyzer()), 0)
+
+    def test_sends_target_tag_without_changing_label(self):
+        client = FakeClient([item(1, "เกลียดนางร้ายมาก"), item(2, "สวัสดีค่ะ")])
+        process_queue(client, FakeAnalyzer())
+        self.assertEqual(client.targets, ["character", None])
 
     def test_empty_queue(self):
         self.assertEqual(process_queue(FakeClient([]), FakeAnalyzer()), 0)

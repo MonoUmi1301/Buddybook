@@ -61,6 +61,8 @@ interface SentimentCallbackInput {
   sentiment_score: number;
   /** ขั้วความรู้สึก −1..1 — worker รุ่นใหม่ส่ง P(pos) − P(neg) มาเอง ถ้าไม่ส่งคำนวณจาก label+score */
   sentiment_polarity?: number;
+  /** ความรู้สึกพุ่งไปที่อะไร (target.py) — ไม่กระทบ label/polarity และระบบแนะนำ */
+  sentiment_target?: "character" | "immersion" | "work" | null;
 }
 
 /** Reference implementation — POST /internal/nlp/sentiment-callback
@@ -68,7 +70,12 @@ interface SentimentCallbackInput {
  *  user→นิยายใหม่จากรีวิว+คอมเมนต์ทั้งหมดของเรื่องนั้น (เดิม sync เฉพาะรีวิว และใช้ความมั่นใจเป็นขั้ว) */
 export async function submitSentimentCallback(input: SentimentCallbackInput) {
   const sentiment_polarity = input.sentiment_polarity ?? toPolarity(input.sentiment_label, input.sentiment_score);
-  const data = { sentiment_label: input.sentiment_label, sentiment_score: input.sentiment_score, sentiment_polarity };
+  const data = {
+    sentiment_label: input.sentiment_label,
+    sentiment_score: input.sentiment_score,
+    sentiment_polarity,
+    sentiment_target: input.sentiment_target ?? null,
+  };
 
   let target_id: string;
   let user_id: string;

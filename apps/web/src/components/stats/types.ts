@@ -45,7 +45,14 @@ export interface NovelStats {
     avg_polarity: number | null;
     weekly: { week_start: string; count: number; avg_polarity: number | null }[];
   };
-  keywords: { positive: KeywordCount[]; negative: KeywordCount[]; all: KeywordCount[] };
+  keywords: { positive: KeywordCount[]; all: KeywordCount[] };
+  /** ผู้อ่านอินกับเรื่องแค่ไหน — สัดส่วนข้อความเชิงบวกที่พูดถึงตัวละคร/บอกว่าอินกับเหตุการณ์ + ตัวละครที่ถูกพูดถึงบ่อย */
+  engagement: {
+    positive: number;
+    immersed: number;
+    share: number | null;
+    characters: { name: string; count: number }[];
+  };
 }
 
 export interface KeywordCount {

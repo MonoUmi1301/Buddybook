@@ -20,6 +20,7 @@ import time
 from api_client import ApiClient
 from config import load_config
 from sentiment import SentimentAnalyzer
+from target import classify_target
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("buddybook-nlp-worker")
@@ -37,11 +38,14 @@ def process_queue(client: ApiClient, analyzer: SentimentAnalyzer, use_target_rul
         except Exception:
             logger.exception("analyze failed for %s %s — skipped", item["target_type"], item["target_id"])
             continue
-        client.submit_sentiment(item["target_type"], item["target_id"], result.label, result.score, result.polarity)
+        target = classify_target(item["content"], item.get("character_names"))
+        client.submit_sentiment(
+            item["target_type"], item["target_id"], result.label, result.score, result.polarity, sentiment_target=target
+        )
         done += 1
         logger.info(
-            "%s %s -> %s (conf %.2f, polarity %+.2f)%s",
-            item["target_type"], item["target_id"], result.label, result.score, result.polarity,
+            "%s %s -> %s (conf %.2f, polarity %+.2f, target %s)%s",
+            item["target_type"], item["target_id"], result.label, result.score, result.polarity, target or "-",
             f" [ปรับ: {result.adjusted}]" if result.adjusted else "",
         )
 

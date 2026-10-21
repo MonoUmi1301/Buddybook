@@ -68,14 +68,15 @@ describe("chapter view tracking", () => {
 describe("writer stats", () => {
   beforeAll(async () => {
     const c1 = await prisma.comment.create({
-      data: { chapter_id: chapterIds[0], user_id: reader.id, content: "พล็อตสนุก ตัวละครน่ารัก", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9 },
+      data: { chapter_id: chapterIds[0], user_id: reader.id, content: "พล็อตสนุก ตัวละครน่ารัก", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9, sentiment_target: "character" },
     });
     await prisma.comment.create({
-      data: { chapter_id: chapterIds[1], user_id: reader2.id, content: "พล็อตสนุก แต่จบเร็ว", sentiment_label: "pos", sentiment_score: 0.7, sentiment_polarity: 0.5 },
+      data: { chapter_id: chapterIds[1], user_id: reader2.id, content: "พล็อตสนุก แต่จบเร็ว ลิเลียน่ารักมาก", sentiment_label: "pos", sentiment_score: 0.7, sentiment_polarity: 0.5, sentiment_target: "character" },
     });
     await prisma.comment.create({
-      data: { chapter_id: chapterIds[1], user_id: reader.id, content: "ตอนนี้ยืดเยื้อ น่าเบื่อ", sentiment_label: "neg", sentiment_score: 0.8, sentiment_polarity: -0.8 },
+      data: { chapter_id: chapterIds[1], user_id: reader.id, content: "ตอนนี้ยืดเยื้อ น่าเบื่อ ลิเลีย", sentiment_label: "neg", sentiment_score: 0.8, sentiment_polarity: -0.8, sentiment_target: "work" },
     });
+    await prisma.characterNode.create({ data: { novel_id: novelId, character_name: "ลิเลีย" } });
     // คอมเมนต์ของนักเขียนเอง — ต้องไม่ถูกนับ
     await prisma.comment.create({ data: { chapter_id: chapterIds[0], user_id: author.id, content: "ขอบคุณที่อ่านนะคะ", parent_comment_id: c1.comment_id } });
     await prisma.review.create({ data: { novel_id: novelId, user_id: reader.id, rating: 4, comment_text: "สนุกดี", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9 } });
@@ -99,6 +100,12 @@ describe("writer stats", () => {
     expect(s.sentiment.avg_polarity).toBeCloseTo((0.9 + 0.5 - 0.8 + 0.9) / 4, 1);
     expect(s.sentiment.weekly).toHaveLength(8);
     expect(s.keywords.positive.map((k: { term: string }) => k.term)).toContain("พล็อต");
+    // ไม่ส่งคำจากคอมเมนต์เชิงลบให้หน้านักเขียน
+    expect(s.keywords.negative).toBeUndefined();
+
+    // บวก 3 ข้อความ (2 คอมเมนต์ติดป้ายตัวละคร + รีวิว "สนุกดี" ไม่มีป้าย) — คอมเมนต์ลบที่มีชื่อตัวละครไม่ถูกนับ
+    expect(s.engagement).toMatchObject({ positive: 3, immersed: 2, share: 0.67 });
+    expect(s.engagement.characters).toEqual([{ name: "ลิเลีย", count: 1 }]);
   });
 
   it("is only visible to the author", async () => {

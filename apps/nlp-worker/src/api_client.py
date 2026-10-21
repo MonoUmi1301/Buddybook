@@ -30,7 +30,8 @@ class ApiClient:
         return res.json()["items"]
 
     def submit_sentiment(
-        self, target_type: str, target_id: str, label: str, score: float, polarity: float | None = None
+        self, target_type: str, target_id: str, label: str, score: float, polarity: float | None = None,
+        sentiment_target: str | None = None,
     ) -> None:
         payload = {
             "target_type": target_type,
@@ -41,6 +42,9 @@ class ApiClient:
         # gap 2.1 — ขั้วความรู้สึก −1..1 (P(pos) − P(neg)) ที่ระบบแนะนำใช้จริง; ถ้าไม่ส่ง API คำนวณจาก label+score เอง
         if polarity is not None:
             payload["sentiment_polarity"] = polarity
+        # ป้ายเป้าหมาย (ตัวละคร/อินกับเรื่อง/งานเขียน) — api รุ่นเก่าไม่รู้จักฟิลด์นี้ก็แค่ตัดทิ้ง ไม่ error
+        if sentiment_target is not None:
+            payload["sentiment_target"] = sentiment_target
         res = requests.post(
             f"{self._base_url}/internal/nlp/sentiment-callback",
             json=payload,

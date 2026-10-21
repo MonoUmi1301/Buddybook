@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { CHART, formatThaiShortDate, type KeywordCount, type NovelStats } from "@/components/stats/types";
 
-const LABELS = { pos: "เชิงบวก", neutral: "เป็นกลาง", neg: "เชิงลบ" } as const;
+// ถ้อยคำฝั่งลบตั้งใจให้นุ่ม — หน้าสถิติมีไว้ให้กำลังใจนักเขียน ไม่ใช่นับคำติ
+const LABELS = { pos: "ชอบ", neutral: "เป็นกลาง", neg: "ยังไม่ถูกใจ" } as const;
 
 function polarityText(p: number | null): string {
   if (p === null) return "ยังไม่มีข้อมูล";
   if (p >= 0.3) return "ผู้อ่านส่วนใหญ่ชอบ";
-  if (p <= -0.3) return "ผู้อ่านส่วนใหญ่ไม่พอใจ";
-  return "ความเห็นค่อนข้างผสม";
+  if (p <= -0.3) return "ผู้อ่านบางส่วนยังไม่ถูกใจ ลองอ่านคอมเมนต์ล่าสุดดู";
+  return "ความเห็นของผู้อ่านหลากหลาย";
 }
 
 /**
@@ -17,7 +18,7 @@ function polarityText(p: number | null): string {
  * สัดส่วน = แถบซ้อน 3 ส่วน (บวก/กลาง/ลบ) พร้อมป้ายตัวเลข (ไม่พึ่งสีอย่างเดียว)
  * แนวโน้มรายสัปดาห์ = แท่งสองทิศจากเส้นศูนย์ (บวกขึ้น/ลบลง) สเกลคงที่ −1..1
  */
-export function SentimentPanel({ sentiment, keywords }: Pick<NovelStats, "sentiment" | "keywords">) {
+export function SentimentPanel({ sentiment, keywords, engagement }: Pick<NovelStats, "sentiment" | "keywords" | "engagement">) {
   const { counts, avg_polarity, weekly } = sentiment;
   const analysed = counts.pos + counts.neutral + counts.neg;
   const [activeWeek, setActiveWeek] = useState<number | null>(null);
@@ -123,8 +124,8 @@ export function SentimentPanel({ sentiment, keywords }: Pick<NovelStats, "sentim
           </div>
 
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <KeywordList title="คำที่พูดถึงในแง่บวก" items={keywords.positive} tone="pos" />
-            <KeywordList title="คำที่พูดถึงในแง่ลบ" items={keywords.negative} tone="neg" />
+            <KeywordList title="คำที่ผู้อ่านพูดถึงในแง่บวก" items={keywords.positive} />
+            <Engagement engagement={engagement} />
           </div>
         </div>
       </div>
@@ -132,11 +133,46 @@ export function SentimentPanel({ sentiment, keywords }: Pick<NovelStats, "sentim
   );
 }
 
-function KeywordList({ title, items, tone }: { title: string; items: KeywordCount[]; tone: "pos" | "neg" }) {
+/** ผู้อ่านอินกับเรื่องแค่ไหน — จากป้ายเป้าหมายของ NLP worker (target.py) นับเฉพาะข้อความเชิงบวก */
+function Engagement({ engagement }: { engagement: NovelStats["engagement"] }) {
+  const { positive, immersed, share, characters } = engagement;
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-medium text-neutral-800">ผู้อ่านอินกับเรื่องนี้</h3>
+      {positive === 0 || share === null ? (
+        <p className="text-xs text-neutral-400">ยังไม่มีคอมเมนต์เชิงบวกที่วิเคราะห์แล้ว</p>
+      ) : (
+        <>
+          <p className="text-sm text-neutral-700">
+            <span className="text-lg font-semibold tabular-nums text-neutral-900">{Math.round(share * 100)}%</span> ของคอมเมนต์ที่ชอบ
+            พูดถึงตัวละครหรือบอกว่าอินกับเหตุการณ์
+            <span className="block text-xs text-neutral-500">
+              {immersed.toLocaleString("th-TH")} จาก {positive.toLocaleString("th-TH")} ข้อความ
+            </span>
+          </p>
+          {characters.length > 0 && (
+            <>
+              <p className="mt-3 text-xs font-medium text-neutral-600">ตัวละครที่ผู้อ่านพูดถึงบ่อย</p>
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                {characters.map((c) => (
+                  <li key={c.name} className="rounded-pill bg-primary-50 px-2.5 py-0.5 text-xs text-primary-700">
+                    {c.name} <span className="tabular-nums text-primary-400">×{c.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function KeywordList({ title, items }: { title: string; items: KeywordCount[] }) {
   return (
     <div>
       <h3 className="mb-2 flex items-center gap-1.5 text-sm font-medium text-neutral-800">
-        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: tone === "pos" ? CHART.positive : CHART.negative }} />
+        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: CHART.positive }} />
         {title}
       </h3>
       {items.length === 0 ? (

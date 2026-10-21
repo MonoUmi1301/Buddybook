@@ -49,6 +49,31 @@ IMMERSION_WORDS = [
 IMMERSION_POLARITY = 0.5
 
 
+# คำชมฝีมือเขียน — อยู่ใน IMMERSION_WORDS เพื่อช่วยกฎพลิก แต่ตอนติดป้ายนับเป็น "งานเขียน" ไม่ใช่ "อินกับเรื่อง"
+WRITING_PRAISE_WORDS = ["เขียนเก่ง", "เขียนดี", "บรรยายดี"]
+
+# ป้ายเป้าหมายของความรู้สึก (ไม่เปลี่ยน label ของโมเดล) — เก็บลง comments/reviews.sentiment_target
+#   character = พูดถึงตัวละคร (ชื่อ/บทบาท/ยัย-ไอ้)   immersion = อินกับเหตุการณ์ในเรื่อง
+#   work      = พูดถึงตัวงานเขียน (ชมหรือติก็ได้)     None = ระบุไม่ได้
+TARGET_CHARACTER = "character"
+TARGET_IMMERSION = "immersion"
+TARGET_WORK = "work"
+
+
+def classify_target(text: str, character_names: list[str] | None = None) -> str | None:
+    """ความรู้สึกในข้อความพุ่งไปที่อะไร — ตัวละคร > อินกับเรื่อง > ตัวงาน
+    (ลำดับนี้วัดบน eval/test_set.csv แล้วจับคอมเมนต์ "อินกับเรื่อง" ได้มากที่สุด — ดู docs/evaluation.md)"""
+    names = [n.strip() for n in (character_names or []) if n and len(n.strip()) >= 2]
+    if _contains_any(text, names) or _contains_any(text, CHARACTER_ROLE_WORDS) or CHARACTER_PREFIX.search(text):
+        return TARGET_CHARACTER
+    immersion = [w for w in IMMERSION_WORDS if w not in WRITING_PRAISE_WORDS]
+    if _contains_any(text, immersion):
+        return TARGET_IMMERSION
+    if _contains_any(text, WORK_CRITICISM_WORDS) or _contains_any(text, WRITING_PRAISE_WORDS):
+        return TARGET_WORK
+    return None
+
+
 @dataclass
 class TargetDecision:
     flipped: bool

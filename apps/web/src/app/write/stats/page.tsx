@@ -114,7 +114,7 @@ export default async function WriterStatsPage({ searchParams }: { searchParams: 
 
                 <div className="mt-6 space-y-6">
                   <DailyViewsChart data={stats.daily_views} />
-                  <SentimentPanel sentiment={stats.sentiment} keywords={stats.keywords} />
+                  <SentimentPanel sentiment={stats.sentiment} keywords={stats.keywords} engagement={stats.engagement} />
                   <ChapterTable chapters={stats.chapters} readers={stats.totals.readers} />
                 </div>
               </>

@@ -40,5 +40,7 @@ def load_config() -> Config:
         # ค่าจาก eval/calibrate.py ของโมเดลที่ใช้อยู่ (1.0 = ไม่ปรับ เหมือนเดิม)
         temperature=float(os.getenv("SENTIMENT_TEMPERATURE", "1.0")),
         # กฎ target.py (พลิก "ด่าตัวละครเพราะอิน" เป็นบวก) ช่วย v2 แต่ v4 เรียนเคสนี้เองแล้ว เปิดกฎแล้วแย่ลง — ดู docs/evaluation.md
-        use_target_rule=os.getenv("SENTIMENT_TARGET_RULE", "1").strip().lower() not in ("0", "false", "no", "off"),
+        # ค่าเริ่มต้นปิด (ตรงกับโมเดลที่ใช้อยู่ v4) — ใช้ v2 ต้องตั้ง SENTIMENT_TARGET_RULE=1 เอง
+        # ป้ายเป้าหมาย (target) ยังติดให้ทุกข้อความเสมอ ไม่ขึ้นกับค่านี้ — ดู target.classify_target
+        use_target_rule=os.getenv("SENTIMENT_TARGET_RULE", "0").strip().lower() in ("1", "true", "yes", "on"),
     )

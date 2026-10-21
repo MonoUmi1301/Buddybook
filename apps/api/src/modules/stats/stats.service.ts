@@ -107,6 +107,7 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
     reviews,
     purchases,
     gifts,
+    characterNodes,
   ] = await Promise.all([
     prisma.chapter.findMany({
       where: { novel_id },
@@ -131,11 +132,11 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
     prisma.review.aggregate({ where: { novel_id, user_id: readerFilter }, _avg: { rating: true }, _count: { _all: true } }),
     prisma.comment.findMany({
       where: { user_id: readerFilter, chapter: { novel_id } },
-      select: { content: true, sentiment_label: true, sentiment_polarity: true, created_at: true },
+      select: { content: true, sentiment_label: true, sentiment_polarity: true, sentiment_target: true, created_at: true },
     }),
     prisma.review.findMany({
       where: { novel_id, user_id: readerFilter },
-      select: { comment_text: true, sentiment_label: true, sentiment_polarity: true, created_at: true },
+      select: { comment_text: true, sentiment_label: true, sentiment_polarity: true, sentiment_target: true, created_at: true },
     }),
     prisma.chapterPurchase.aggregate({
       where: { chapter: { novel_id } },
@@ -143,6 +144,7 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
       _count: { _all: true },
     }),
     prisma.donation.aggregate({ where: { novel_id }, _sum: { net_amount: true } }),
+    prisma.characterNode.findMany({ where: { novel_id }, select: { character_name: true } }),
   ]);
 
   // ---- ยอดวิวรายวัน ----
@@ -165,10 +167,20 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
 
   // ---- ความรู้สึกผู้อ่าน (social listening) ----
   const feedback = [
-    ...comments.map((c) => ({ text: c.content, label: c.sentiment_label, polarity: c.sentiment_polarity, at: c.created_at })),
-    ...reviews
-      .filter((r) => r.comment_text)
-      .map((r) => ({ text: r.comment_text as string, label: r.sentiment_label, polarity: r.sentiment_polarity, at: r.created_at })),
+    ...comments.map((c) => ({
+      text: c.content,
+      label: c.sentiment_label,
+      polarity: c.sentiment_polarity,
+      target: c.sentiment_target,
+      at: c.created_at,
+    })),
+    ...reviews.filter((r) => r.comment_text).map((r) => ({
+      text: r.comment_text as string,
+      label: r.sentiment_label,
+      polarity: r.sentiment_polarity,
+      target: r.sentiment_target,
+      at: r.created_at,
+    })),
   ];
   const counts = { pos: 0, neg: 0, neutral: 0, pending: 0 };
   for (const f of feedback) counts[f.label ?? "pending"] += 1;
@@ -190,10 +202,28 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
   }
 
   const recent = feedback.filter((f) => f.at >= sentimentSince);
+  // ไม่ส่งคำจากคอมเมนต์เชิงลบให้หน้านักเขียน — ตั้งใจให้หน้าสถิติเป็นกำลังใจ ไม่ใช่รวมคำติ
   const keywords = {
     positive: topKeywords(recent.filter((f) => f.label === "pos").map((f) => f.text)),
-    negative: topKeywords(recent.filter((f) => f.label === "neg").map((f) => f.text)),
     all: topKeywords(recent.map((f) => f.text)),
+  };
+
+  // ผู้อ่านอินกับเรื่องแค่ไหน: ในคอมเมนต์/รีวิวเชิงบวก มีกี่ข้อความที่พูดถึงตัวละครหรือบอกว่าอินกับเหตุการณ์
+  // (ป้ายจาก target.py ใน NLP worker — ป้าย "work" ไม่ใช้ที่นี่) + ตัวละครที่ถูกพูดถึงบ่อยในแง่บวก
+  // ข้อความที่วิเคราะห์ก่อนมีป้ายจะนับเป็น "ไม่ได้ระบุ" — ให้ worker วิเคราะห์ใหม่ (ล้าง sentiment_label) ถ้าอยากได้ตัวเลขครบ
+  const positive = feedback.filter((f) => f.label === "pos");
+  const immersed = positive.filter((f) => f.target === "character" || f.target === "immersion").length;
+  const names = [...new Set(characterNodes.map((n) => n.character_name.trim()).filter((n) => n.length >= 2))];
+  const characters = names
+    .map((name) => ({ name, count: positive.filter((f) => f.text.includes(name)).length }))
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  const engagement = {
+    positive: positive.length,
+    immersed,
+    share: positive.length ? round(immersed / positive.length) : null,
+    characters,
   };
 
   const salesNet = (purchases._sum.price_coins ?? 0) - (purchases._sum.fee_coins ?? 0);
@@ -218,6 +248,7 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
     chapters: chapterRows,
     sentiment: { counts, avg_polarity: round(avg_polarity), weekly },
     keywords,
+    engagement,
   };
 }
 

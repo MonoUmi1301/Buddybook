@@ -380,7 +380,7 @@ function generate() {
     }
   });
 
-  return { users, authors, novels, chapters, chapterIdOf, novelTags, interactions, nodes, edges, pref, purchases };
+  return { users, authors, authorGenre, novels, chapters, chapterIdOf, novelTags, interactions, nodes, edges, pref, purchases };
 }
 
 // ---------------------------------------------------------------------------
@@ -408,12 +408,25 @@ function report(d: ReturnType<typeof generate>) {
 }
 
 type Mood = "pos" | "neutral" | "neg";
-/** sentiment แบบเดียวกับที่ NLP worker ส่งกลับ (label + ความมั่นใจ + ขั้ว −1..1) — เว้นว่างถ้าใช้ --no-sentiment */
-function sentimentFor(mood: Mood) {
+type Target = "character" | "immersion" | "work" | null;
+// ป้ายเป้าหมายแบบเดียวกับ nlp-worker/src/target.py (ย่อ) — ข้อมูลจำลองเท่านั้น ผลจริงมาจาก worker
+const CHARACTER_CUES = ["พระเอก", "นางเอก", "ตัวร้าย", "ตัวละคร", "สองคนนี้"];
+const IMMERSION_CUES = ["ร้องไห้", "ใจสั่น", "อบอุ่นหัวใจ", "สารภาพ", "ไม่ง่วง", "มันส์", "เศร้า", "รำคาญนางเอก"];
+const WORK_CUES = ["ยืด", "เดาทาง", "ข้ามไป", "บรรยาย", "เขียนดี", "แบน", "สั้นไป"];
+function targetOf(text: string, names: string[]): Target {
+  if (names.some((n) => text.includes(n)) || CHARACTER_CUES.some((w) => text.includes(w))) return "character";
+  if (IMMERSION_CUES.some((w) => text.includes(w))) return "immersion";
+  if (WORK_CUES.some((w) => text.includes(w))) return "work";
+  return null;
+}
+const CHARACTER_PRAISE = ["น่ารักมาก", "เท่สุด ๆ", "คือที่สุดแล้ว", "ทำใจสลายเลย", "ต้องได้ดีนะ"];
+
+/** sentiment แบบเดียวกับที่ NLP worker ส่งกลับ (label + ความมั่นใจ + ขั้ว −1..1 + ป้ายเป้าหมาย) — เว้นว่างถ้าใช้ --no-sentiment */
+function sentimentFor(mood: Mood, target: Target = null) {
   if (!WITH_SENTIMENT) return {};
   const score = Number(clamp(0.72 + 0.12 * normal(), 0.4, 0.99).toFixed(3));
   const polarity = mood === "pos" ? score : mood === "neg" ? -score : Number(clamp(0.1 * normal(), -0.3, 0.3).toFixed(3));
-  return { sentiment_label: mood, sentiment_score: score, sentiment_polarity: Number(polarity.toFixed(3)) };
+  return { sentiment_label: mood, sentiment_score: score, sentiment_polarity: Number(polarity.toFixed(3)), sentiment_target: target };
 }
 
 /** บัญชีแนะนำสำหรับลองล็อกอิน — เลือกจากข้อมูลจริงที่เพิ่งสร้าง */
@@ -481,6 +494,9 @@ async function insert(d: ReturnType<typeof generate>) {
       const top = d.pref[i].map((p, g) => [p, g] as const).sort((a, b) => b[0] - a[0]).slice(0, 2);
       return top.map(([, g]) => ({ user_id: u.user_id, tag_id: tagId(GENRES[g].main) }));
     }), (b) => prisma.userInterest.createMany({ data: b, skipDuplicates: true }));
+    // นักเขียนก็ต้องมีความสนใจ ไม่งั้นล็อกอินแล้วโดนพาไป onboarding ทุกครั้ง
+    await chunk(d.authors.map((a, i) => ({ user_id: a.user_id, tag_id: tagId(GENRES[d.authorGenre[i]].main) })),
+      (b) => prisma.userInterest.createMany({ data: b, skipDuplicates: true }));
 
     await chunk(d.novels.map(({ genreMain, genreSub, ...n }) => ({ ...n, primary_tag_id: tagId(genreMain), secondary_tag_id: tagId(genreSub) })),
       (b) => prisma.novel.createMany({ data: b }), 500);
@@ -508,13 +524,17 @@ async function insert(d: ReturnType<typeof generate>) {
       (b) => prisma.novelLike.createMany({ data: b, skipDuplicates: true }));
     await chunk(it.filter((x) => x.rating !== null).map((x) => {
       const r = x.rating as number;
-      return { user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, rating: r, comment_text: pick(REVIEW_TEXT[r]),
-        ...sentimentFor(r >= 4 ? "pos" : r === 3 ? "neutral" : "neg"),
+      const text = pick(REVIEW_TEXT[r]);
+      return { user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, rating: r, comment_text: text,
+        ...sentimentFor(r >= 4 ? "pos" : r === 3 ? "neutral" : "neg", targetOf(text, [])),
         is_anonymous: rand() < 0.05, created_at: at(Math.min(CFG.days - 0.01, x.t + 1 + rand() * 10)) };
     }), (b) => prisma.review.createMany({ data: b, skipDuplicates: true }));
     // คอมเมนต์ 1-3 ตอนต่อคน อารมณ์ตามความชอบเรื่อง (มีสุ่มสลับบ้าง) + นักเขียนตอบกลับบางส่วน
     const comments: { comment_id: string; chapter_id: string; user_id: string; parent_comment_id: string | null; content: string; created_at: Date }[] = [];
     const commentMood: Mood[] = [];
+    const commentTarget: Target[] = [];
+    const namesOf = new Map<string, string[]>();
+    for (const nd of d.nodes) namesOf.set(nd.novel_id, [...(namesOf.get(nd.novel_id) ?? []), nd.character_name]);
     for (const x of it) {
       if (rand() >= CFG.commentRate) continue;
       const readable = Math.min(x.chaptersRead, d.chapterIdOf[x.novel].length);
@@ -523,18 +543,25 @@ async function insert(d: ReturnType<typeof generate>) {
         const mood: Mood = rand() < 0.2 ? pick(["pos", "neutral", "neg"] as const) : base;
         const created = at(Math.min(CFG.days - 0.02, x.t + rand() * 15));
         const id = randomUUID();
+        const names = namesOf.get(N[x.novel].novel_id) ?? [];
+        // คอมเมนต์บวกบางส่วนชมตัวละครตามชื่อ — ให้ "ตัวละครที่ผู้อ่านพูดถึงบ่อย" ในหน้าสถิติมีข้อมูล
+        const content = mood === "pos" && names.length && rand() < 0.25
+          ? `${pick(names)}${pick(CHARACTER_PRAISE)}`
+          : pick(mood === "pos" ? COMMENT_POS : mood === "neg" ? COMMENT_NEG : COMMENT_NEU);
         comments.push({ comment_id: id, chapter_id: d.chapterIdOf[x.novel][Math.floor(rand() * readable)], user_id: U[x.user].user_id,
-          parent_comment_id: null, content: pick(mood === "pos" ? COMMENT_POS : mood === "neg" ? COMMENT_NEG : COMMENT_NEU), created_at: created });
+          parent_comment_id: null, content, created_at: created });
         commentMood.push(mood);
+        commentTarget.push(targetOf(content, names));
         if (rand() < CFG.authorReplyRate) {
           comments.push({ comment_id: randomUUID(), chapter_id: comments[comments.length - 1].chapter_id, user_id: N[x.novel].author_id,
             parent_comment_id: id, content: pick(AUTHOR_REPLY), created_at: new Date(Math.min(NOW - 60_000, created.getTime() + rand() * 2 * DAY)) });
           commentMood.push("pos");
+          commentTarget.push(null);
         }
       }
     }
     // พ่อก่อนลูก (reply อ้าง parent ที่ต้องมีอยู่แล้ว) — createMany ทีละ batch ตามลำดับใน array จึงปลอดภัย
-    await chunk(comments.map((c, i) => ({ ...c, ...sentimentFor(commentMood[i]) })), (b) => prisma.comment.createMany({ data: b }));
+    await chunk(comments.map((c, i) => ({ ...c, ...sentimentFor(commentMood[i], commentTarget[i]) })), (b) => prisma.comment.createMany({ data: b }));
 
     // ติดตามนักเขียนของเรื่องที่ชอบมาก
     const follows = new Map<string, { follower_id: string; author_id: string; created_at: Date }>();

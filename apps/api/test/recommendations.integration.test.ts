@@ -124,4 +124,21 @@ describe("POST /internal/nlp/sentiment-callback (polarity)", () => {
     expect(res.status).toBe(200);
     expect(res.json.sentiment_polarity).toBe(0.25);
   });
+
+  it("stores the target tag without touching label or polarity", async () => {
+    const review = await prisma.review.create({
+      data: { novel_id: novels.fresh, user_id: reader.id, rating: 5, comment_text: "เกลียดนางร้ายมาก อินสุด ๆ" },
+      select: { review_id: true },
+    });
+    const body = { target_type: "review", target_id: review.review_id, sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.8 };
+    const headers = { "x-internal-token": env.INTERNAL_SERVICE_TOKEN };
+    expect((await h.api("POST", "/internal/nlp/sentiment-callback", undefined, { ...body, sentiment_target: "character" }, headers)).status).toBe(200);
+    const stored = await prisma.review.findUniqueOrThrow({ where: { review_id: review.review_id } });
+    expect(stored).toMatchObject({ sentiment_label: "pos", sentiment_polarity: 0.8, sentiment_target: "character" });
+
+    // worker รุ่นเก่าไม่ส่งป้าย = null, ค่าที่ไม่รู้จักถูกปฏิเสธ
+    await h.api("POST", "/internal/nlp/sentiment-callback", undefined, body, headers);
+    expect((await prisma.review.findUniqueOrThrow({ where: { review_id: review.review_id } })).sentiment_target).toBeNull();
+    expect((await h.api("POST", "/internal/nlp/sentiment-callback", undefined, { ...body, sentiment_target: "author" }, headers)).status).toBe(400);
+  });
 });
