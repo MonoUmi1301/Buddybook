@@ -18,6 +18,7 @@
     "prisma:generate": "npm run prisma:generate --workspace=apps/api",
     "prisma:migrate": "npm run prisma:migrate --workspace=apps/api",
     "seed:scale": "npm run db:seed:scale --workspace=apps/api --",
+    "db:check": "node scripts/db-check.mjs",
     "docker:up": "docker compose --profile app up -d --build",
     "docker:down": "docker compose --profile app down",
     "docker:setup": "docker compose --profile app exec api node scripts/db-setup.mjs",

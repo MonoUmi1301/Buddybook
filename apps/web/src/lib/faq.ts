@@ -56,8 +56,6 @@ export const FAQ_GROUPS: FAQGroup[] = [
         question: "เติม coin ยังไง?",
         answer: "กดรูปโปรไฟล์ > เติม coin เลือกแพ็กเกจ แล้วจ่ายด้วย PromptPay หรือบัตรเดบิต/เครดิต coin เข้าอัตโนมัติหลังจ่ายเสร็จ ไม่ต้องแนบสลิป",
         link: { href: "/guide/coin", label: "ดูวิธีเติมทีละขั้น" },
-        icon: "🪙",
-        iconPosition: "right",
         featured: true,
       },
       {
@@ -90,8 +88,6 @@ export const FAQ_GROUPS: FAQGroup[] = [
         question: "อยากส่งกำลังใจให้นักเขียน",
         answer: "กด \"ส่งของขวัญ\" ในหน้านิยาย หรือ \"ส่งกาแฟ\" ท้ายตอน เลือกของขวัญ พิมพ์ข้อความลงบนการ์ด แล้วส่งด้วย coin",
         link: { href: "/guide#gift", label: "ดูวิธีในคู่มือ" },
-        icon: "🧸",
-        iconPosition: "right",
         featured: true,
       },
       {
@@ -116,8 +112,6 @@ export const FAQ_GROUPS: FAQGroup[] = [
         question: "อยากเริ่มเขียนนิยาย ต้องทำยังไง?",
         answer: "กดไอคอนปากกาที่แถบเมนูด้านบน > สร้างนิยายใหม่ ตั้งชื่อ เลือกแท็ก แล้วเขียนตอนแรกได้เลย ระบบบันทึกฉบับร่างให้อัตโนมัติ",
         link: { href: "/guide#write", label: "ดูวิธีทีละขั้น" },
-        icon: "✍️",
-        iconPosition: "left",
         featured: true,
       },
       {
