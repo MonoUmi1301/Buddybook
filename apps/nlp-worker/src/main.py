@@ -27,6 +27,7 @@ logger = logging.getLogger("buddybook-nlp-worker")
 
 def process_queue(client: ApiClient, analyzer: SentimentAnalyzer, use_target_rule: bool = True) -> int:
     items = client.fetch_pending_queue()
+    done = 0
 
     for item in items:
         # ข้อความเดียวพัง (เช่นยาวผิดปกติ) ต้องไม่ทำให้ทั้งคิวค้าง — ข้ามไป รอบหน้าจะลองใหม่ ส่วนอันอื่นวิเคราะห์ต่อได้
@@ -37,13 +38,15 @@ def process_queue(client: ApiClient, analyzer: SentimentAnalyzer, use_target_rul
             logger.exception("analyze failed for %s %s — skipped", item["target_type"], item["target_id"])
             continue
         client.submit_sentiment(item["target_type"], item["target_id"], result.label, result.score, result.polarity)
+        done += 1
         logger.info(
             "%s %s -> %s (conf %.2f, polarity %+.2f)%s",
             item["target_type"], item["target_id"], result.label, result.score, result.polarity,
             f" [ปรับ: {result.adjusted}]" if result.adjusted else "",
         )
 
-    return len(items)
+    # นับเฉพาะที่ส่งผลสำเร็จ — ข้อความที่วิเคราะห์ไม่ได้ค้างหัวคิวตลอด ถ้านับรวมจะวนดึงซ้ำไม่หยุด (ดู loop ใน main)
+    return done
 
 
 def main() -> None:
@@ -59,6 +62,7 @@ def main() -> None:
     logger.info("Model loaded — worker started, polling every %ss", config.poll_interval_seconds)
 
     while True:
+        n = 0
         try:
             n = process_queue(client, analyzer, config.use_target_rule)
             if n:
@@ -66,7 +70,10 @@ def main() -> None:
         except Exception:
             logger.exception("Error during polling cycle — will retry next cycle")
 
-        time.sleep(config.poll_interval_seconds)
+        # คิวยังมีงานค้าง (รอบนี้ได้งานมา) → ดึงรอบถัดไปทันที ไม่ต้องรอ — เดิมพักทุกรอบ คิวหลายหมื่นรายการ
+        # (เช่นหลัง seed:scale --no-sentiment) ใช้เวลาหลายชั่วโมงทั้งที่โมเดลว่างอยู่ พักเฉพาะตอนคิวว่างหรือ error
+        if not n:
+            time.sleep(config.poll_interval_seconds)
 
 
 if __name__ == "__main__":

@@ -70,7 +70,8 @@ npm run dev              # เปิด api + web + stripe:listen พร้อ�
 
 ```bash
 npm run seed:scale       # นักอ่าน 3,000 / นักเขียน 200 / นิยาย 800 / ตอน ~12,000 พร้อมรีวิว คอมเมนต์ ตอนติดเหรียญ ยอดวิว
-# ปรับขนาดได้: npm run seed:scale -- --users 1000 --novels 300   |  ให้ NLP worker วิเคราะห์เอง: -- --no-sentiment
+# ปรับขนาดได้: npm run seed:scale -- --users 1000 --novels 300
+# ให้โมเดล sentiment จริง (worker) วิเคราะห์แทนค่าสุ่ม: npm run seed:scale -- --no-sentiment แล้วเปิด nlp-worker ไว้
 ```
 
 - ทุกบัญชีล็อกอินด้วยอีเมล `sim_reader_xxxxx@scale.buddybook.local` / `sim_writer_xxxxx@scale.buddybook.local` รหัสผ่าน `buddy1234`
