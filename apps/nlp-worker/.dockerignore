@@ -3,3 +3,4 @@
 .env
 # โมเดล ~400MB ไม่ต้องเข้า build context — docker-compose mount เข้า /model ตอนรัน
 model
+model_*

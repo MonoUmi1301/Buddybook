@@ -49,6 +49,8 @@ coverage/
 
 # NLP worker model folder (mounted into the nlp-worker container, ~400MB)
 apps/nlp-worker/model/
+# โมเดลเวอร์ชันอื่นที่วางไว้วัดผลเทียบ เช่น model_v4/ (ตัวที่ใช้จริงคือ model/ เสมอ)
+apps/nlp-worker/model_*/
 
 # Playwright (e2e/)
 test-results/
