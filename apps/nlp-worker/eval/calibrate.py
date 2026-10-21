@@ -73,6 +73,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--cache", required=True)
+    ap.add_argument("--no-target", action="store_true", help="worker ปิดกฎ target (เช่น v4) — fit บนทุกประโยค")
     here = os.path.dirname(__file__)
     ap.add_argument("--dev", default=os.path.join(here, "dev_set.csv"))
     ap.add_argument("--test", default=os.path.join(here, "test_set.csv"))
@@ -81,6 +82,8 @@ def main() -> None:
     with open(args.cache, encoding="utf-8") as f:
         cache = json.load(f)[os.path.abspath(args.model)]
     def not_flipped(rows):
+        if args.no_target:
+            return rows
         keep = []
         for r in rows:
             label = SentimentAnalyzer.from_scores(cache[r["text"]]).label
@@ -96,7 +99,7 @@ def main() -> None:
     best_t = min(grid, key=lambda t: nll(dev, dev_raw, t))
 
     sys.stdout.reconfigure(encoding="utf-8")
-    print(f"T ที่ดีที่สุดบน dev_set: {best_t}  (dev {len(dev)} · test {len(test)} ประโยคที่กฎ target ไม่ได้พลิก)")
+    print(f"T ที่ดีที่สุดบน dev_set: {best_t}  (dev {len(dev)} · test {len(test)} ประโยค{'' if args.no_target else 'ที่กฎ target ไม่ได้พลิก'})")
     print("| วัดบน test_set | T = 1 (เดิม) | T = %s |" % best_t)
     print("|---|---:|---:|")
     for name, fn in (("log-loss", nll), ("ECE", ece), ("Brier", brier), ("|ขั้ว| เฉลี่ยตอนทายผิด", mean_abs_polarity_when_wrong)):

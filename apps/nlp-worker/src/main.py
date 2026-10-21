@@ -25,14 +25,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("buddybook-nlp-worker")
 
 
-def process_queue(client: ApiClient, analyzer: SentimentAnalyzer) -> int:
+def process_queue(client: ApiClient, analyzer: SentimentAnalyzer, use_target_rule: bool = True) -> int:
     items = client.fetch_pending_queue()
 
     for item in items:
         # ข้อความเดียวพัง (เช่นยาวผิดปกติ) ต้องไม่ทำให้ทั้งคิวค้าง — ข้ามไป รอบหน้าจะลองใหม่ ส่วนอันอื่นวิเคราะห์ต่อได้
         try:
             # character_names: ชื่อตัวละครของนิยายเรื่องนั้น (api รุ่นเก่าไม่ส่งมา = ใช้แค่คำเรียกบทบาท)
-            result = analyzer.analyze(item["content"], item.get("character_names"))
+            result = analyzer.analyze(item["content"], item.get("character_names"), use_target=use_target_rule)
         except Exception:
             logger.exception("analyze failed for %s %s — skipped", item["target_type"], item["target_id"])
             continue
@@ -51,13 +51,16 @@ def main() -> None:
     client = ApiClient(config.api_base_url, config.internal_service_token)
     analyzer = SentimentAnalyzer(config.model_path, config.temperature)
 
-    logger.info("Loading fine-tuned WangchanBERTa model from %s (temperature %.2f)", config.model_path, config.temperature)
+    logger.info(
+        "Loading fine-tuned WangchanBERTa model from %s (temperature %.2f, target rule %s)",
+        config.model_path, config.temperature, "on" if config.use_target_rule else "off",
+    )
     analyzer.load()
     logger.info("Model loaded — worker started, polling every %ss", config.poll_interval_seconds)
 
     while True:
         try:
-            n = process_queue(client, analyzer)
+            n = process_queue(client, analyzer, config.use_target_rule)
             if n:
                 logger.info("Processed %s items", n)
         except Exception:

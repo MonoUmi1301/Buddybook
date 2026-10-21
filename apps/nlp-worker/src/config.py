@@ -16,6 +16,7 @@ class Config:
     batch_size: int
     model_path: str
     temperature: float
+    use_target_rule: bool
 
 
 def load_config() -> Config:
@@ -38,4 +39,6 @@ def load_config() -> Config:
         model_path=model_path,
         # ค่าจาก eval/calibrate.py ของโมเดลที่ใช้อยู่ (1.0 = ไม่ปรับ เหมือนเดิม)
         temperature=float(os.getenv("SENTIMENT_TEMPERATURE", "1.0")),
+        # กฎ target.py (พลิก "ด่าตัวละครเพราะอิน" เป็นบวก) ช่วย v2 แต่ v4 เรียนเคสนี้เองแล้ว เปิดกฎแล้วแย่ลง — ดู docs/evaluation.md
+        use_target_rule=os.getenv("SENTIMENT_TARGET_RULE", "1").strip().lower() not in ("0", "false", "no", "off"),
     )
