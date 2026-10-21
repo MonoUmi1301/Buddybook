@@ -86,7 +86,8 @@ def main() -> None:
     ap.add_argument("--novel-dataset", required=True)
     ap.add_argument("--wisesight-dir", required=True)
     ap.add_argument("--pythainlp-dir", required=True)
-    ap.add_argument("--wisesight-per-class", type=int, default=1200, help="สุ่ม Wisesight ต่อคลาส (เทรนบน CPU ได้)")
+    ap.add_argument("--wisesight-per-class", type=int, default=0, help="สุ่ม Wisesight ต่อคลาส (0 = ใช้ทั้งหมด — เทรนบน GPU)")
+    ap.add_argument("--wisesight-neutral-cap", type=int, default=7000, help="จำกัด neutral ของ Wisesight (มีเยอะเกินคลาสอื่นมาก)")
     ap.add_argument("--val-ratio", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--out", default=os.path.join(HERE, "data"))
@@ -96,13 +97,21 @@ def main() -> None:
     held_out = read_csv(os.path.join(HERE, "..", "eval", "test_set.csv")) + read_csv(os.path.join(HERE, "..", "eval", "dev_set.csv"))
     held_norm = {normalize(r["text"]) for r in held_out}
     held_grams = [trigrams(normalize(r["text"])) for r in held_out]
+    # ชุดทดสอบทางการของ Wisesight (kaggle-competition/test.txt) ใช้วัดผลบนข้อมูลจริง — ห้ามหลุดเข้าชุดเทรน
+    # (มี 8 ประโยคที่ซ้ำกับ train.txt) เช็คแบบตรงตัวหลัง normalize พอ ชุดใหญ่เกินจะเทียบ trigram ทุกคู่
+    ws_test_path = os.path.join(args.wisesight_dir, "ws_test.txt")
+    if os.path.exists(ws_test_path):
+        held_norm |= {normalize(" ".join(t.split())) for t in read_lines(ws_test_path)}
 
     wisesight = load_wisesight(args.wisesight_dir)
     ws_sample = []
     for label in LABELS:
         pool = [r for r in wisesight if r["label"] == label and 8 <= len(r["text"]) <= 300]
         rng.shuffle(pool)
-        ws_sample += pool[: args.wisesight_per_class]
+        cap = args.wisesight_per_class or len(pool)
+        if label == "neutral" and args.wisesight_neutral_cap:
+            cap = min(cap, args.wisesight_neutral_cap)
+        ws_sample += pool[:cap]
 
     sources = load_novel_dataset(args.novel_dataset) + ws_sample + load_pythainlp(args.pythainlp_dir) + load_synthetic()
 
