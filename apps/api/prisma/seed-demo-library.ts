@@ -12,6 +12,7 @@
  */
 import bcrypt from "bcryptjs";
 import { PrismaClient, type LibraryStatus, type NovelStatus } from "@prisma/client";
+import { storyParagraphs, toHtml } from "./lib/storyText";
 
 const prisma = new PrismaClient();
 
@@ -126,7 +127,7 @@ async function main() {
           novel_id: novel.novel_id,
           chapter_number: c,
           title: `ตอนที่ ${c}`,
-          content: `<p>เนื้อหาตัวอย่างของ${n.title} ตอนที่ ${c}</p>`,
+          content: toHtml(storyParagraphs(`${n.title}-${c}`, { genre: n.genre })),
           status: "published",
           word_count: 1800 + ((i * 37 + c * 53) % 1400),
           published_at: daysAgo(240 - i * 10 - c),

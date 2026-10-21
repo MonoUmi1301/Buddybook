@@ -28,6 +28,7 @@ import {
   type CharacterRole,
   type SentimentLabel,
 } from "@prisma/client";
+import { storyParagraphs, toHtml } from "./lib/storyText";
 
 const prisma = new PrismaClient();
 
@@ -48,7 +49,6 @@ function countWords(html: string): number {
   for (const s of segmenter.segment(text)) if (s.isWordLike) n++;
   return n;
 }
-const toHtml = (paragraphs: string[]) => paragraphs.map((p) => `<p>${p}</p>`).join("");
 const intro = (...paragraphs: string[]) => paragraphs.join("\n\n");
 
 // ---------------------------------------------------------------------------
@@ -934,7 +934,15 @@ async function main() {
     const ids: string[] = [];
     for (const [idx, c] of n.chapters.entries()) {
       const status = c.status ?? "published";
-      const content = toHtml(c.paragraphs);
+      // ย่อหน้าที่เขียนไว้เป็นหัว-ท้ายตอน แล้วเสริมเนื้อเรื่องตรงกลางให้ยาวเท่าตอนจริง (ไม่ให้ตอนสั้นแค่ 3-4 บรรทัด)
+      const middle = storyParagraphs(`${n.key}-${idx}`, {
+        genre: n.genreMain,
+        names: n.characters?.map((ch) => ch.name),
+        paragraphs: 8 + (idx % 5),
+        bodyOnly: true,
+      });
+      const written = c.paragraphs;
+      const content = toHtml(written.length > 1 ? [...written.slice(0, -1), ...middle, written[written.length - 1]] : [...written, ...middle]);
       const at = daysAgo(Math.max(0, created - gap * idx));
       const ch = await prisma.chapter.create({
         data: {
