@@ -56,3 +56,6 @@ playwright-report/
 
 # pg_dump ของ dev DB — ข้อมูล ห้าม commit
 backups/
+# ข้อมูลเทรน v4 (สร้างใหม่ได้ด้วย train/build_dataset.py) และไฟล์ zip สำหรับอัปโหลดขึ้น Colab (~420MB)
+apps/nlp-worker/train/data/
+apps/nlp-worker/train/colab/
