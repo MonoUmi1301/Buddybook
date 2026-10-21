@@ -50,11 +50,18 @@ def load_novel_dataset(path: str) -> list[dict]:
     return out
 
 
+def read_lines(path: str) -> list[str]:
+    """แยกบรรทัดด้วย \n เท่านั้น — ห้ามใช้ str.splitlines(): มันตัดที่ \x0c, \x1c,   ฯลฯ ด้วย ซึ่งมีอยู่ในข้อความ
+    Wisesight บางแถว ทำให้ไฟล์ข้อความยาวกว่าไฟล์ label 12 บรรทัด และ label เลื่อนผิดแถวตั้งแต่ราวแถว 6,000 (บั๊กของ v4 รอบแรก)"""
+    with open(path, encoding="utf-8", newline="") as f:
+        return [line.rstrip("\r") for line in f.read().rstrip("\n").split("\n")]
+
+
 def load_wisesight(d: str) -> list[dict]:
-    with open(os.path.join(d, "ws_train.txt"), encoding="utf-8") as f:
-        texts = f.read().splitlines()
-    with open(os.path.join(d, "ws_train_label.txt"), encoding="utf-8") as f:
-        labels = f.read().splitlines()
+    texts = read_lines(os.path.join(d, "ws_train.txt"))
+    labels = read_lines(os.path.join(d, "ws_train_label.txt"))
+    if len(texts) != len(labels):
+        raise SystemExit(f"Wisesight: ข้อความ {len(texts)} บรรทัด แต่ label {len(labels)} บรรทัด — ไฟล์ไม่ตรงกัน")
     mapping = {"pos": "pos", "neg": "neg", "neu": "neutral", "q": "neutral"}
     return [{"text": t, "label": mapping[l.strip()], "source": "wisesight"} for t, l in zip(texts, labels) if l.strip() in mapping]
 
@@ -62,11 +69,10 @@ def load_wisesight(d: str) -> list[dict]:
 def load_pythainlp(d: str) -> list[dict]:
     out = []
     for name in ("pt_review_shopping.csv", "pt_general-amy.csv"):
-        with open(os.path.join(d, name), encoding="utf-8") as f:
-            for line in f:
-                text, _, label = line.rstrip("\n").rpartition("\t")
-                if label.strip() in ("pos", "neg") and text.strip():
-                    out.append({"text": text, "label": label.strip(), "source": f"pythainlp/{name[3:-4]}"})
+        for line in read_lines(os.path.join(d, name)):
+            text, _, label = line.rpartition("\t")
+            if label.strip() in ("pos", "neg") and text.strip():
+                out.append({"text": text, "label": label.strip(), "source": f"pythainlp/{name[3:-4]}"})
     return out
 
 
