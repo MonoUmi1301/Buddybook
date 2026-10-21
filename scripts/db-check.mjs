@@ -75,6 +75,14 @@ for (const port of ports) {
       console.log(`  ${db}${inUse}`);
       console.log(`    ผู้ใช้ ${row.users} (บัญชีจริง ${row.real_users}) · นิยาย ${row.novels}`);
       console.log(`    ผู้ใช้คนแรกสร้าง ${row.first?.toISOString() ?? "-"} · บัญชีจริงล่าสุด ${row.latest?.toISOString() ?? "-"}`);
+      // ตาราง migration บอกว่าฐานข้อมูลนี้ถูกสร้าง/รีเซ็ตเมื่อไร (migrate reset จะลบทุกอย่างแล้วลง migration ใหม่ทั้งหมดพร้อมกัน)
+      try {
+        const [m] = await prisma.$queryRaw`
+          SELECT count(*)::int AS n, min(started_at) AS first, max(finished_at) AS last FROM _prisma_migrations`;
+        console.log(`    migration ${m.n} รายการ · ลงครั้งแรก ${m.first?.toISOString() ?? "-"} · ล่าสุด ${m.last?.toISOString() ?? "-"}`);
+      } catch {
+        // ไม่มีตาราง migration
+      }
     } catch {
       // ฐานข้อมูลนี้ไม่มีตาราง users ของ BuddyBook — ข้าม
     } finally {
