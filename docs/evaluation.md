@@ -193,15 +193,12 @@ Brier 0.211 → 0.213 (เท่าเดิม) ได้ผลพอประ�
 |---|---|---|---:|
 | [Wisesight Sentiment](https://github.com/PyThaiNLP/wisesight-sentiment) (สุ่มสมดุล 3 คลาส, q → neutral) | จริง | CC0-1.0 | 3,233 |
 | [PyThaiNLP thai-sentiment-analysis-dataset](https://github.com/PyThaiNLP/thai-sentiment-analysis-dataset) (review_shopping, general-amy) | จริง | CC BY 4.0 | 197 |
-| [krathu-500](https://github.com/Pittawat2542/krathu-500) คอมเมนต์ Pantip (≤ 280 ตัวอักษร, สุ่ม NEU ≤ 600) | จริง | ไม่ระบุ — ใช้เพื่อการศึกษา อ้างอิงแหล่ง ไม่แจกจ่ายต่อ และขออนุญาตเจ้าของแล้ว | 1,078 |
 | `novel_dataset.csv` เดิม (ตัดประโยคซ้ำ) | — | — | 148 |
 | `train/novel_comments_synthetic.csv` (เน้นด่าตัวละครเพราะอิน = pos) | แต่งโดยทีม | — | 211 |
 
 ตัดประโยคซ้ำ (1,446 แถว) และตัดทุกประโยคที่ซ้ำ/เกือบซ้ำกับ test_set หรือ dev_set (trigram ≥ 0.6 เกณฑ์เดียวกับ evaluate.py)
-รวม 4,867 แถว เป็นข้อมูลจริง 4,508 แถว (93%) ส่วนที่แต่งมี 211 แถว
-ไม่ใช้ [40 Thai Children Stories](https://github.com/dsmlr/40-Thai-Children-Stories) เพราะเป็นประโยคเล่าเรื่องไม่ใช่คอมเมนต์ และ label นับเหตุการณ์เศร้าเป็น neg
-ซึ่งขัดกับเกณฑ์ "อินกับเรื่อง = pos" · [Thai Sentiment Analysis Toolkit (Kaggle)](https://www.kaggle.com/datasets/rtatman/thai-sentiment-analysis-toolkit)
-เป็นรายการคำ ไม่ใช่ประโยคที่ติด label จึงใช้ fine-tune ไม่ได้
+ไม่ใช้ [40 Thai Children Stories](https://github.com/dsmlr/40-Thai-Children-Stories) และ [krathu-500](https://github.com/Pittawat2542/krathu-500) เพราะไม่ระบุ license
+(และ label ของนิทานนับเหตุการณ์เศร้าเป็น neg ซึ่งขัดกับเกณฑ์ "อินกับเรื่อง = pos")
 อ้างอิง Wisesight: Suriyawongkul et al. (2019) doi:10.5281/zenodo.3457447
 
 ผล v4 จะเพิ่มในตารางนี้หลังเทรนและวัดบน test_set — เปลี่ยนไปใช้ก็ต่อเมื่อดีกว่า v2+กฎ target

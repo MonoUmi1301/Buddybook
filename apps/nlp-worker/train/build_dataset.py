@@ -9,16 +9,12 @@
      Suriyawongkul et al. (2019) doi:10.5281/zenodo.3457447 — label q (คำถาม) ยุบเป็น neutral
   3. PyThaiNLP thai-sentiment-analysis-dataset (CC BY 4.0) — review_shopping.csv, general-amy.csv
      https://github.com/PyThaiNLP/thai-sentiment-analysis-dataset
-  4. krathu-500 (Taveekitworachai et al.) — คอมเมนต์ Pantip จริงที่ติด POS/NEG/NEU แล้ว
-     https://github.com/Pittawat2542/krathu-500 (labeled/comments-small-labeled.csv)
-     repo ไม่ระบุ license — ใช้เพื่อการศึกษาวิจัยไม่หากำไร อ้างอิงแหล่ง ไม่แจกจ่ายไฟล์ต่อ และขออนุญาตเจ้าของแล้ว
-     ตัดคอมเมนต์ยาว (ส่วนใหญ่เป็นเนื้อกระทู้/เล่าเรื่อง) และสุ่ม NEU ไม่ให้ท่วมคลาสอื่น
-  5. train/novel_comments_synthetic.csv — คอมเมนต์นิยายที่ทีมพัฒนาแต่งขึ้น (เน้นด่าตัวละครเพราะอิน = pos
+  4. train/novel_comments_synthetic.csv — คอมเมนต์นิยายที่ทีมพัฒนาแต่งขึ้น (เน้นด่าตัวละครเพราะอิน = pos
      ซึ่งไม่มีในแหล่งไหนเลย) source = synthetic ในไฟล์ผลลัพธ์
 
 รัน (จาก apps/nlp-worker):
     python train/build_dataset.py --novel-dataset ".../novel_dataset.csv" \
-        --wisesight-dir ".../datasets" --pythainlp-dir ".../datasets" --krathu-csv ".../comments-small-labeled.csv"         --out train/data
+        --wisesight-dir ".../datasets" --pythainlp-dir ".../datasets" --out train/data
 """
 
 import argparse
@@ -74,19 +70,6 @@ def load_pythainlp(d: str) -> list[dict]:
     return out
 
 
-def load_krathu(path: str, max_len: int, neutral_cap: int, rng: random.Random) -> list[dict]:
-    mapping = {"POS": "pos", "NEG": "neg", "NEU": "neutral"}
-    rows = []
-    for r in read_csv(path):
-        label = mapping.get((r.get("class_label") or "").strip())
-        text = " ".join((r.get("text") or "").split())
-        if label and 5 <= len(text) <= max_len:
-            rows.append({"text": text, "label": label, "source": "krathu-500"})
-    neutral = [r for r in rows if r["label"] == "neutral"]
-    rng.shuffle(neutral)
-    return [r for r in rows if r["label"] != "neutral"] + neutral[:neutral_cap]
-
-
 def load_synthetic() -> list[dict]:
     rows = read_csv(os.path.join(HERE, "novel_comments_synthetic.csv"))
     return [{"text": r["text"], "label": r["label"], "source": "synthetic", "category": r["category"]} for r in rows]
@@ -97,9 +80,6 @@ def main() -> None:
     ap.add_argument("--novel-dataset", required=True)
     ap.add_argument("--wisesight-dir", required=True)
     ap.add_argument("--pythainlp-dir", required=True)
-    ap.add_argument("--krathu-csv", help="krathu-500 labeled/comments-small-labeled.csv (ไม่ใส่ = ไม่ใช้)")
-    ap.add_argument("--krathu-max-len", type=int, default=280, help="ตัดคอมเมนต์ที่ยาวกว่านี้ (มักเป็นเนื้อกระทู้)")
-    ap.add_argument("--krathu-neutral", type=int, default=600, help="สุ่ม NEU ของ krathu-500 ไม่เกินเท่านี้")
     ap.add_argument("--wisesight-per-class", type=int, default=1200, help="สุ่ม Wisesight ต่อคลาส (เทรนบน CPU ได้)")
     ap.add_argument("--val-ratio", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=42)
@@ -118,8 +98,7 @@ def main() -> None:
         rng.shuffle(pool)
         ws_sample += pool[: args.wisesight_per_class]
 
-    krathu = load_krathu(args.krathu_csv, args.krathu_max_len, args.krathu_neutral, rng) if args.krathu_csv else []
-    sources = load_novel_dataset(args.novel_dataset) + ws_sample + load_pythainlp(args.pythainlp_dir) + krathu + load_synthetic()
+    sources = load_novel_dataset(args.novel_dataset) + ws_sample + load_pythainlp(args.pythainlp_dir) + load_synthetic()
 
     seen: dict[str, str] = {}
     kept, dropped = [], Counter()
