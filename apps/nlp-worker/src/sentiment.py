@@ -7,6 +7,8 @@ BuddyBook NLP Worker — WangchanBERTa sentiment wrapper
 
 from dataclasses import dataclass
 
+import target
+
 SentimentLabel = str  # "pos" | "neg" | "neutral" — ตรงกับ enum SentimentLabel ใน Prisma schema
 
 
@@ -15,6 +17,7 @@ class SentimentResult:
     label: SentimentLabel
     score: float  # 0.0 - 1.0 ความมั่นใจของ label ที่ทาย (CHECK chk_comments_sentiment_score_range)
     polarity: float  # -1.0 - 1.0 = P(pos) - P(neg) — ขั้วความรู้สึกที่ระบบแนะนำใช้ (gap 2.1)
+    adjusted: str = ""  # เหตุผลที่ target.py พลิกผล (ว่าง = ใช้ผลโมเดลตรง ๆ)
 
 
 class SentimentAnalyzer:
@@ -41,7 +44,7 @@ class SentimentAnalyzer:
             max_length=512,
         )
 
-    def analyze(self, text: str) -> SentimentResult:
+    def analyze(self, text: str, character_names: list[str] | None = None, use_target: bool = True) -> SentimentResult:
         if self._pipe is None:
             raise RuntimeError("เรียก .load() ก่อนใช้ .analyze()")
 
@@ -49,7 +52,21 @@ class SentimentAnalyzer:
         scores = self._pipe(text, top_k=None)
         if scores and isinstance(scores[0], list):  # บางเวอร์ชันของ transformers ห่อเป็น list ซ้อน
             scores = scores[0]
-        return self.from_scores(scores)
+        result = self.from_scores(scores)
+        return self.apply_target(text, result, character_names) if use_target else result
+
+    @staticmethod
+    def apply_target(text: str, result: SentimentResult, character_names: list[str] | None = None) -> SentimentResult:
+        """โมเดลทาย neg กับข้อความที่ด่าตัวละครเพราะอิน → นับเป็นบวกขั้วกลาง ๆ (ดู target.py)"""
+        decision = target.decide(text, result.label, character_names)
+        if not decision.flipped:
+            return result
+        return SentimentResult(
+            label="pos",
+            score=target.IMMERSION_POLARITY,
+            polarity=target.IMMERSION_POLARITY,
+            adjusted=decision.reason,
+        )
 
     @classmethod
     def from_scores(cls, scores: list[dict]) -> SentimentResult:

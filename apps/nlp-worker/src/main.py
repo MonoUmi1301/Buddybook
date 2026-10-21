@@ -29,11 +29,13 @@ def process_queue(client: ApiClient, analyzer: SentimentAnalyzer) -> int:
     items = client.fetch_pending_queue()
 
     for item in items:
-        result = analyzer.analyze(item["content"])
+        # character_names: ชื่อตัวละครของนิยายเรื่องนั้น (api รุ่นเก่าไม่ส่งมา = ใช้แค่คำเรียกบทบาท)
+        result = analyzer.analyze(item["content"], item.get("character_names"))
         client.submit_sentiment(item["target_type"], item["target_id"], result.label, result.score, result.polarity)
         logger.info(
-            "%s %s -> %s (conf %.2f, polarity %+.2f)",
+            "%s %s -> %s (conf %.2f, polarity %+.2f)%s",
             item["target_type"], item["target_id"], result.label, result.score, result.polarity,
+            f" [ปรับ: {result.adjusted}]" if result.adjusted else "",
         )
 
     return len(items)

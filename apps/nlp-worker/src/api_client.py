@@ -12,10 +12,11 @@ from typing import Literal, TypedDict
 import requests
 
 
-class PendingItem(TypedDict):
+class PendingItem(TypedDict, total=False):
     target_type: Literal["comment", "review"]
     target_id: str
     content: str
+    character_names: list[str]  # ชื่อตัวละครของนิยายเรื่องนั้น (ดู target.py)
 
 
 class ApiClient:

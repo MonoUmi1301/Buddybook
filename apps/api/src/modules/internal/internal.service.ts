@@ -7,7 +7,12 @@ interface PendingQueueItem {
   target_type: "comment" | "review";
   target_id: string;
   content: string;
+  /** เพิ่มภายหลัง — ชื่อตัวละครของนิยายเรื่องนั้น ให้ worker แยกว่าความรู้สึกพุ่งไปที่ตัวละครหรือตัวงาน
+   *  ("น็อกซ์น่าสงสาร" = อินกับเรื่อง ไม่ใช่ติงาน — ดู apps/nlp-worker/src/target.py) */
+  character_names: string[];
 }
+
+const characterNamesSelect = { character_nodes: { select: { character_name: true } } } as const;
 
 /** Reference implementation — GET /internal/nlp/pending-queue
  *  Python NLP Worker poll endpoint นี้แทนที่จะต่อ Postgres ตรง ๆ (ดู README ของ nlp-worker
@@ -20,22 +25,28 @@ export async function getPendingQueue(limit = 20): Promise<{ items: PendingQueue
       where: { sentiment_label: null, content: { not: "" } },
       orderBy: { created_at: "asc" },
       take: limit,
-      select: { comment_id: true, content: true },
+      select: { comment_id: true, content: true, chapter: { select: { novel: { select: characterNamesSelect } } } },
     }),
     prisma.review.findMany({
       where: { sentiment_label: null, comment_text: { not: null } },
       orderBy: { created_at: "asc" },
       take: limit,
-      select: { review_id: true, comment_text: true },
+      select: { review_id: true, comment_text: true, novel: { select: characterNamesSelect } },
     }),
   ]);
 
   const items: PendingQueueItem[] = [
-    ...comments.map((c) => ({ target_type: "comment" as const, target_id: c.comment_id, content: c.content })),
+    ...comments.map((c) => ({
+      target_type: "comment" as const,
+      target_id: c.comment_id,
+      content: c.content,
+      character_names: c.chapter.novel.character_nodes.map((n) => n.character_name),
+    })),
     ...reviews.map((r) => ({
       target_type: "review" as const,
       target_id: r.review_id,
       content: r.comment_text as string,
+      character_names: r.novel.character_nodes.map((n) => n.character_name),
     })),
   ];
 

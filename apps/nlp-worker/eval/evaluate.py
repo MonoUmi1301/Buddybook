@@ -109,14 +109,40 @@ def evaluate(rows: list[dict], preds: list[str]) -> dict:
     }
 
 
-def run_model(model_path: str, rows: list[dict]) -> tuple[list[str], list[float]]:
+def raw_scores(model_path: str, rows: list[dict], cache_path: str | None) -> list[list[dict]]:
+    """ผลดิบของโมเดล (ความน่าจะเป็นทุกคลาส) ต่อประโยค — cache ไว้ได้ จูนกฎ target.py ซ้ำโดยไม่ต้องรันโมเดลใหม่"""
+    cache: dict = {}
+    if cache_path and os.path.exists(cache_path):
+        with open(cache_path, encoding="utf-8") as f:
+            cache = json.load(f)
+    key = os.path.abspath(model_path)
+    per_model = cache.setdefault(key, {})
+    missing = [r["text"] for r in rows if r["text"] not in per_model]
+    if missing:
+        from sentiment import SentimentAnalyzer
+
+        analyzer = SentimentAnalyzer(model_path)
+        analyzer.load()
+        for text in missing:
+            scores = analyzer._pipe(text, top_k=None)
+            if scores and isinstance(scores[0], list):
+                scores = scores[0]
+            per_model[text] = [{"label": s["label"], "score": float(s["score"])} for s in scores]
+        if cache_path:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(cache, f, ensure_ascii=False)
+    return [per_model[r["text"]] for r in rows]
+
+
+def run_model(model_path: str, rows: list[dict], use_target: bool = True, cache_path: str | None = None) -> tuple[list[str], list[float]]:
     from sentiment import SentimentAnalyzer
 
-    analyzer = SentimentAnalyzer(model_path)
-    analyzer.load()
     preds, polarities = [], []
-    for r in rows:
-        result = analyzer.analyze(r["text"])
+    for r, scores in zip(rows, raw_scores(model_path, rows, cache_path)):
+        result = SentimentAnalyzer.from_scores(scores)
+        if use_target:
+            names = [n for n in (r.get("characters") or "").split("|") if n]
+            result = SentimentAnalyzer.apply_target(r["text"], result, names)
         preds.append(result.label)
         polarities.append(result.polarity)
     return preds, polarities
@@ -198,6 +224,9 @@ def main() -> None:
     ap.add_argument("--test", default=os.path.join(os.path.dirname(__file__), "test_set.csv"))
     ap.add_argument("--train-data", help="novel_dataset.csv สำหรับเช็คประโยคซ้ำ")
     ap.add_argument("--out", help="ไฟล์รายงาน .md (ไม่ใส่ = พิมพ์ออกจอ)")
+    ap.add_argument("--no-target", action="store_true", help="วัดโมเดลล้วน ไม่ใช้กฎ target.py")
+    ap.add_argument("--compare-target", action="store_true", help="รายงานทั้งแบบไม่มีและมีกฎ target.py")
+    ap.add_argument("--cache", help="ไฟล์ json เก็บผลดิบของโมเดล (รันซ้ำเร็วขึ้น)")
     args = ap.parse_args()
 
     rows = read_csv(args.test)
@@ -211,11 +240,13 @@ def main() -> None:
 
     results = {}
     for path in args.model:
-        name = os.path.basename(os.path.normpath(path))
-        preds, polarity = run_model(path, rows)
-        results[name] = {"preds": preds, "polarity": polarity, "metrics": evaluate(rows, preds)}
-        m = results[name]["metrics"]
-        print(f"{name}: accuracy {pct(m['accuracy'])}  macro-F1 {m['macro_f1']:.3f}", file=sys.stderr)
+        base = os.path.basename(os.path.normpath(path))
+        variants = [(base, False), (f"{base}+target", True)] if args.compare_target else [(base if args.no_target else f"{base}+target", not args.no_target)]
+        for name, use_target in variants:
+            preds, polarity = run_model(path, rows, use_target, args.cache)
+            results[name] = {"preds": preds, "polarity": polarity, "metrics": evaluate(rows, preds)}
+            m = results[name]["metrics"]
+            print(f"{name}: accuracy {pct(m['accuracy'])}  macro-F1 {m['macro_f1']:.3f}", file=sys.stderr)
 
     report = render(args.test, rows, overlap, results)
     if args.out:
