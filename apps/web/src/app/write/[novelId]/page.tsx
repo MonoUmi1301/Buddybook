@@ -1,6 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { BackButton } from "@/components/ui/BackButton";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { NovelManagementPanel, type ManagedNovel, type ManagedChapter } from "@/components/writer/NovelManagementPanel";
@@ -41,14 +40,7 @@ export default async function NovelManagePage({ params }: { params: { novelId: s
       <Navbar user={user} />
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        {/* ปุ่มย้อนกลับไปหน้ารวมนิยายของฉัน (เดิมไม่มี ต้องกดผ่าน navbar) */}
-        <Link
-          href="/write"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-neutral-500 transition-colors hover:text-primary-500"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          นิยายของฉัน
-        </Link>
+        <BackButton href="/write" label="ผลงานของฉัน" className="-ml-1.5 mb-3" />
         <NovelManagementPanel novel={novel} chapters={chapters} tags={tags} />
       </main>
 

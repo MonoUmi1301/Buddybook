@@ -111,20 +111,22 @@ export async function sendPasswordResetEmail(to: string, resetLink: string): Pro
   });
 }
 
-/** ขอรีเซ็ตรหัสผ่านกับบัญชีที่สมัครผ่าน Google/Facebook/LINE (ไม่มีรหัสผ่านให้รีเซ็ต) — แจ้งทางอีเมลว่า
- *  ต้องเข้าสู่ระบบด้วยช่องทางไหน แทนการเงียบไปเฉย ๆ ส่งไปที่อีเมลเจ้าของบัญชีเท่านั้น หน้าเว็บจึงยังตอบ
- *  เหมือนกันทุกกรณี (ไม่เปิดเผยว่าอีเมลไหนมีบัญชี) */
-export async function sendOAuthLoginReminderEmail(to: string, providerLabel: string, loginLink: string): Promise<void> {
+const PROVIDER_LABEL: Record<string, string> = { google: "Google", facebook: "Facebook", line: "LINE", apple: "Apple" };
+
+/** ผลทดสอบ #6 — บัญชีที่สมัครด้วย Google/Facebook/LINE ไม่มีรหัสผ่าน กด "ลืมรหัสผ่าน" แล้วเดิมเงียบไป
+ *  ผู้ใช้รออีเมลที่ไม่มีวันมา — ส่งอีเมลบอกว่าให้เข้าสู่ระบบด้วยช่องทางไหนแทน (ไม่มีลิงก์ตั้งรหัส) */
+export async function sendOAuthSignInHintEmail(to: string, provider: string, loginUrl: string): Promise<void> {
+  const label = PROVIDER_LABEL[provider] ?? provider;
   await sendEmail({
     to,
-    subject: `บัญชีของคุณใช้การเข้าสู่ระบบด้วย ${providerLabel} — BuddyBook`,
+    subject: "วิธีเข้าสู่ระบบบัญชีของคุณ — BuddyBook",
     html: `
       <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
         <h2 style="color: #5B3A29;">บัญชีนี้ไม่ได้ใช้รหัสผ่าน</h2>
-        <p>มีคำขอตั้งรหัสผ่านใหม่สำหรับอีเมลนี้ แต่บัญชี BuddyBook ของคุณสมัครไว้ด้วย <b>${providerLabel}</b> จึงไม่มีรหัสผ่านให้ตั้งใหม่</p>
-        <p>กรุณาเข้าสู่ระบบโดยกดปุ่ม "เข้าสู่ระบบด้วย ${providerLabel}"</p>
+        <p>มีคนขอตั้งรหัสผ่านใหม่ให้อีเมลนี้ แต่บัญชี BuddyBook ของคุณสมัครด้วย <b>${label}</b> จึงไม่มีรหัสผ่านให้ตั้งใหม่</p>
+        <p>เข้าสู่ระบบได้โดยกดปุ่ม "เข้าสู่ระบบด้วย ${label}" ที่หน้าเข้าสู่ระบบ</p>
         <p style="margin: 24px 0;">
-          <a href="${loginLink}" style="background: #F0803C; color: white; padding: 12px 24px; border-radius: 999px; text-decoration: none; font-weight: bold;">ไปหน้าเข้าสู่ระบบ</a>
+          <a href="${loginUrl}" style="background: #F0803C; color: white; padding: 12px 24px; border-radius: 999px; text-decoration: none; font-weight: bold;">ไปหน้าเข้าสู่ระบบ</a>
         </p>
         <p style="color: #737373; font-size: 13px;">หากคุณไม่ได้เป็นผู้ขอ สามารถละเว้นอีเมลนี้ได้ บัญชีของคุณยังปลอดภัย</p>
       </div>

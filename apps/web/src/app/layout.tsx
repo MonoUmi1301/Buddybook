@@ -4,6 +4,7 @@ import { AuthFetchInterceptor } from "@/components/auth/AuthFetchInterceptor";
 import { Toaster } from "@/components/ui/Toaster";
 import { FaqChatButton } from "@/components/support/FaqChatButton";
 import "./fonts.css";
+import { NavigationTracker } from "@/components/layout/NavigationTracker";
 import "./globals.css";
 import "./gifts.css";
 
@@ -51,6 +52,7 @@ export default function RootLayout({
           <FaqChatButton />
         </ThemeProvider>
         <Toaster />
+        <NavigationTracker />
       </body>
     </html>
   );

@@ -55,7 +55,7 @@ export default async function ProfilePage({ params }: { params: { userId: string
         <Navbar user={user} />
         <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
           <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-            เชื่อมต่อ API Gateway ไม่ได้ตอนนี้ — ตรวจสอบว่า apps/api (Express) กำลังรันอยู่หรือไม่
+            ตอนนี้เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณารอสักครู่แล้วรีเฟรชหน้านี้อีกครั้ง
           </p>
         </main>
         <Footer />

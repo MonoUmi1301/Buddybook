@@ -1,5 +1,5 @@
-import { AuthForm } from "@/components/auth/AuthForm";
 import { redirect } from "next/navigation";
+import { AuthForm } from "@/components/auth/AuthForm";
 import { getCurrentUser } from "@/lib/api/session";
 
 /** ข้อความของ ?error= ที่ OAuth callback (api/v1/auth/oauth/[provider]/callback) ส่งกลับมา */
@@ -13,9 +13,9 @@ const oauthErrorMessages: Record<string, string> = {
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: { error?: string; two_factor?: string } }) {
-  // ล็อกอินอยู่แล้วไม่ต้องเห็นฟอร์มอีก — เช็คกับ API จริง (ไม่ใช่แค่มี cookie) กัน token ค้างของบัญชีที่ถูกลบ
+  // ผลทดสอบ #8 — เดิมเปิด /login ได้ทั้งที่ล็อกอินค้าง ถ้าล็อกอินช่องทางใหม่ไม่สำเร็จ ผู้ใช้ยังอยู่บัญชีเก่า
+  // โดยไม่รู้ตัว — คนที่ล็อกอินอยู่ให้ออกจากระบบก่อนถึงจะเปลี่ยนบัญชีได้
   if (await getCurrentUser()) redirect("/");
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 py-12">
       <AuthForm

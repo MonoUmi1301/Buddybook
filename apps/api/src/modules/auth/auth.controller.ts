@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import {
   requestRegistrationOtp,
@@ -102,13 +103,22 @@ const refreshSchema = z.object({
 export async function refresh(req: Request, res: Response) {
   const { refresh_token } = refreshSchema.parse(req.body);
 
+  let payload: ReturnType<typeof verifyRefreshToken>;
   try {
-    const payload = verifyRefreshToken(refresh_token);
-    const access_token = signAccessToken({ user_id: payload.user_id, role: payload.role });
-    res.status(200).json({ access_token });
+    payload = verifyRefreshToken(refresh_token);
   } catch {
     throw ApiError.unauthorized("Invalid or expired refresh token");
   }
+  // เดิมออก access token ใหม่จาก refresh token อย่างเดียว — บัญชีที่ถูกลบหรือถูกระงับจึงใช้ต่อได้อีก 30 วัน
+  // เช็คสถานะจริงทุกครั้งที่ต่ออายุ (ทุก ~15 นาทีต่อผู้ใช้ ไม่แพง) และใช้ role ปัจจุบันแทนค่าที่ฝังใน token
+  const user = await prisma.user.findUnique({
+    where: { user_id: payload.user_id },
+    select: { role: true, is_suspended: true, deleted_at: true },
+  });
+  if (!user || user.deleted_at) throw ApiError.unauthorized("Invalid or expired refresh token");
+  if (user.is_suspended) throw ApiError.forbidden("This account has been suspended");
+  const access_token = signAccessToken({ user_id: payload.user_id, role: user.role });
+  res.status(200).json({ access_token });
 }
 
 export async function logout(_req: Request, res: Response) {

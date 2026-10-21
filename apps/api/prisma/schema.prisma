@@ -241,6 +241,8 @@ model User {
   /// data dictionary เดิมไม่มีคอลัมน์นี้เลย บล็อกตอน login เท่านั้น (ไม่เช็คทุก request เพื่อไม่ให้
   /// เพิ่ม query ในทุก endpoint ที่ผ่าน requireAuth — access token อายุสั้น 15 นาทีอยู่แล้ว)
   is_suspended   Boolean        @default(false)
+  /// เพิ่มภายหลัง — ผู้ใช้ลบบัญชีเอง (DELETE /users/me): ข้อมูลระบุตัวตนถูกล้าง นิยายถูกย้ายลงถังขยะ token ใช้ต่อไม่ได้
+  deleted_at     DateTime?      @db.Timestamptz(6)
   /// เพิ่มภายหลัง (audit fix) — 2FA ผ่านแอป Authenticator (Google Authenticator/Authy ฯลฯ) แบบ
   /// TOTP (RFC 6238) เหมือน GitHub — เป็นฟีเจอร์ที่ผู้ใช้เปิดเองใน settings (ไม่บังคับทุกบัญชี)
   /// totp_secret เป็น null จนกว่าจะเปิดใช้งานสำเร็จ (ยืนยันรหัสจากแอปถูกต้องรอบแรกก่อน)

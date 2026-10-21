@@ -109,6 +109,8 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
         <TransactionHistory refreshKey={balance} />
 
         <WithdrawalSection onBalanceChange={setBalance} />
+
+        <TransactionHistory refreshKey={balance} />
       </main>
 
       {selectedPkg && <StripeCheckoutPanel pkg={selectedPkg} onClose={() => setSelectedPkg(null)} />}

@@ -59,12 +59,11 @@ export async function stripeWebhook(req: Request, res: Response) {
     throw ApiError.badRequest(`Invalid Stripe webhook signature: ${err instanceof Error ? err.message : "unknown"}`);
   }
 
-  // ที่เดียวในระบบที่เปลี่ยนสถานะ order และเติม coin — กฎสถานะอยู่ใน lib/payments/resolveStatus.ts
-  // (สำรอง: GET /wallet/topup/orders/:id/status ถาม Stripe เองถ้า webhook ยังไม่มา — ดู wallet.service.ts)
-  if (event.type.startsWith("checkout.session.")) {
-    const s = event.data.object as { id: string; status?: string | null; payment_status?: string | null };
-    console.log(`[stripe webhook] ${event.type} session=${s.id} status=${s.status} payment_status=${s.payment_status}`);
-  }
+  // log ทุก event ที่ผ่านลายเซ็น — ไว้เช็คว่า webhook มาถึงจริงไหม (ผลทดสอบ S4: ไม่มี log เลยหาสาเหตุไม่ได้)
+  console.info(`[stripe] webhook ${event.type} ${event.id}`);
+
+  // ทางหลักที่เปลี่ยนสถานะ order และเติม coin (สำรองด้วย reconcileWithStripe ตอนหน้า /wallet ถามสถานะ)
+  // กฎสถานะอยู่ใน lib/payments/resolveStatus.ts
   switch (event.type) {
     case "checkout.session.completed":
       // PromptPay ฯลฯ อาจ complete ทั้งที่ยัง unpaid → PENDING ต่อ รอ async_payment_succeeded/failed

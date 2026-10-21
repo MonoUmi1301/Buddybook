@@ -89,8 +89,8 @@ const deleteMeBodySchema = z.object({
  *  cascade ไว้ — ลบ user ที่เคยรีวิว/คอมเมนต์ที่ไหนจะชน FK constraint ทันที) แทนที่ด้วยการ
  *  "anonymize" ล้างข้อมูลระบุตัวตนทั้งหมดแต่คงแถวไว้ ตามที่เว็บใหญ่ ๆ ทำกัน (Reddit/Twitter
  *  แสดง "[deleted]" แทนชื่อเดิม) เพื่อไม่ให้รีวิว/คอมเมนต์ของคนอื่นที่พาดพิงถึง broken —
- *  ตรวจจับบัญชีที่ถูกลบแล้วด้วย password_hash=null AND oauth_id=null พร้อมกัน (สถานะที่เป็นไป
- *  ไม่ได้สำหรับบัญชีปกติ เพราะ register ต้องมีอย่างใดอย่างหนึ่งเสมอ) ไม่ต้องเพิ่มคอลัมน์ deleted_at ใหม่
+ *  บัญชีที่ถูกลบระบุด้วย users.deleted_at (เดิมใช้ password_hash/oauth ว่างทั้งคู่ ซึ่งขัด
+ *  chk_users_has_login_method จนลบบัญชีไม่ได้เลย — ดู migration 20261018090000_deleted_accounts)
  *  ฝั่ง Neo4j ลบ node เต็มรูปแบบได้เลยเพราะ INTERESTED_IN/READ เป็นข้อมูลส่วนตัวล้วน ๆ ไม่กระทบคนอื่น */
 export async function deleteMe(req: Request, res: Response) {
   const { password } = deleteMeBodySchema.parse(req.body);
@@ -108,41 +108,36 @@ export async function deleteMe(req: Request, res: Response) {
     if (!matches) throw ApiError.unauthorized("รหัสผ่านไม่ถูกต้อง");
   }
 
-  // เพิ่มภายหลัง — นิยายของบัญชีที่ลบต้องไม่โผล่ต่อในหน้าสาธารณะ (เดิมเปลี่ยนแค่ชื่อเป็น "ผู้ใช้ที่ถูกลบ"
-  // นิยายยังเผยแพร่อยู่) — ย้ายทุกเรื่องลงถังขยะแบบเดียวกับ deleteNovel (visibility=private + จำค่าเดิม)
-  // แล้ว scheduler purge-expired-trash ลบถาวรเมื่อครบ 30 วัน (เรื่องที่มีคนซื้อตอนไปแล้วจะถูกซ่อนไว้ ไม่ลบถาวร)
-  const now = new Date();
-  const ownNovels = await prisma.novel.findMany({
-    where: { author_id: user_id, deleted_at: null },
-    select: { novel_id: true, visibility: true },
-  });
-
-  await prisma.$transaction([
-    ...ownNovels.map((n) =>
-      prisma.novel.update({
-        where: { novel_id: n.novel_id },
-        data: { deleted_at: now, visibility_before_delete: n.visibility, visibility: "private", updated_at: now },
-      })
-    ),
-    prisma.user.update({
+  // นิยายของบัญชีที่ลบต้องหายจากเว็บด้วย (เดิมยังเผยแพร่อยู่ในชื่อ "ผู้ใช้ที่ถูกลบ_xxx" ไม่มีเจ้าของดูแล)
+  // ใช้ soft delete แบบเดียวกับนิยายที่นักเขียนลบเอง: ซ่อนทันที (private) แล้ว purge ลบถาวรตอนครบ 30 วัน
+  // (เรื่องที่มีคนซื้อตอนไว้จะถูกซ่อนแต่ไม่ถูก purge — ดู purgeExpiredNovels) ทำใน transaction เดียวกับ anonymize
+  const trashedNovels = await prisma.$transaction(async (tx) => {
+    const novels = await tx.$queryRaw<{ novel_id: string }[]>`
+      UPDATE novels
+         SET visibility_before_delete = visibility, visibility = 'private', deleted_at = now(), updated_at = now()
+       WHERE author_id = ${user_id}::uuid AND deleted_at IS NULL
+      RETURNING novel_id`;
+    await tx.user.update({
       where: { user_id },
       data: {
         username: `ผู้ใช้ที่ถูกลบ_${user_id.slice(0, 8)}`,
-        email: `deleted+${user_id}@buddybook.invalid`,
-        password_hash: null,
-        oauth_provider: null,
-        oauth_id: null,
-        avatar_url: null,
+      email: `deleted+${user_id}@buddybook.invalid`,
+      password_hash: null,
+      oauth_provider: null,
+      oauth_id: null,
+      avatar_url: null,
         bio: null,
-        updated_at: now,
+        deleted_at: new Date(),
+        updated_at: new Date(),
       },
-    }),
-  ]);
+    });
+    return novels;
+  });
 
-  for (const n of ownNovels) {
-    deleteNovelGraphNode(n.novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
-  }
   deleteUserGraphNode(user_id).catch((err) => console.error("Neo4j deleteUserGraphNode failed:", err));
+  for (const { novel_id } of trashedNovels) {
+    deleteNovelGraphNode(novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
+  }
 
   res.status(204).send();
 }

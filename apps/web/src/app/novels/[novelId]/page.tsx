@@ -82,7 +82,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
     return (
       <ErrorShell
         user={user}
-        message="เชื่อมต่อ API Gateway ไม่ได้ตอนนี้ — ตรวจสอบว่า apps/api (Express) กำลังรันอยู่หรือไม่"
+        message="ตอนนี้เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณารอสักครู่แล้วรีเฟรชหน้านี้อีกครั้ง"
       />
     );
   }
@@ -105,7 +105,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
 
   if (result.status >= 400 || !isNovelDetail(result.json)) {
     return (
-      <ErrorShell user={user} message={`เกิดข้อผิดพลาดขณะโหลดข้อมูลนิยาย (API Gateway ตอบกลับ status ${result.status})`} />
+      <ErrorShell user={user} message="โหลดข้อมูลนิยายไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" />
     );
   }
 
@@ -234,7 +234,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
         {/* แถบไล่สีอ่อนโทนแบรนด์ด้านบน — ให้หัวเรื่องไม่ลอยบนพื้นเรียบ ๆ */}
         <div className="bg-gradient-to-b from-primary-500/10 via-brand-tan/5 to-transparent">
           <div className="mx-auto max-w-7xl px-4 pb-2 pt-4 sm:px-6 lg:px-8">
-            <BackButton />
+            <BackButton href="/" useHistory />
           </div>
         </div>
 

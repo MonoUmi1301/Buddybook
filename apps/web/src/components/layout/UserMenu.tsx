@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { BookMarked, Coins, History, LogOut, Moon, PenSquare, Settings, BarChart3, Bell, LifeBuoy } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { useTheme } from "@/components/theme/ThemeProvider";
+import { toast } from "@/components/ui/Toaster";
 
 interface UserMenuUser {
   userId: string;
@@ -27,17 +27,24 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
   const [loggingOut, setLoggingOut] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const isDark = theme === "dark";
-  const router = useRouter();
   const { toggleTheme } = useTheme();
 
+  /** ผลทดสอบ #7 "ปุ่มออกจากระบบบางครั้งไม่ทำงาน" — เดิม router.push("/") + refresh ไม่ว่า request สำเร็จไหม:
+   *  (1) request ล้ม cookie ยังอยู่แต่ผู้ใช้คิดว่าออกแล้ว (2) อยู่หน้า "/" อยู่แล้ว push ไม่ทำอะไร และ client
+   *  router cache ยังแสดงสถานะล็อกอินเดิม — ตอนนี้เช็คผลก่อน แล้วโหลดหน้าใหม่ทั้งหน้า (ล้าง state ฝั่ง client ทั้งหมด) */
   async function handleLogout() {
     setLoggingOut(true);
     try {
-      await fetch("/api/v1/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-    } finally {
-      // โหลดหน้าใหม่ทั้งหน้าแทน router.push + refresh — ถ้าอยู่หน้าแรกอยู่แล้ว push("/") ไม่ทำอะไร
-      // และ client router cache อาจยังเรนเดอร์เมนูของผู้ใช้เดิมค้างไว้ (ปัญหา "กดออกจากระบบแล้วไม่ออก")
+      const res = await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) throw new Error(String(res.status));
       window.location.assign("/");
+    } catch {
+      setLoggingOut(false);
+      toast("ออกจากระบบไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง");
     }
   }
 
