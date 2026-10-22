@@ -52,6 +52,10 @@ IMMERSION_POLARITY = 0.5
 # คำชมฝีมือเขียน — อยู่ใน IMMERSION_WORDS เพื่อช่วยกฎพลิก แต่ตอนติดป้ายนับเป็น "งานเขียน" ไม่ใช่ "อินกับเรื่อง"
 WRITING_PRAISE_WORDS = ["เขียนเก่ง", "เขียนดี", "บรรยายดี"]
 
+# คำที่พูดถึงตัวงานเพิ่มเติม ใช้ตอนติดป้ายเท่านั้น — ไม่เพิ่มใน WORK_CRITICISM_WORDS เพราะกฎพลิก (v2) วัดผลไว้กับลิสต์เดิม
+# (เพิ่มแล้วตัวเลข v2 + กฎใน docs/evaluation.md จะเปลี่ยน)
+WORK_TAG_EXTRA_WORDS = ["คำซ้ำ", "ใช้คำซ้ำ", "ประโยคซ้ำ", "ตรวจทาน", "ตรวจคำ", "เรียบเรียง", "การเว้นวรรค", "ย่อหน้า"]
+
 # ป้ายเป้าหมายของความรู้สึก (ไม่เปลี่ยน label ของโมเดล) — เก็บลง comments/reviews.sentiment_target
 #   character = พูดถึงตัวละคร (ชื่อ/บทบาท/ยัย-ไอ้)   immersion = อินกับเหตุการณ์ในเรื่อง
 #   work      = พูดถึงตัวงานเขียน (ชมหรือติก็ได้)     None = ระบุไม่ได้
@@ -60,18 +64,25 @@ TARGET_IMMERSION = "immersion"
 TARGET_WORK = "work"
 
 
-def classify_target(text: str, character_names: list[str] | None = None) -> str | None:
-    """ความรู้สึกในข้อความพุ่งไปที่อะไร — ตัวละคร > อินกับเรื่อง > ตัวงาน
-    (ลำดับนี้วัดบน eval/test_set.csv แล้วจับคอมเมนต์ "อินกับเรื่อง" ได้มากที่สุด — ดู docs/evaluation.md)"""
+def classify_targets(text: str, character_names: list[str] | None = None) -> list[str]:
+    """ความรู้สึกในข้อความพุ่งไปที่อะไรบ้าง — ได้หลายป้าย เช่นรีวิวที่ทั้งชมนางเอกและติคำซ้ำ = [character, work]
+    เรียงตามลำดับ ตัวละคร, อินกับเรื่อง, ตัวงาน (ว่าง = ระบุไม่ได้)"""
+    tags: list[str] = []
     names = [n.strip() for n in (character_names or []) if n and len(n.strip()) >= 2]
     if _contains_any(text, names) or _contains_any(text, CHARACTER_ROLE_WORDS) or CHARACTER_PREFIX.search(text):
-        return TARGET_CHARACTER
+        tags.append(TARGET_CHARACTER)
     immersion = [w for w in IMMERSION_WORDS if w not in WRITING_PRAISE_WORDS]
     if _contains_any(text, immersion):
-        return TARGET_IMMERSION
-    if _contains_any(text, WORK_CRITICISM_WORDS) or _contains_any(text, WRITING_PRAISE_WORDS):
-        return TARGET_WORK
-    return None
+        tags.append(TARGET_IMMERSION)
+    if _contains_any(text, WORK_CRITICISM_WORDS + WORK_TAG_EXTRA_WORDS + WRITING_PRAISE_WORDS):
+        tags.append(TARGET_WORK)
+    return tags
+
+
+def classify_target(text: str, character_names: list[str] | None = None) -> str | None:
+    """ป้ายหลักป้ายเดียว (ตัวแรกของ classify_targets) — คงไว้ให้โค้ด/สคริปต์วัดผลรุ่นเดิม"""
+    tags = classify_targets(text, character_names)
+    return tags[0] if tags else None
 
 
 @dataclass

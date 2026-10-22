@@ -109,7 +109,7 @@ async function loadPostgres(prisma: PrismaClient) {
     prisma.novelTag.findMany({ select: { novel_id: true, tag: { select: { name: true } } } }),
     prisma.userInterest.findMany({ select: { user_id: true, tag: { select: { name: true } } } }),
     prisma.review.findMany({
-      select: { user_id: true, novel_id: true, rating: true, sentiment_polarity: true, created_at: true },
+      select: { user_id: true, novel_id: true, rating: true, blended_polarity: true, created_at: true },
     }),
     prisma.userLibrary.findMany({ select: { user_id: true, novel_id: true } }),
     prisma.readingProgress.findMany({ select: { user_id: true, novel_id: true } }),
@@ -137,7 +137,7 @@ async function loadPostgres(prisma: PrismaClient) {
     user_id: r.user_id,
     novel_id: r.novel_id,
     rating: r.rating,
-    sentiment: r.sentiment_polarity,
+    sentiment: r.blended_polarity, // ขั้วหลังผสมดาว — ค่าเดียวกับที่ระบบแนะนำใช้
     t: r.created_at.getTime(),
   }));
 
@@ -149,7 +149,7 @@ async function loadPostgres(prisma: PrismaClient) {
     return edgeParts.get(key) ?? edgeParts.set(key, { review: null, comments: [] }).get(key)!;
   };
   for (const p of progress) part(p.user_id, p.novel_id);
-  for (const r of reviews) part(r.user_id, r.novel_id).review = r.sentiment_polarity;
+  for (const r of reviews) part(r.user_id, r.novel_id).review = r.blended_polarity;
   for (const c of comments) part(c.user_id, c.chapter.novel_id).comments.push(c.sentiment_polarity as number);
   const readEdges = new Map<string, number | null>();
   for (const [key, v] of edgeParts) {

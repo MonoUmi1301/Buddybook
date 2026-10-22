@@ -4,15 +4,18 @@
 - Frontend: Next.js (apps/web) - Port 3000
 - Backend: Express (apps/api) - Port 4000
 - Database: PostgreSQL + Prisma ORM + Neo4j
-  - Dev DB the app actually uses: native Windows Postgres at `localhost:5432/buddybook` (`apps/api/.env`; the Docker api container reaches it via `host.docker.internal:5432`).
-  - Port 5525 is the Docker `buddybook-postgres-1` container — no longer used by the app (holds only old mock/demo data).
+  - Dev DB the app actually uses: native Windows PostgreSQL 18 at `localhost:5525/buddybook`, user `postgres` (`apps/api/.env`). PostgreSQL 17 on port 1301 is a different server (different password) — the app does not use it. The Docker `postgres` service also maps 5525 — don't run both.
+  - `npm run db:check` shows which DB the app uses and what each local Postgres holds; `npm run db:backup` dumps it to `backups/` (gitignored).
+  - Never run `prisma migrate dev` / `migrate reset` / `db push --force-reset` against the dev DB without a backup — on 2026-10-22 an `npm run prisma:migrate` (= `migrate dev`) most likely reset it and the data was lost. Apply migrations with `npx prisma migrate deploy`. `npm run prisma:migrate` now backs up first.
   - Never pass the dev `DATABASE_URL` as `--shadow-database-url`; Prisma resets the shadow DB.
 - Styling: Tailwind CSS
 
 ## Common Commands
 - Setup dependencies: `npm install`
 - Prisma generate: `npm run prisma:generate`
-- Prisma migrate: `npm run prisma:migrate`
+- Apply migrations (safe, never deletes data): `cd apps/api && npx prisma migrate deploy`
+- Create a new migration (dev only, backs up first): `npm run prisma:migrate`
+- Back up the dev DB: `npm run db:backup`
 - Run Dev (API): `cd apps/api && npm run dev`
 - Run Dev (Web): `cd apps/web && npm run dev`
 
@@ -22,7 +25,7 @@
 - Onboarding: Mandatory 3-step wizard (No skip) writing to user preferences.
 - Background jobs: `apps/api/src/lib/scheduler.ts` runs scheduled-chapter publishing, trash purge and Neo4j resync in-process (`SCHEDULER_ENABLED`, off under `NODE_ENV=test`).
 - Money: every wallet write goes through `lockWallets` + `getBalance` inside one `$transaction` (see gifts, chapter purchases, withdrawals).
-- Sentiment: `sentiment_score` is model confidence (0..1); recommendations use `sentiment_polarity` (−1..1, `lib/sentiment.ts`). Neo4j `READ.sentiment_score` holds the combined polarity.
+- Sentiment: `sentiment_score` is model confidence (0..1); `sentiment_polarity` (−1..1) is the raw text polarity. Reviews also store `blended_polarity` (text + stars, `blendReviewPolarity` in `lib/sentiment.ts`) — recommendations use that for reviews and raw polarity for comments. Neo4j `READ.sentiment_score` holds the combined polarity. Target tags are an array `sentiment_targets` (character/immersion/work); writers only see the positive side, the rest is admin-only.
 - Recommendations: candidates → `ranking.ts` (`relevanceScore` + `rerankLongTail`); never use views as a positive signal. Validate changes with `npm run eval:recs`.
 - Deleting a novel is a 30-day soft delete (`deleted_at`, visibility forced to private); owner-scoped queries must filter `deleted_at: null`.
 - Chapter autosave locks the chapter row (`FOR UPDATE`) to number versions; editor keeps a localStorage draft (`lib/draftStore.ts`).

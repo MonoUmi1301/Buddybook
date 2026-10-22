@@ -20,6 +20,8 @@ const sentimentCallbackBodySchema = z.object({
   sentiment_score: z.number().min(0).max(1),
   sentiment_polarity: z.number().min(-1).max(1).optional(),
   // ป้ายเป้าหมาย (worker รุ่นใหม่) — ไม่ส่งมา = ไม่รู้ (null)
+  sentiment_targets: z.array(z.enum(["character", "immersion", "work"])).max(3).optional(),
+  // worker รุ่นเก่าส่งป้ายเดียว
   sentiment_target: z.enum(["character", "immersion", "work"]).nullable().optional(),
 });
 

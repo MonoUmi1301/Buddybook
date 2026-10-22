@@ -153,7 +153,7 @@ export function ReaderContent({
           <ChapterUnlockPanel {...paywall} onUnlocked={setUnlockedContent} />
         ) : (
           <article
-            className="prose prose-neutral mt-6 max-w-none transition-colors"
+            className="chapter-indent prose prose-neutral mt-6 max-w-none transition-colors"
             style={{
               fontFamily: activeFont.cssVar,
               fontSize: `${activeSize.px}px`,

@@ -8,7 +8,7 @@ import unittest
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, "..", "src"))
 
-from target import classify_target  # noqa: E402
+from target import classify_target, classify_targets  # noqa: E402
 
 
 class ClassifyTargetTest(unittest.TestCase):
@@ -24,6 +24,10 @@ class ClassifyTargetTest(unittest.TestCase):
         self.assertEqual(classify_target("พิมพ์ผิดเยอะ อ่านแล้วสะดุด"), "work")
         # คำชมฝีมือเขียนเป็นเรื่องตัวงาน ไม่ใช่การอินกับเรื่อง
         self.assertEqual(classify_target("ไรท์เขียนเก่งมาก"), "work")
+
+    def test_mixed_review_gets_several_tags(self):
+        text = "โดยรวมถือว่าดี นางเอกก็ปกติไม่งี่เง่า ฉลาด แต่คำซ้ำเยอะ ทำให้อ่านแล้วหงุดหงิด ถ้าปรับปรุงตรวจทานคำเยอะ ๆ ก็จะดีมากเลย"
+        self.assertEqual(classify_targets(text), ["character", "work"])
 
     def test_unknown(self):
         self.assertIsNone(classify_target("ตอนหน้าลงวันไหนคะ"))

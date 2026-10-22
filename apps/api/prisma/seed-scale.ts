@@ -408,25 +408,29 @@ function report(d: ReturnType<typeof generate>) {
 }
 
 type Mood = "pos" | "neutral" | "neg";
-type Target = "character" | "immersion" | "work" | null;
+type Target = ("character" | "immersion" | "work")[];
 // ป้ายเป้าหมายแบบเดียวกับ nlp-worker/src/target.py (ย่อ) — ข้อมูลจำลองเท่านั้น ผลจริงมาจาก worker
 const CHARACTER_CUES = ["พระเอก", "นางเอก", "ตัวร้าย", "ตัวละคร", "สองคนนี้"];
 const IMMERSION_CUES = ["ร้องไห้", "ใจสั่น", "อบอุ่นหัวใจ", "สารภาพ", "ไม่ง่วง", "มันส์", "เศร้า", "รำคาญนางเอก"];
 const WORK_CUES = ["ยืด", "เดาทาง", "ข้ามไป", "บรรยาย", "เขียนดี", "แบน", "สั้นไป"];
 function targetOf(text: string, names: string[]): Target {
-  if (names.some((n) => text.includes(n)) || CHARACTER_CUES.some((w) => text.includes(w))) return "character";
-  if (IMMERSION_CUES.some((w) => text.includes(w))) return "immersion";
-  if (WORK_CUES.some((w) => text.includes(w))) return "work";
-  return null;
+  const tags: Target = [];
+  if (names.some((n) => text.includes(n)) || CHARACTER_CUES.some((w) => text.includes(w))) tags.push("character");
+  if (IMMERSION_CUES.some((w) => text.includes(w))) tags.push("immersion");
+  if (WORK_CUES.some((w) => text.includes(w))) tags.push("work");
+  return tags;
 }
 const CHARACTER_PRAISE = ["น่ารักมาก", "เท่สุด ๆ", "คือที่สุดแล้ว", "ทำใจสลายเลย", "ต้องได้ดีนะ"];
 
 /** sentiment แบบเดียวกับที่ NLP worker ส่งกลับ (label + ความมั่นใจ + ขั้ว −1..1 + ป้ายเป้าหมาย) — เว้นว่างถ้าใช้ --no-sentiment */
-function sentimentFor(mood: Mood, target: Target = null) {
+function sentimentFor(mood: Mood, target: Target = [], rating: number | null = null) {
   if (!WITH_SENTIMENT) return {};
   const score = Number(clamp(0.72 + 0.12 * normal(), 0.4, 0.99).toFixed(3));
   const polarity = mood === "pos" ? score : mood === "neg" ? -score : Number(clamp(0.1 * normal(), -0.3, 0.3).toFixed(3));
-  return { sentiment_label: mood, sentiment_score: score, sentiment_polarity: Number(polarity.toFixed(3)), sentiment_target: target };
+  const raw = Number(polarity.toFixed(3));
+  // รีวิวมีค่าหลังผสมดาวด้วย (สูตรเดียวกับ blendReviewPolarity) — คอมเมนต์ไม่มีคอลัมน์นี้
+  const blended = rating === null ? {} : { blended_polarity: Number((0.5 * raw + 0.5 * ((rating - 3) / 2)).toFixed(3)) };
+  return { sentiment_label: mood, sentiment_score: score, sentiment_polarity: raw, sentiment_targets: target, ...blended };
 }
 
 /** บัญชีแนะนำสำหรับลองล็อกอิน — เลือกจากข้อมูลจริงที่เพิ่งสร้าง */
@@ -526,7 +530,7 @@ async function insert(d: ReturnType<typeof generate>) {
       const r = x.rating as number;
       const text = pick(REVIEW_TEXT[r]);
       return { user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, rating: r, comment_text: text,
-        ...sentimentFor(r >= 4 ? "pos" : r === 3 ? "neutral" : "neg", targetOf(text, [])),
+        ...sentimentFor(r >= 4 ? "pos" : r === 3 ? "neutral" : "neg", targetOf(text, []), r),
         is_anonymous: rand() < 0.05, created_at: at(Math.min(CFG.days - 0.01, x.t + 1 + rand() * 10)) };
     }), (b) => prisma.review.createMany({ data: b, skipDuplicates: true }));
     // คอมเมนต์ 1-3 ตอนต่อคน อารมณ์ตามความชอบเรื่อง (มีสุ่มสลับบ้าง) + นักเขียนตอบกลับบางส่วน
@@ -556,7 +560,7 @@ async function insert(d: ReturnType<typeof generate>) {
           comments.push({ comment_id: randomUUID(), chapter_id: comments[comments.length - 1].chapter_id, user_id: N[x.novel].author_id,
             parent_comment_id: id, content: pick(AUTHOR_REPLY), created_at: new Date(Math.min(NOW - 60_000, created.getTime() + rand() * 2 * DAY)) });
           commentMood.push("pos");
-          commentTarget.push(null);
+          commentTarget.push([]);
         }
       }
     }

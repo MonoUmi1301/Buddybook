@@ -200,14 +200,14 @@ const SENTIMENT_WEEKS = 8;
 
 /** ข้อความของผู้อ่าน (คอมเมนต์ + รีวิวที่มีข้อความ) ทั้งหมด — ใช้ซ้ำในทุก query ด้านล่าง */
 const readerFeedback = Prisma.sql`
-  SELECT n.novel_id, c.sentiment_label::text AS label, c.sentiment_target::text AS target,
+  SELECT n.novel_id, c.sentiment_label::text AS label, c.sentiment_targets::text[] AS targets,
          c.sentiment_polarity AS polarity, c.created_at
     FROM comments c
     JOIN chapters ch ON ch.chapter_id = c.chapter_id
     JOIN novels n ON n.novel_id = ch.novel_id
    WHERE c.user_id <> n.author_id AND c.content <> ''
   UNION ALL
-  SELECT n.novel_id, r.sentiment_label::text, r.sentiment_target::text, r.sentiment_polarity, r.created_at
+  SELECT n.novel_id, r.sentiment_label::text, r.sentiment_targets::text[], coalesce(r.blended_polarity, r.sentiment_polarity), r.created_at
     FROM reviews r
     JOIN novels n ON n.novel_id = r.novel_id
    WHERE r.user_id <> n.author_id AND coalesce(r.comment_text, '') <> ''`;
@@ -220,11 +220,29 @@ const round2 = (v: unknown): number | null => {
 
 export async function getSentimentOverview() {
   const since = new Date(Date.now() - SENTIMENT_WEEKS * 7 * 24 * 60 * 60 * 1000);
-  const [groups, weeks, novels] = await Promise.all([
-    prisma.$queryRaw<{ label: string | null; target: string | null; n: number; polarity_sum: number | null }[]>`
-      SELECT label, target, count(*)::int AS n, sum(polarity)::float AS polarity_sum
+  const [groups, targetGroups, byRating, weeks, novels] = await Promise.all([
+    prisma.$queryRaw<{ label: string | null; n: number; polarity_sum: number | null }[]>`
+      SELECT label, count(*)::int AS n, sum(polarity)::float AS polarity_sum
         FROM (${readerFeedback}) f
-       GROUP BY label, target`,
+       GROUP BY label`,
+    // ข้อความหนึ่งมีได้หลายป้าย — นับแยกทุกป้าย (ผลรวมแถวนี้จึงมากกว่าจำนวนข้อความได้) ไม่มีป้าย = none
+    prisma.$queryRaw<{ label: string; target: string; n: number }[]>`
+      SELECT f.label, coalesce(t.tag, 'none') AS target, count(*)::int AS n
+        FROM (${readerFeedback}) f
+        LEFT JOIN LATERAL unnest(f.targets) AS t(tag) ON true
+       WHERE f.label IS NOT NULL
+       GROUP BY f.label, coalesce(t.tag, 'none')`,
+    // รีวิวแยกตามดาว: ค่าดิบจากโมเดล เทียบกับค่าหลังผสมดาว (ตารางสำหรับรายงาน)
+    prisma.$queryRaw<{ rating: number | null; n: number; pos: number; neutral: number; neg: number; raw: number | null; blended: number | null }[]>`
+      SELECT r.rating::int AS rating, count(*)::int AS n,
+             count(*) FILTER (WHERE r.sentiment_label = 'pos')::int AS pos,
+             count(*) FILTER (WHERE r.sentiment_label = 'neutral')::int AS neutral,
+             count(*) FILTER (WHERE r.sentiment_label = 'neg')::int AS neg,
+             avg(r.sentiment_polarity)::float AS raw, avg(r.blended_polarity)::float AS blended
+        FROM reviews r
+        JOIN novels n ON n.novel_id = r.novel_id
+       WHERE r.user_id <> n.author_id AND r.sentiment_polarity IS NOT NULL
+       GROUP BY r.rating ORDER BY r.rating DESC NULLS LAST`,
     prisma.$queryRaw<{ week_start: Date; n: number; neg: number; avg_polarity: number | null }[]>`
       SELECT date_trunc('week', created_at AT TIME ZONE 'Asia/Bangkok')::date AS week_start,
              count(*)::int AS n, count(*) FILTER (WHERE label = 'neg')::int AS neg, avg(polarity)::float AS avg_polarity
@@ -238,7 +256,7 @@ export async function getSentimentOverview() {
       SELECT f.novel_id, n.title, coalesce(u.pen_name, u.username) AS author,
              count(*)::int AS analysed,
              count(*) FILTER (WHERE f.label = 'neg')::int AS neg,
-             count(*) FILTER (WHERE f.label = 'neg' AND f.target = 'work')::int AS work_neg,
+             count(*) FILTER (WHERE f.label = 'neg' AND 'work' = ANY(f.targets))::int AS work_neg,
              avg(f.polarity)::float AS avg_polarity
         FROM (${readerFeedback}) f
         JOIN novels n ON n.novel_id = f.novel_id
@@ -264,16 +282,28 @@ export async function getSentimentOverview() {
     counts[label] += n;
     analysed += n;
     polaritySum += Number(g.polarity_sum ?? 0);
-    const key = g.target ?? "none";
-    targets[key] ??= { pos: 0, neutral: 0, neg: 0 };
-    targets[key][label] += n;
+  }
+  for (const g of targetGroups) {
+    targets[g.target] ??= { pos: 0, neutral: 0, neg: 0 };
+    targets[g.target][g.label as "pos" | "neutral" | "neg"] += Number(g.n);
   }
 
   return {
     counts,
     avg_polarity: analysed ? round2(polaritySum / analysed) : null,
-    /** ป้ายเป้าหมาย × ความรู้สึก — character / immersion / work / none (ยังไม่มีป้าย หรือระบุไม่ได้) */
+    /** ป้ายเป้าหมาย × ความรู้สึก — character / immersion / work / none (ยังไม่มีป้าย หรือระบุไม่ได้)
+     *  ข้อความที่มีหลายป้ายนับในทุกป้ายของมัน */
     targets,
+    /** รีวิวแยกตามดาว — raw = ค่าเฉลี่ยขั้วจากข้อความอย่างเดียว, blended = หลังผสมดาว (ค่าที่ระบบแนะนำใช้) */
+    reviews_by_rating: byRating.map((r) => ({
+      rating: r.rating === null ? null : Number(r.rating),
+      count: Number(r.n),
+      pos: Number(r.pos),
+      neutral: Number(r.neutral),
+      neg: Number(r.neg),
+      avg_raw_polarity: round2(r.raw),
+      avg_blended_polarity: round2(r.blended),
+    })),
     weekly: weeks.map((w) => ({
       week_start: w.week_start.toISOString().slice(0, 10),
       count: Number(w.n),
