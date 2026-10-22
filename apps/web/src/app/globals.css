@@ -101,3 +101,15 @@
   border-top-right-radius: 0.5rem;
   box-shadow: 0 1px 0 rgb(0 0 0 / 0.04);
 }
+
+/* เส้นคั่นฉาก (ปุ่มเส้นคั่นใน editor → <hr class="scene-break">) — ใช้สีตัวอักษร จึงเข้ากับธีมมืด/ซีเปียของหน้าอ่าน
+   ย่อหน้าแรกหลังเส้นคั่นไม่ย่อหน้า (แบบหนังสือ) */
+.chapter-indent hr {
+  border: 0;
+  border-top: 1px solid currentColor;
+  opacity: 0.35;
+  margin: 1.5em 0;
+}
+.chapter-indent hr + p {
+  text-indent: 0;
+}

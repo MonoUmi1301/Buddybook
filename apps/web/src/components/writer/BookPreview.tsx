@@ -104,6 +104,8 @@ const CONTENT_CSS = `
 .bp-content s { text-decoration: line-through; }
 .bp-content a { color: inherit; text-decoration: underline; }
 .bp-content img { display: block; max-width: 100%; height: auto; margin: 0.5em auto; }
+.bp-content hr { border: 0; border-top: 1px solid currentColor; opacity: 0.35; margin: 1em 0; }
+.bp-content hr + p { text-indent: 0; }
 .bp-content .bp-li { padding-left: 1.4em; text-indent: -1.1em; }
 .bp-content .ql-align-center { text-align: center; }
 .bp-content .ql-align-right { text-align: right; }
@@ -126,10 +128,10 @@ function segmentText(text: string): string[] {
 
 const ALLOWED_TAGS = new Set([
   "P", "BR", "STRONG", "B", "EM", "I", "U", "S", "SPAN", "A", "SUB", "SUP", "CODE", "PRE",
-  "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "IMG", "UL", "OL", "LI",
+  "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "IMG", "UL", "OL", "LI", "HR",
 ]);
 const DROP_TAGS = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "FORM", "INPUT", "BUTTON", "TEXTAREA", "SELECT"]);
-const BLOCK_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "PRE"]);
+const BLOCK_TAGS = new Set(["P", "H1", "H2", "H3", "H4", "H5", "H6", "BLOCKQUOTE", "PRE", "HR"]);
 
 /** กรอง HTML ของเนื้อหาให้เหลือแท็กจัดรูปแบบที่รู้จัก (ตัด script / event handler / style ออก) */
 function sanitize(root: Element) {
