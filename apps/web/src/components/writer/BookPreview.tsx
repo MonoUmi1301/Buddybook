@@ -90,7 +90,9 @@ const headingStyle: CSSProperties = { fontSize: "1.35em", fontWeight: 700, lineH
 // สไตล์ของเนื้อหา (HTML จาก Quill) — ใช้คลาสเดียวกันทั้งกล่องวัดและหน้ากระดาษจริง ไม่งั้นแบ่งหน้าเพี้ยน
 const CONTENT_CSS = `
 .bp-content { display: flow-root; overflow-wrap: anywhere; }
-.bp-content p { margin: 0; }
+.bp-content p { margin: 0; text-indent: 2em; }
+.bp-content p.ql-align-center, .bp-content p.ql-align-right, .bp-content p.bp-cont,
+.bp-content :is(h1, h2, h3, h4, h5, h6) + p, .bp-content blockquote p { text-indent: 0; }
 .bp-content h1 { font-size: 1.6em; font-weight: 700; line-height: 1.4; margin: 0.6em 0; }
 .bp-content h2 { font-size: 1.35em; font-weight: 700; line-height: 1.4; margin: 0.6em 0; }
 .bp-content h3, .bp-content h4, .bp-content h5, .bp-content h6 { font-size: 1.15em; font-weight: 700; margin: 0.5em 0; }
@@ -310,7 +312,12 @@ function paginate(measure: HTMLDivElement, layout: Layout, chapters: { heading: 
       if (lo > 0) {
         page.blocks.push(sliceBlock(block, 0, offsets[lo]).outerHTML);
         const rest = text.slice(offsets[lo]);
-        if (rest.trim()) queue.unshift(sliceBlock(block, offsets[lo] + (rest.length - rest.trimStart().length), text.length));
+        if (rest.trim()) {
+          // ส่วนที่ยกไปหน้าถัดไปเป็นย่อหน้าเดิมที่ต่อมา — ไม่ย่อหน้าบรรทัดแรกซ้ำ
+          const cont = sliceBlock(block, offsets[lo] + (rest.length - rest.trimStart().length), text.length);
+          cont.classList.add("bp-cont");
+          queue.unshift(cont);
+        }
       } else {
         queue.unshift(block);
       }

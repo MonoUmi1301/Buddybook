@@ -63,3 +63,17 @@
     scrollbar-width: none;
   }
 }
+
+/* ย่อหน้าบรรทัดแรกแบบนิยายไทย — หน้าอ่าน (ปิดได้ในเมนู Aa) และ editor ของนักเขียน
+   เป็นแค่การแสดงผล เนื้อหาใน DB ไม่มีช่องว่างเพิ่ม ; ย่อหน้าที่จัดกลาง/ขวา ย่อหน้าแรกหลังหัวข้อ คำพูดยกมา ไม่ย่อ
+   (ตัวอย่างหน้าหนังสือ BookPreview ใช้กฎเดียวกันใน CONTENT_CSS ของตัวเอง) */
+.chapter-indent p {
+  text-indent: 2em;
+}
+.chapter-indent p.ql-align-center,
+.chapter-indent p.ql-align-right,
+.chapter-indent :is(h1, h2, h3, h4, h5, h6) + p,
+.chapter-indent blockquote p,
+.chapter-indent li p {
+  text-indent: 0;
+}

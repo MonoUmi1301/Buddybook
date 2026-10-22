@@ -35,7 +35,8 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
     // toolbar จะไปค้างใน parent — พอ remount (เช่นกด "กู้คืนฉบับในเครื่อง" ที่เปลี่ยน key) toolbar เก่า
     // ไม่ถูกลบ เลยขึ้นซ้ำ 2 แถว จึงสร้าง div ให้ Quill เองภายใน wrapper แล้วล้างทิ้งทั้งหมดตอน unmount
     const editorEl = document.createElement("div");
-    editorEl.className = "min-h-[400px] bg-white";
+    // chapter-indent: ย่อหน้าบรรทัดแรกให้เหมือนหน้าอ่าน (globals.css) — แค่การแสดงผล ไม่ใส่ช่องว่างลงในเนื้อหา
+    editorEl.className = "chapter-indent min-h-[400px] bg-white";
     wrapper.appendChild(editorEl);
 
     const quill = new Quill(editorEl, {

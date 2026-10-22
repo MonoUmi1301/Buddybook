@@ -16,9 +16,11 @@ interface ReaderPrefs {
   fontFamily: FontFamily;
   fontSize: FontSize;
   theme: ReaderTheme;
+  /** ย่อหน้าบรรทัดแรกแบบนิยายไทย */
+  indent: boolean;
 }
 
-const DEFAULT_PREFS: ReaderPrefs = { fontFamily: "sans", fontSize: "md", theme: "light" };
+const DEFAULT_PREFS: ReaderPrefs = { fontFamily: "sans", fontSize: "md", theme: "light", indent: true };
 const STORAGE_KEY = "bb_reader_prefs";
 
 const fontFamilyOptions: { value: FontFamily; label: string; cssVar: string }[] = [
@@ -57,6 +59,7 @@ function loadPrefs(): ReaderPrefs {
       fontFamily: fontFamilyOptions.some((o) => o.value === parsed.fontFamily) ? parsed.fontFamily! : DEFAULT_PREFS.fontFamily,
       fontSize: fontSizeOptions.some((o) => o.value === parsed.fontSize) ? parsed.fontSize! : DEFAULT_PREFS.fontSize,
       theme: themeOptions.some((o) => o.value === parsed.theme) ? parsed.theme! : DEFAULT_PREFS.theme,
+      indent: typeof parsed.indent === "boolean" ? parsed.indent : DEFAULT_PREFS.indent,
     };
   } catch {
     return DEFAULT_PREFS;
@@ -153,7 +156,7 @@ export function ReaderContent({
           <ChapterUnlockPanel {...paywall} onUnlocked={setUnlockedContent} />
         ) : (
           <article
-            className="prose prose-neutral mt-6 max-w-none transition-colors"
+            className={cn("prose prose-neutral mt-6 max-w-none transition-colors", prefs.indent && "chapter-indent")}
             style={{
               fontFamily: activeFont.cssVar,
               fontSize: `${activeSize.px}px`,
@@ -286,6 +289,23 @@ export function ReaderContent({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-neutral-500">ย่อหน้าบรรทัดแรก</p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={prefs.indent}
+              aria-label="ย่อหน้าบรรทัดแรก"
+              onClick={() => update({ indent: !prefs.indent })}
+              className={cn(
+                "flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors",
+                prefs.indent ? "justify-end bg-primary-500" : "justify-start bg-neutral-300"
+              )}
+            >
+              <span className="block h-5 w-5 rounded-full bg-white shadow" />
+            </button>
           </div>
         </div>
       )}
