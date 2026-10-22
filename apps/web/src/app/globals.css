@@ -78,7 +78,20 @@
   text-indent: 0;
 }
 
-/* แถบเครื่องมือของ editor เขียนตอน (Quill) ติดขอบบนจอตอนเลื่อน — หน้าเขียนตอนไม่มี navbar จึงติดที่ top 0 */
+/* editor เขียนตอน (Quill): กล่องเนื้อหาเลื่อนขึ้นลงในตัวเอง (สูงสุด 70% ของจอ) แถบเครื่องมือจึงอยู่บนกล่องเสมอ
+   ไม่ต้องเลื่อนทั้งหน้ากลับขึ้นไปหา ; ตัวอักษร/ระยะบรรทัดเท่าหน้าอ่าน (1.8) ให้นักเขียนเห็นหน้าตาใกล้ของจริง */
+.quill-sticky .ql-container.ql-snow {
+  max-height: 70vh;
+  overflow-y: auto;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+.quill-sticky .ql-editor {
+  font-family: var(--font-ibm-plex-sans-thai), sans-serif;
+  font-size: 16px;
+  line-height: 1.8;
+}
+/* แถบเครื่องมือติดขอบบนจอด้วย เผื่อเลื่อนทั้งหน้าลงไปส่วนล่างของฟอร์ม — หน้าเขียนตอนไม่มี navbar จึงติดที่ top 0 */
 .quill-sticky .ql-toolbar.ql-snow {
   position: sticky;
   top: 0;

@@ -157,6 +157,8 @@ export function ReaderContent({
             style={{
               fontFamily: activeFont.cssVar,
               fontSize: `${activeSize.px}px`,
+              // ระยะบรรทัดเท่ากับ editor และตัวอย่างหน้าหนังสือ (สระ/วรรณยุกต์ไทยซ้อนสูง ระยะ 1.5 ดูอึดอัด)
+              lineHeight: 1.8,
               color: activeTheme.text,
             }}
             dangerouslySetInnerHTML={{ __html: unlockedContent ?? content }}
