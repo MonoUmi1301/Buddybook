@@ -5,6 +5,21 @@ import Quill from "quill";
 import "quill/dist/quill.snow.css";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 
+// เส้นคั่นฉาก (เปลี่ยน/จบเหตุการณ์) — Quill ไม่มีให้ในตัว จึงลงทะเบียน <hr class="scene-break"> เป็น block embed
+// ทำครั้งเดียวตอนโหลดโมดูล (ฝั่ง client เท่านั้น — ไฟล์นี้ถูก dynamic import แบบ ssr: false)
+const BlockEmbed = Quill.import("blots/block/embed") as unknown as { new (...args: unknown[]): object };
+class SceneBreak extends BlockEmbed {
+  static blotName = "divider";
+  static tagName = "HR";
+  static className = "scene-break";
+}
+Quill.register(SceneBreak as never, true);
+const icons = Quill.import("ui/icons") as Record<string, string>;
+icons.divider =
+  '<svg viewBox="0 0 18 18"><line class="ql-stroke" x1="2" x2="16" y1="9" y2="9"></line>' +
+  '<line class="ql-stroke ql-thin" x1="6" x2="12" y1="4" y2="4"></line>' +
+  '<line class="ql-stroke ql-thin" x1="6" x2="12" y1="14" y2="14"></line></svg>';
+
 interface QuillEditorProps {
   defaultValue?: string;
   onChange?: (html: string) => void;
@@ -52,10 +67,30 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
             [{ indent: "-1" }, { indent: "+1" }],
             [{ align: [] }],
             [{ color: [] }, { background: [] }],
+            ["divider"],
             ["link", "image", "video"],
             ["clean"],
           ],
           handlers: {
+            // แทรกเส้นคั่นฉากใต้ย่อหน้าที่เคอร์เซอร์อยู่ (ไม่ตัดกลางย่อหน้า) แล้วย้ายเคอร์เซอร์ไปบรรทัดว่างใต้เส้น
+            // ให้เขียนฉากใหม่ต่อได้ทันที — ถ้าอยู่บนบรรทัดว่าง เส้นจะขึ้นแทนที่บรรทัดนั้นแล้วเขียนต่อใต้เส้น
+            divider: function dividerHandler(this: { quill: Quill }) {
+              const quill = this.quill;
+              const range = quill.getSelection(true);
+              const [line, offset] = quill.getLine(range.index);
+              const lineStart = range.index - offset;
+              const lineLen = line ? line.length() : 1; // รวมตัวขึ้นบรรทัดใหม่
+              let at: number;
+              if (lineLen <= 1) {
+                at = lineStart; // บรรทัดว่าง — เส้นขึ้นก่อนบรรทัดนี้ เคอร์เซอร์อยู่บรรทัดว่างใต้เส้น
+              } else {
+                at = lineStart + lineLen; // ต้นย่อหน้าถัดไป
+                // ย่อหน้าสุดท้ายของตอน — เพิ่มบรรทัดว่างไว้ใต้เส้นให้เขียนต่อ
+                if (at >= quill.getLength()) quill.insertText(at - 1, "\n", "user");
+              }
+              quill.insertEmbed(at, "divider", true, "user");
+              quill.setSelection(at + 1, 0, "user");
+            },
             image: function imageHandler(this: { quill: Quill }) {
               const range = this.quill.getSelection(true);
               const input = document.createElement("input");
@@ -78,6 +113,10 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
         },
       },
     });
+
+    const dividerBtn = wrapper.querySelector("button.ql-divider");
+    dividerBtn?.setAttribute("title", "เส้นคั่นฉาก (เปลี่ยน/จบเหตุการณ์)");
+    dividerBtn?.setAttribute("aria-label", "เส้นคั่นฉาก");
 
     if (defaultValue) quill.clipboard.dangerouslyPasteHTML(defaultValue);
     quill.on("text-change", () => onChange?.(quill.root.innerHTML));
