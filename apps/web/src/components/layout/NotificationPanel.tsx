@@ -16,7 +16,7 @@ const NOTIFICATION_POLL_MS = 10_000;
 const tabFilter: Record<"updates" | "comments" | "activity", NotificationItem["type"][]> = {
   // เพิ่มภายหลัง (audit fix) — new_chapter (นิยายที่เก็บไว้ในชั้นหนังสือมีตอนใหม่) เข้าแท็บ "อัปเดต"
   // เช่นเดียวกับ system; gap 3.2 — คำตอบจากทีมงานแจ้งปัญหา (support_reply) ก็อยู่แท็บนี้
-  updates: ["system", "new_chapter", "support_reply"],
+  updates: ["system", "new_chapter", "support_reply", "moderation"],
   comments: ["comment", "reply"],
   // เพิ่มภายหลัง (ติดตามนักเขียน) — มีผู้ติดตามใหม่
   activity: ["donation", "new_follower"],

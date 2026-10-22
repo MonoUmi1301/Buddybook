@@ -1,19 +1,22 @@
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BarChart3, Plus, Trash2 } from "lucide-react";
+import { BarChart3, Plus, ShieldAlert, Trash2 } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { callApi } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
 import { getCurrentUser } from "@/lib/api/session";
+import { MODERATION_STATUS_LABEL, canAppeal, type ModerationCase } from "@/lib/moderation";
 
 interface MyNovel {
   novel_id: string;
   title: string;
   cover_image_url: string | null;
   status: "ongoing" | "completed" | "hiatus";
-  visibility: "published" | "private" | "pending_review";
+  visibility: "published" | "private" | "suspended";
+  /** post-moderation — มีค่าเมื่อแอดมินระงับนิยายเรื่องนี้อยู่ */
+  moderation_case?: ModerationCase | null;
 }
 
 const statusLabel: Record<MyNovel["status"], string> = {
@@ -25,7 +28,7 @@ const statusLabel: Record<MyNovel["status"], string> = {
 const visibilityLabel: Record<MyNovel["visibility"], string> = {
   published: "เผยแพร่แล้ว",
   private: "ส่วนตัว",
-  pending_review: "รอตรวจสอบ",
+  suspended: "ถูกระงับ",
 };
 
 // หน้ารวมผลงานของนักเขียน — จุดเริ่มต้นก่อนเข้าเครื่องมือ world-building/chapter editor
@@ -120,8 +123,31 @@ export default async function WriterDashboardPage() {
                 <h3 className="mt-2 line-clamp-1 text-sm font-semibold text-neutral-900 group-hover:text-primary-600">
                   {n.title}
                 </h3>
-                <p className="text-xs text-neutral-500">{visibilityLabel[n.visibility]}</p>
+                {n.visibility === "suspended" ? (
+                  <p className="text-xs font-medium text-red-600">
+                    {n.moderation_case ? MODERATION_STATUS_LABEL[n.moderation_case.status] : visibilityLabel.suspended}
+                  </p>
+                ) : (
+                  <p className="text-xs text-neutral-500">{visibilityLabel[n.visibility]}</p>
+                )}
               </Link>
+              {/* post-moderation — เหตุผลที่ถูกระงับ + ทางไปยื่นอุทธรณ์ ให้เห็นตั้งแต่หน้ารวมผลงาน */}
+              {n.visibility === "suspended" && n.moderation_case && (
+                <div className="mt-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                  <p className="flex items-center gap-1 font-semibold">
+                    <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> เหตุผล
+                  </p>
+                  <p className="mt-0.5 line-clamp-3 break-words">{n.moderation_case.reason}</p>
+                  {canAppeal(n.moderation_case) && (
+                    <Link
+                      href={`/write/${n.novel_id}?appeal=1`}
+                      className="mt-1 inline-block font-semibold text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-200"
+                    >
+                      ยื่นอุทธรณ์
+                    </Link>
+                  )}
+                </div>
+              )}
               <Link
                 href={`/write/${n.novel_id}/chapters/new`}
                 className="mt-1 inline-block text-xs font-medium text-primary-500 hover:text-primary-600"

@@ -1,3 +1,5 @@
+import type { ModerationCase } from "@/lib/moderation";
+
 export interface ManagedNovel {
   novel_id: string;
   title: string;
@@ -5,7 +7,7 @@ export interface ManagedNovel {
   introduction: string | null;
   cover_image_url: string | null;
   status: "ongoing" | "completed" | "hiatus";
-  visibility: "published" | "private" | "pending_review";
+  visibility: "published" | "private" | "suspended";
   legal_status: "original" | "fan-fiction" | "translation";
   format: "multi_chapter" | "one_shot";
   is_translated: boolean;
@@ -18,6 +20,8 @@ export interface ManagedNovel {
   secondary_tag: { tag_id: number; name: string } | null;
   tags: { tag_id: number; name: string; category: string | null }[];
   author: { user_id: string; username: string };
+  /** post-moderation — เคสระงับที่ยังมีผลอยู่ (เฉพาะเจ้าของได้รับ) */
+  moderation_case?: ModerationCase | null;
 }
 
 export interface ManagedChapter {

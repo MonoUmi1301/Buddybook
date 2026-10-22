@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import {
   NOTIFICATION_ICON,
   NOTIFICATION_TYPE_LABEL,
+  UNMUTABLE_NOTIFICATION_TYPES,
   timeAgo,
   type NotificationItem,
   type NotificationType,
@@ -32,6 +33,7 @@ const FILTERS: { value: NotificationType | "all"; label: string }[] = [
   { value: "donation", label: "ของขวัญ" },
   { value: "new_follower", label: "ผู้ติดตาม" },
   { value: "support_reply", label: "ทีมงาน" },
+  { value: "moderation", label: "ตรวจสอบนิยาย" },
   { value: "system", label: "ระบบ" },
 ];
 
@@ -210,7 +212,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
         </h2>
         <p className="mb-3 mt-0.5 text-xs text-neutral-500">ปิดประเภทที่ไม่ต้องการเห็น (เปิดกลับได้ทุกเมื่อ)</p>
         <ul className="space-y-2">
-          {(Object.keys(NOTIFICATION_TYPE_LABEL) as NotificationType[]).map((t) => {
+          {(Object.keys(NOTIFICATION_TYPE_LABEL) as NotificationType[]).filter((t) => !UNMUTABLE_NOTIFICATION_TYPES.includes(t)).map((t) => {
             const on = !muted.includes(t);
             return (
               <li key={t}>

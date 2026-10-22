@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import * as notificationsService from "@/modules/notifications/notifications.service";
 
-const typeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply"]);
+const typeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation"]);
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

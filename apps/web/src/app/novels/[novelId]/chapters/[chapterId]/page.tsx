@@ -4,6 +4,7 @@ import { Footer } from "@/components/layout/Footer";
 import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
 import { CommentSection, type CommentNode } from "@/components/novel-detail/CommentSection";
 import { ReaderContent } from "@/components/reader/ReaderContent";
+import { ReaderPresence } from "@/components/reader/ReaderPresence";
 import { ReportButton } from "@/components/social/ReportButton";
 import { BackButton } from "@/components/ui/BackButton";
 import { OwnerPreviewBar } from "@/components/novel-detail/OwnerPreviewBar";
@@ -109,6 +110,8 @@ export default async function ChapterReaderPage({
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Navbar user={user} />
+      {/* ผู้อ่านออนไลน์บนหน้าแอดมิน — นับเฉพาะผู้ที่ล็อกอิน ไม่นับเจ้าของที่ทดลองอ่าน */}
+      {user && !isOwner && <ReaderPresence />}
       {isOwner && (
         <OwnerPreviewBar
           novelId={novel.novel_id}

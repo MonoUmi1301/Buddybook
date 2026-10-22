@@ -1,3 +1,6 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import neo4j from "neo4j-driver";
 import {
   classifyNeo4jError,
@@ -291,41 +294,31 @@ async function getHeadViewThreshold(): Promise<number> {
  * gap 2.2 — READ edge มาจากประวัติการอ่าน + รีวิว + คอมเมนต์ (เดิมรีวิวอย่างเดียว) และ
  * sentiment_score คือขั้วความรู้สึกรวม −1..1 (lib/sentiment.ts combinePolarity)
  */
-export async function fullResync() {
-  const { syncUserNode, syncInterestedIn, syncNovelTags, syncReadEdge } = await import("@/lib/graphSync");
+/** เวลาที่ full resync รอบล่าสุดเสร็จ — เก็บเป็นไฟล์ใน temp ด้วย (แบบเดียวกับธง dirty ใน graphSync.ts)
+ *  ให้รอบที่รันจาก `npm run graph:resync` หรือก่อน API รีสตาร์ทยังแสดงบนหน้าแอดมิน */
+const lastResyncPath = path.join(os.tmpdir(), "buddybook-graph-last-resync");
+let lastFullResyncAt: Date | null = null;
+export function getLastFullResyncAt() {
+  if (lastFullResyncAt) return lastFullResyncAt;
+  try {
+    const at = new Date(readFileSync(lastResyncPath, "utf8").trim());
+    return Number.isNaN(at.getTime()) ? null : at;
+  } catch {
+    return null;
+  }
+}
+function setLastFullResyncAt(at: Date) {
+  lastFullResyncAt = at;
+  try {
+    writeFileSync(lastResyncPath, at.toISOString());
+  } catch {
+    // เขียนไม่ได้ก็ยังมีค่าในหน่วยความจำ
+  }
+}
+
+/** คู่ (user, novel published) ที่ควรมีเส้น READ — ประวัติการอ่าน ∪ รีวิว ∪ คอมเมนต์ พร้อมขั้วรวม */
+async function loadReadPairs(publishedIds: Set<string>) {
   const { combinePolarity } = await import("@/lib/sentiment");
-
-  const users = await prisma.user.findMany({ select: { user_id: true, username: true } });
-  for (const u of users) await syncUserNode(u.user_id, u.username);
-
-  const interests = await prisma.userInterest.findMany({
-    select: { user_id: true, tag: { select: { name: true } } },
-  });
-  const interestsByUser = new Map<string, string[]>();
-  for (const i of interests) {
-    const list = interestsByUser.get(i.user_id) ?? [];
-    list.push(i.tag.name);
-    interestsByUser.set(i.user_id, list);
-  }
-  const usernameById = new Map(users.map((u) => [u.user_id, u.username]));
-  for (const [user_id, tagNames] of interestsByUser) {
-    await syncInterestedIn(user_id, usernameById.get(user_id) ?? "", tagNames);
-  }
-
-  const novels = await prisma.novel.findMany({
-    where: { visibility: "published" },
-    select: { novel_id: true, title: true, novel_tags: { select: { tag: { select: { name: true } } } } },
-  });
-  for (const n of novels) {
-    await syncNovelTags(
-      n.novel_id,
-      n.title,
-      n.novel_tags.map((nt) => nt.tag.name)
-    );
-  }
-  const publishedIds = new Set(novels.map((n) => n.novel_id));
-
-  // รวม READ ต่อคู่ (user, novel) จาก 3 แหล่ง
   const [progress, reviews, comments] = await Promise.all([
     prisma.readingProgress.findMany({ select: { user_id: true, novel_id: true, last_chapter_number: true, last_read_at: true } }),
     prisma.review.findMany({ select: { user_id: true, novel_id: true, blended_polarity: true } }),
@@ -355,17 +348,80 @@ export async function fullResync() {
   for (const r of reviews) pair(r.user_id, r.novel_id).review = r.blended_polarity;
   for (const c of comments) pair(c.user_id, c.chapter.novel_id).comments.push(c.sentiment_polarity as number);
 
-  let readEdges = 0;
-  for (const p of pairs.values()) {
-    if (!publishedIds.has(p.novel_id)) continue;
-    await syncReadEdge(p.user_id, p.novel_id, combinePolarity(p.review, p.comments), p.progress);
-    readEdges += 1;
-  }
+  const edges = [...pairs]
+    .filter(([, p]) => publishedIds.has(p.novel_id))
+    .map(([key, p]) => ({
+      key,
+      user_id: p.user_id,
+      novel_id: p.novel_id,
+      sentiment_score: combinePolarity(p.review, p.comments),
+      last_chapter_number: p.progress?.last_chapter_number ?? null,
+      last_read_at: p.progress?.last_read_at.toISOString() ?? null,
+    }));
+  return { edges, reviewCount: reviews.length };
+}
 
+async function loadPublishedNovels() {
+  return prisma.novel.findMany({
+    where: { visibility: "published" },
+    select: { novel_id: true, title: true, novel_tags: { select: { tag: { select: { name: true } } } } },
+  });
+}
+
+/** รอบที่กำลังรันอยู่ — admin/scheduler/heal/internal เรียกซ้อนกันได้ ให้รอรอบเดิมแทนเริ่มใหม่ */
+let resyncInFlight: Promise<Awaited<ReturnType<typeof runFullResync>>> | null = null;
+
+export function fullResync() {
+  resyncInFlight ??= runFullResync().finally(() => {
+    resyncInFlight = null;
+  });
+  return resyncInFlight;
+}
+
+export function isFullResyncRunning() {
+  return resyncInFlight !== null;
+}
+
+async function runFullResync() {
+  const graph = await import("@/lib/graphSync");
+
+  const users = await prisma.user.findMany({ select: { user_id: true, username: true } });
+  await graph.syncUserNodesBatch(users);
+
+  const interests = await prisma.userInterest.findMany({
+    select: { user_id: true, tag: { select: { name: true } } },
+  });
+  const interestsByUser = new Map<string, string[]>(users.map((u) => [u.user_id, []]));
+  for (const i of interests) interestsByUser.get(i.user_id)?.push(i.tag.name);
+  await graph.syncInterestedInBatch([...interestsByUser].map(([user_id, tags]) => ({ user_id, tags })));
+
+  const novels = await loadPublishedNovels();
+  await graph.syncNovelTagsBatch(
+    novels.map((n) => ({ novel_id: n.novel_id, title: n.title, tags: n.novel_tags.map((nt) => nt.tag.name) }))
+  );
+
+  const { edges, reviewCount } = await loadReadPairs(new Set(novels.map((n) => n.novel_id)));
+  await graph.syncReadEdgesBatch(edges.map(({ key: _key, ...row }) => row));
+
+  // ลบ drift — อ่าน Postgres ใหม่ตอนนี้ ไม่ใช้ชุดตอนเริ่ม (ของที่ถูกสร้างระหว่าง resync จะไม่โดนลบ)
+  const [userIdsNow, novelsNow] = await Promise.all([
+    prisma.user.findMany({ select: { user_id: true } }),
+    loadPublishedNovels(),
+  ]);
+  const publishedNow = new Set(novelsNow.map((n) => n.novel_id));
+  const pairsNow = await loadReadPairs(publishedNow);
+  const pruned = await graph.pruneGraph({
+    userIds: userIdsNow.map((u) => u.user_id),
+    novelIds: [...publishedNow],
+    readPairs: new Set(pairsNow.edges.map((e) => e.key)),
+  });
+
+  setLastFullResyncAt(new Date());
   return {
     users_synced: users.length,
     novels_synced: novels.length,
-    reviews_synced: reviews.length,
-    read_edges_synced: readEdges,
+    reviews_synced: reviewCount,
+    read_edges_synced: edges.length,
+    pruned,
   };
 }

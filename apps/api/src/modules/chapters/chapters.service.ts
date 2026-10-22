@@ -116,7 +116,7 @@ export async function createChapter(novel_id: string, author_id: string, input: 
 }
 
 /** Reference implementation — GET /novels/:novel_id/chapters (Public — draft เห็นเฉพาะเจ้าของ,
- *  นิยาย private/pending_review ทั้งเรื่องก็เห็นเฉพาะเจ้าของเช่นกัน) */
+ *  นิยาย private/suspended ทั้งเรื่องก็เห็นเฉพาะเจ้าของเช่นกัน) */
 export async function listNovelChapters(novel_id: string, requester_id?: string) {
   const novel = await prisma.novel.findUnique({
     where: { novel_id },
@@ -177,7 +177,7 @@ export async function listNovelChapters(novel_id: string, requester_id?: string)
 }
 
 /** Reference implementation — GET /chapters/:chapter_id (Public — draft เห็นเฉพาะเจ้าของ,
- *  นิยาย private/pending_review ทั้งเรื่องก็เห็นเฉพาะเจ้าของเช่นกัน) */
+ *  นิยาย private/suspended ทั้งเรื่องก็เห็นเฉพาะเจ้าของเช่นกัน) */
 export async function getChapterById(chapter_id: string, requester_id?: string, viewer_key?: string) {
   const chapter = await getChapterWithNovel(chapter_id);
 

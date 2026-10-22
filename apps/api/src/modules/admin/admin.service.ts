@@ -5,65 +5,7 @@ import { ApiError } from "@/utils/ApiError";
 import { startOfThaiMonth } from "@/modules/gifts/gifts.service";
 import { env } from "@/config/env";
 import type { TagCategory, UserRole } from "@prisma/client";
-
-/** Reference implementation — GET /admin/novels/pending */
-export async function listPendingNovels() {
-  const novels = await prisma.novel.findMany({
-    where: { visibility: "pending_review" },
-    orderBy: { created_at: "asc" },
-    select: {
-      novel_id: true,
-      title: true,
-      legal_status: true,
-      cover_image_url: true,
-      author: { select: { user_id: true, username: true } },
-    },
-  });
-  return { novels };
-}
-
-/** Reference implementation — PATCH /admin/novels/:novel_id/approve */
-export async function approveNovel(novel_id: string) {
-  const novel = await prisma.novel.update({
-    where: { novel_id },
-    data: { visibility: "published" },
-    select: { novel_id: true, visibility: true, author_id: true, title: true },
-  });
-
-  await prisma.notification.create({
-    data: {
-      user_id: novel.author_id,
-      type: "system",
-      content: `นิยาย "${novel.title}" ของคุณผ่านการตรวจสอบและเผยแพร่แล้ว`,
-      link_url: `/novels/${novel_id}`,
-    },
-  });
-
-  return { novel_id: novel.novel_id, visibility: novel.visibility };
-}
-
-/** Reference implementation — PATCH /admin/novels/:novel_id/reject */
-export async function rejectNovel(novel_id: string, reason: string) {
-  const existing = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true, title: true } });
-  if (!existing) throw ApiError.notFound("Novel not found");
-
-  const novel = await prisma.novel.update({
-    where: { novel_id },
-    data: { visibility: "private" },
-    select: { novel_id: true, visibility: true },
-  });
-
-  await prisma.notification.create({
-    data: {
-      user_id: existing.author_id,
-      type: "system",
-      content: `นิยาย "${existing.title}" ของคุณไม่ผ่านการตรวจสอบ: ${reason}`,
-      link_url: `/novels/${novel_id}`,
-    },
-  });
-
-  return { novel_id: novel.novel_id, visibility: novel.visibility, reason };
-}
+import { getQueueCounts } from "@/modules/admin/moderation.service";
 
 /** Reference implementation — GET /admin/users?page= */
 export async function listUsers(page: number, pageSize = 20) {
@@ -170,25 +112,106 @@ export async function deleteTag(tag_id: number) {
 
 /** Reference implementation — GET /admin/reports/stats */
 export async function getStats() {
-  const [total_users, total_novels, total_chapters, pending_review_count, feeAll, feeMonth] = await Promise.all([
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [
+    total_users,
+    total_novels,
+    total_chapters,
+    moderation,
+    feeAll,
+    feeMonth,
+    open_content_reports,
+    open_gift_reports,
+    pending_withdrawals,
+    open_support_tickets,
+    new_users_7d,
+  ] = await Promise.all([
     prisma.user.count(),
     prisma.novel.count(),
     prisma.chapter.count(),
-    prisma.novel.count({ where: { visibility: "pending_review" } }),
+    // post-moderation — แทน pending_review_count เดิม: อุทธรณ์ที่รอพิจารณา = งานที่ต้องตัดสิน
+    getQueueCounts(),
     // เพิ่มภายหลัง (Gift donations) — ค่าธรรมเนียมแพลตฟอร์มสะสม (SUM donations.fee_amount) ยังไม่เข้าบัญชีใคร
     // เป็นแค่ตัวเลขบันทึกไว้ (ดู modules/gifts/gift-fee.ts)
     prisma.donation.aggregate({ _sum: { fee_amount: true } }),
     prisma.donation.aggregate({ where: { created_at: { gte: startOfThaiMonth() } }, _sum: { fee_amount: true } }),
+    // เพิ่มภายหลัง — "งานที่รอแอดมิน" บนหน้าภาพรวม + ตัวเลขบนเมนูหลังบ้าน
+    prisma.contentReport.count({ where: { status: "open" } }),
+    prisma.donation.count({ where: { reported_at: { not: null }, report_resolved_at: null } }),
+    prisma.withdrawalRequest.count({ where: { status: "pending" } }),
+    prisma.supportTicket.count({ where: { status: { in: ["open", "in_progress"] } } }),
+    prisma.user.count({ where: { created_at: { gte: weekAgo } } }),
   ]);
   return {
     total_users,
     total_novels,
     total_chapters,
-    pending_review_count,
+    pending_appeal_count: moderation.appeals,
+    unreviewed_novel_count: moderation.unreviewed,
+    suspended_novel_count: moderation.suspended,
     platform_fee_total: feeAll._sum.fee_amount?.toNumber() ?? 0,
     platform_fee_this_month: feeMonth._sum.fee_amount?.toNumber() ?? 0,
     platform_fee_percent: env.GIFT_PLATFORM_FEE_PERCENT,
+    open_content_reports,
+    open_gift_reports,
+    pending_withdrawals,
+    open_support_tickets,
+    new_users_7d,
   };
+}
+
+/** GET /admin/reports/activity — กิจกรรมเงินล่าสุด (เติมเหรียญที่จ่ายแล้ว + ของขวัญ/โดเนท) สำหรับ hero หน้าภาพรวม
+ *  แอดมินเห็นผู้ส่งจริงเสมอ (เหมือน /admin/gift-reports) แม้ผู้ส่งเลือกไม่ระบุตัวตน */
+export async function getRecentActivity(limit = 5) {
+  const userSelect = { user_id: true, username: true, pen_name: true } as const;
+  const [topups, donations] = await Promise.all([
+    prisma.topupOrder.findMany({
+      where: { status: "paid" },
+      orderBy: { paid_at: "desc" },
+      take: limit,
+      select: { order_id: true, coins: true, amount_thb: true, paid_at: true, created_at: true, user: { select: userSelect } },
+    }),
+    prisma.donation.findMany({
+      orderBy: { created_at: "desc" },
+      take: limit,
+      select: {
+        donation_id: true,
+        amount: true,
+        quantity: true,
+        created_at: true,
+        gift: { select: { name_th: true } },
+        from_user: { select: userSelect },
+        to_user: { select: userSelect },
+      },
+    }),
+  ]);
+
+  const items = [
+    ...topups.map((t) => ({
+      id: t.order_id,
+      kind: "topup" as const,
+      coins: t.coins,
+      amount_thb: t.amount_thb.toNumber(),
+      user: t.user,
+      recipient: null,
+      gift_name: null,
+      quantity: 1,
+      created_at: t.paid_at ?? t.created_at,
+    })),
+    ...donations.map((d) => ({
+      id: d.donation_id,
+      kind: "gift" as const,
+      coins: d.amount.toNumber(),
+      amount_thb: null,
+      user: d.from_user,
+      recipient: d.to_user,
+      gift_name: d.gift?.name_th ?? null,
+      quantity: d.quantity,
+      created_at: d.created_at,
+    })),
+  ];
+  items.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+  return { items: items.slice(0, limit) };
 }
 
 // ---------------------------------------------------------------------------

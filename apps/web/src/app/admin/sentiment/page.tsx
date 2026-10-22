@@ -185,7 +185,7 @@ export default async function AdminSentimentPage() {
       <section className="rounded-card border border-neutral-200 p-5">
         <h2 className="text-base font-semibold text-neutral-900">นิยายที่ผู้อ่านไม่ค่อยพอใจ</h2>
         <p className="mb-3 text-xs text-neutral-500">
-          อย่างน้อย 5 ข้อความที่วิเคราะห์แล้ว เรียงจากสัดส่วนเชิงลบมากสุด · "ติงานเขียน" = เชิงลบที่ถูกติดป้ายว่าพูดถึงงานเขียน
+          อย่างน้อย 5 ข้อความที่วิเคราะห์แล้ว เรียงจากสัดส่วนเชิงลบมากสุด · &ldquo;ติงานเขียน&rdquo; = เชิงลบที่ถูกติดป้ายว่าพูดถึงงานเขียน
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">

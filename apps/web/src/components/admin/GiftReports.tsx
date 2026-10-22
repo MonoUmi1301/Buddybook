@@ -73,8 +73,6 @@ export function GiftReports({ initialItems, initialCursor }: { initialItems: Gif
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-neutral-900">การ์ดที่ถูกรายงาน</h2>
-      <p className="mb-4 text-xs text-neutral-500">การ์ดที่รอตรวจจะไม่แสดงต่อสาธารณะจนกว่าจะตัดสิน</p>
 
       {items.length === 0 ? (
         <p className="rounded-card border border-dashed border-neutral-300 px-6 py-12 text-center text-sm text-neutral-500">

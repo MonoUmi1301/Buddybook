@@ -22,6 +22,7 @@ import meStatsRouter from "@/modules/stats/stats.routes";
 import supportRoutes from "@/modules/support/support.routes";
 import collectionsRoutes from "@/modules/collections/collections.routes";
 import reportsRoutes from "@/modules/reports/reports.routes";
+import presenceRoutes from "@/modules/presence/presence.routes";
 
 /**
  * Router รวมทุกโมดูล mount ใต้ /api/v1 (ดู app.ts)
@@ -52,6 +53,7 @@ router.use("/wallet", walletRoutes);
 router.use("/notifications", notificationsRoutes);
 // เพิ่มภายหลัง (รายงานเนื้อหา) — ผู้ใช้รายงาน, แอดมินตรวจที่ /admin/content-reports
 router.use("/reports", reportsRoutes);
+router.use("/presence", presenceRoutes);
 // gap 3.2 — ระบบสนับสนุนผู้ใช้งาน / แจ้งปัญหา
 router.use("/support", supportRoutes);
 

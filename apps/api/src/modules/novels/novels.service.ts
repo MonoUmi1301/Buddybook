@@ -5,6 +5,7 @@ import { ApiError } from "@/utils/ApiError";
 import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
+import { getOpenCasesForNovels, type ModerationCaseSummary } from "@/modules/admin/moderation.service";
 import type { ContentRating, LegalStatus, NovelFormat, NovelStatus, TagCategory, Visibility } from "@prisma/client";
 
 interface SearchNovelsInput {
@@ -131,7 +132,7 @@ export async function searchNovels({
   // จำนวนตอน/ถูกใจนับเฉพาะเรื่องในหน้านี้ (ดู lib/novelCounts.ts — _count ใน findMany สแกนทั้งตาราง)
   // ยิงพร้อมกันทั้งสามตัว ไม่ต่อคิวทีละ query
   const ids = novels.map((n) => n.novel_id);
-  const [ratings, likeCountByNovel, chapterCountByNovel] = await Promise.all([
+  const [ratings, likeCountByNovel, chapterCountByNovel, moderationByNovel] = await Promise.all([
     ids.length
       ? prisma.review.groupBy({
           by: ["novel_id"],
@@ -143,6 +144,8 @@ export async function searchNovels({
     countLikesByNovel(ids),
     // เพิ่มภายหลัง (หน้าแรก coverflow "มาแรง") — จำนวนตอนที่เผยแพร่แล้ว
     countChaptersByNovel(ids, { publishedOnly: true }),
+    // post-moderation — หน้า "ผลงานของฉัน" แสดงเหตุผลที่ถูกระงับ/สถานะอุทธรณ์ (เฉพาะเจ้าของเห็น)
+    scopedToOwn ? getOpenCasesForNovels(ids) : Promise.resolve(new Map<string, ModerationCaseSummary>()),
   ]);
   const ratingByNovel = new Map(ratings.map((r) => [r.novel_id, r]));
 
@@ -158,6 +161,7 @@ export async function searchNovels({
         rating: r?._avg.rating ?? 0,
         review_count: r?._count.rating ?? 0,
         like_count: likeCountByNovel.get(n.novel_id) ?? 0,
+        ...(scopedToOwn ? { moderation_case: moderationByNovel.get(n.novel_id) ?? null } : {}),
       };
     }),
     total,
@@ -321,11 +325,20 @@ interface UpdateNovelInput {
 
 /** Reference implementation — PATCH /novels/:novel_id (เจ้าของเท่านั้นที่แก้ได้) */
 export async function updateNovel(novel_id: string, user_id: string, input: UpdateNovelInput) {
-  const existing = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true, deleted_at: true } });
+  const existing = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, deleted_at: true, visibility: true },
+  });
   if (!existing) throw ApiError.notFound("Novel not found");
   if (existing.author_id !== user_id) throw ApiError.forbidden("Forbidden");
   // gap 2.4 — แก้ไขนิยายในถังขยะไม่ได้ (เช่นตั้ง visibility=published กลับเอง) ต้องกู้คืนก่อน
   if (existing.deleted_at) throw ApiError.conflict("นิยายเรื่องนี้อยู่ในถังขยะ กู้คืนก่อนจึงจะแก้ไขได้");
+  // post-moderation — นิยายที่แอดมินระงับ นักเขียนยังแก้เนื้อหาได้ (เพื่อแก้ตามเหตุผล) แต่เผยแพร่เองไม่ได้
+  // ต้องยื่นอุทธรณ์ (POST /novels/:id/appeal) ให้แอดมินคืนสถานะ
+  if (existing.visibility === "suspended" && input.visibility !== undefined && input.visibility !== "suspended") {
+    throw ApiError.conflict("นิยายเรื่องนี้ถูกระงับการเผยแพร่ ยื่นอุทธรณ์เพื่อให้ทีมงานตรวจซ้ำก่อน");
+  }
+  if (input.visibility === "suspended") throw ApiError.forbidden("Forbidden");
   await assertValidCategoryHierarchy(input.primary_tag_id, input.secondary_tag_id);
 
   const { tag_ids, tag_names, pairing_tag_ids, pairing_tag_names, fandom_tag_ids, fandom_tag_names, ...rest } = input;
@@ -359,6 +372,14 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (rest.visibility !== undefined) {
+      // แอดมินอาจระงับระหว่างที่เช็คด้านบนกับตอนเขียนจริง — ล็อกแถวเดียวกับ suspendNovel แล้วเช็คซ้ำ
+      const [row] = await tx.$queryRaw<{ visibility: Visibility }[]>`
+        SELECT visibility FROM novels WHERE novel_id = ${novel_id}::uuid FOR UPDATE`;
+      if (row?.visibility === "suspended") {
+        throw ApiError.conflict("นิยายเรื่องนี้ถูกระงับการเผยแพร่ ยื่นอุทธรณ์เพื่อให้ทีมงานตรวจซ้ำก่อน");
+      }
+    }
     if (allTagIds !== undefined) {
       await tx.novelTag.deleteMany({ where: { novel_id } });
       if (allTagIds.length) {
@@ -996,9 +1017,13 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
     ? Boolean(await prisma.novelLike.findUnique({ where: { user_id_novel_id: { user_id: viewer_id, novel_id } } }))
     : false;
 
+  const moderation_case =
+    isOwner && novel.visibility === "suspended" ? (await getOpenCasesForNovels([novel_id])).get(novel_id) ?? null : null;
+
   const { novel_tags, view_count, _count, deleted_at: _deleted, character_map_public, ...rest } = novel;
   return {
     ...rest,
+    ...(isOwner ? { moderation_case } : {}),
     character_map: character_map_public ?? null,
     view_count: Number(view_count),
     tags: novel_tags.map((nt) => nt.tag),

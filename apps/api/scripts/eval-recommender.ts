@@ -4,6 +4,8 @@
  *   cd apps/api && npx tsx --env-file=.env scripts/eval-recommender.ts [--sample 100] [--seed 42]
  *
  * ผลลัพธ์: docs/eval/recommender-eval.csv และ docs/eval/recommender-eval.md (ที่ root ของ repo)
+ * --save (หรือ `npm run eval:recs:live`): หลังตรวจว่าข้อมูลไม่เปลี่ยนแล้ว บันทึกผล threshold ที่เลือก 1 แถวลง
+ *   recommender_eval_runs (connection แยกที่เขียนได้ — เขียนเฉพาะตารางนั้น) ให้หน้าภาพรวมแอดมินแสดง
  *
  * การันตีอ่านอย่างเดียว:
  *   - Postgres: ทุก connection (รวม Prisma ของแอปที่ GET /recommendations ใช้) เปิดด้วย
@@ -29,6 +31,7 @@ import { PrismaClient } from "@prisma/client";
 // ตั้งค่า
 // ---------------------------------------------------------------------------
 const argv = process.argv.slice(2);
+const SAVE = argv.includes("--save");
 const argNum = (name: string, def: number) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 ? Number(argv[i + 1]) : def;
@@ -55,6 +58,7 @@ const OUT_DIR = path.resolve(__dirname, "../../../docs/eval");
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required — run with --env-file=.env");
 // บังคับอ่านอย่างเดียวที่ระดับ connection ก่อน import โมดูลของแอป (env.ts/prisma.ts อ่านค่าตอน import)
+const writableUrl = process.env.DATABASE_URL;
 const roUrl = new URL(process.env.DATABASE_URL);
 roUrl.searchParams.set("options", "-c default_transaction_read_only=on");
 process.env.DATABASE_URL = roUrl.toString();
@@ -777,7 +781,39 @@ function writeOutputs(
     ].join("\n") + "\n"
   );
   fs.writeFileSync(path.join(OUT_DIR, "recommender-eval.md"), md.join("\n") + "\n");
-  return sel;
+  return { ...sel, test: testOf(sel.best), popTest, lowData, inSync: countMismatch === 0 && pairMismatch === 0 };
+}
+
+/** บันทึกผลรอบนี้ลง recommender_eval_runs — ไม่มี threshold ผ่านเกณฑ์ = ไม่บันทึก (หน้าแอดมินแสดงรอบก่อนหน้า) */
+async function saveRun(sel: ReturnType<typeof writeOutputs>, evalUsers: number) {
+  if (!sel.best || !sel.test) {
+    console.warn("[eval] --save: ไม่มี threshold ที่ผ่านเกณฑ์ coverage — ไม่บันทึก");
+    return;
+  }
+  const writer = new PrismaClient({ datasourceUrl: writableUrl });
+  try {
+    const t = sel.test;
+    await writer.recommenderEvalRun.create({
+      data: {
+        method: t.method,
+        threshold: t.threshold ?? 0,
+        k: t.k,
+        precision: t.precision,
+        recall: t.recall,
+        f1: t.f1,
+        ndcg: t.ndcg,
+        hit_rate: t.hit_rate,
+        user_coverage: t.user_coverage,
+        baseline_ndcg: sel.popTest.ndcg,
+        eval_users: evalUsers,
+        graph_in_sync: sel.inSync,
+        low_data: sel.lowData,
+      },
+    });
+    console.log("[eval] --save: บันทึกลง recommender_eval_runs แล้ว");
+  } finally {
+    await writer.$disconnect();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -825,6 +861,7 @@ async function main() {
         : "[eval] ไม่มี threshold ที่ผ่านเกณฑ์ coverage"
     );
     if (!unchanged.postgres || !unchanged.neo4j) throw new Error("ข้อมูลเปลี่ยนระหว่างรัน — ตรวจสอบด่วน");
+    if (SAVE) await saveRun(sel, offline.evalUsers.test);
   } finally {
     await session.close();
     await neo4jDriver.close();

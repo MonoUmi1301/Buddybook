@@ -566,7 +566,7 @@ const novels: MockNovel[] = [
     ),
     status: "ongoing",
     legal_status: "fan_fiction",
-    visibility: "pending_review",
+    visibility: "published",
     content_rating: "teen",
     allow_donations: false,
     genreMain: "แฟนตาซี",

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Library, PenLine, Search } from "lucide-react";
+import { Library, PenLine, Search, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { NotificationPanel } from "@/components/layout/NotificationPanel";
@@ -106,18 +106,39 @@ export function Navbar({ theme, user = null }: NavbarProps) {
         </div>
 
         <div className="flex shrink-0 items-center sm:gap-1.5">
-          <Link href="/write" aria-label="สร้างผลงาน" className={iconLinkClasses(isDark)}>
-            <PenLine className="h-5 w-5" />
-          </Link>
+          {/* บัญชีแอดมินเป็นบัญชีทีมงาน — ไม่มีปุ่มสร้างผลงาน/ชั้นหนังสือ เหลือแค่ค้นหา (ไว้ตรวจนิยาย) */}
+          {user?.role !== "admin" && (
+            <Link href="/write" aria-label="สร้างผลงาน" className={iconLinkClasses(isDark)}>
+              <PenLine className="h-5 w-5" />
+            </Link>
+          )}
           <Link href="/search" aria-label="ค้นหา" className={iconLinkClasses(isDark)}>
             <Search className="h-5 w-5" />
           </Link>
-          <Link href="/library" aria-label="ชั้นหนังสือ" className={iconLinkClasses(isDark)}>
-            <Library className="h-5 w-5" />
-          </Link>
+          {user?.role !== "admin" && (
+            <Link href="/library" aria-label="ชั้นหนังสือ" className={iconLinkClasses(isDark)}>
+              <Library className="h-5 w-5" />
+            </Link>
+          )}
 
           {user ? (
             <>
+              {user.role === "admin" && (
+                <Link
+                  href="/admin"
+                  aria-label="หลังบ้านแอดมิน"
+                  title="หลังบ้านแอดมิน"
+                  className={cn(
+                    "mr-0.5 inline-flex h-9 items-center gap-1.5 rounded-pill px-2.5 text-xs font-semibold transition-colors sm:px-3",
+                    pathname?.startsWith("/admin")
+                      ? "bg-primary-500 text-white"
+                      : "bg-primary-500/10 text-primary-600 hover:bg-primary-500/20"
+                  )}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  <span className="max-sm:hidden">แอดมิน</span>
+                </Link>
+              )}
               <NotificationPanel theme={effectiveTheme} />
               <div className="ml-1 sm:ml-1.5">
                 <UserMenu
@@ -126,6 +147,7 @@ export function Navbar({ theme, user = null }: NavbarProps) {
                     username: user.username,
                     email: user.email,
                     avatarUrl: user.avatar_url ?? undefined,
+                    isAdmin: user.role === "admin",
                   }}
                   theme={effectiveTheme}
                 />

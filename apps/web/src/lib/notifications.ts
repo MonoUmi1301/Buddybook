@@ -1,6 +1,17 @@
-import { Bell, BookOpen, Gift, Headset, MessageCircle, UserPlus, type LucideIcon } from "lucide-react";
+import { Bell, BookOpen, Gift, Headset, MessageCircle, ShieldAlert, UserPlus, type LucideIcon } from "lucide-react";
 
-export type NotificationType = "comment" | "reply" | "donation" | "system" | "new_chapter" | "new_follower" | "support_reply";
+export type NotificationType =
+  | "comment"
+  | "reply"
+  | "donation"
+  | "system"
+  | "new_chapter"
+  | "new_follower"
+  | "support_reply"
+  | "moderation";
+
+/** post-moderation — การระงับนิยาย/ผลอุทธรณ์ ปิดไม่ได้ (API กรองทิ้งเองด้วย) */
+export const UNMUTABLE_NOTIFICATION_TYPES: NotificationType[] = ["moderation"];
 
 export interface NotificationItem {
   notification_id: string;
@@ -18,6 +29,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   donation: "ของขวัญ / โดเนท",
   new_follower: "ผู้ติดตามใหม่",
   support_reply: "คำตอบจากทีมงาน",
+  moderation: "การตรวจสอบนิยาย",
   system: "ประกาศจากระบบ",
 };
 
@@ -29,6 +41,7 @@ export const NOTIFICATION_ICON: Record<NotificationType, LucideIcon> = {
   new_chapter: BookOpen,
   new_follower: UserPlus,
   support_reply: Headset,
+  moderation: ShieldAlert,
 };
 
 export function timeAgo(iso: string): string {

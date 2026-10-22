@@ -102,9 +102,10 @@ Base URL: `/api/v1` (Node.js/Express API Gateway) · Auth: `Authorization: Beare
 
 | Method | URL Path | Request Body (JSON) | Response (JSON) | Status |
 |---|---|---|---|---|
-| GET | `/admin/novels/pending` | — | `{"novels":[{"novel_id","title","author","legal_status"}]}` | 200 |
-| PATCH | `/admin/novels/:novel_id/approve` | `{}` | `{"novel_id","visibility":"published"}` | 200 |
-| PATCH | `/admin/novels/:novel_id/reject` | `{"reason"}` | `{"novel_id","visibility":"private","reason"}` | 200 |
+| GET | `/admin/novels/moderation?tab=unreviewed\|reported\|appeals\|suspended&page=` | — | `{"tab","novels":[{"novel_id","title","author","visibility","open_report_count","moderation_case"}],"total","page","pageSize","counts":{"unreviewed","reported","appeals","suspended"}}` | 200 |
+| PATCH | `/admin/novels/:novel_id/suspend` | `{"reason"}` (≥10 ตัวอักษร) | `{"novel_id","visibility":"suspended","moderation_case","notified":{"web","email"}}` — ปิดรายงานที่ค้างของนิยายนี้ด้วย | 200 / 409 ถ้าระงับอยู่แล้ว |
+| PATCH | `/admin/novels/:novel_id/reviewed` | `{}` | `{"novel_id","reviewed":true}` — เอาออกจากแท็บ "ยังไม่ตรวจ" จนกว่านักเขียนจะแก้ไขอีก | 200 |
+| PATCH | `/admin/novels/:novel_id/moderation` | `{"decision":"reinstate\|uphold","note?"}` (uphold ต้องมี note และต้องมีคำอุทธรณ์รออยู่) | `{"novel_id","visibility","moderation_case","notified"}` | 200 / 409 |
 | GET | `/admin/users?page=` | — | `{"users":[{"user_id","username","email","role","created_at"}],"total"}` | 200 |
 | PATCH | `/admin/users/:user_id/role` | `{"role":"admin\|user"}` | `{"user_id","role"}` | 200 |
 | PATCH | `/admin/users/:user_id/suspend` | `{}` | `{"user_id","suspended":true}` — มีผลทันที (access token ที่ออกไปแล้วใช้ไม่ได้) | 200 |
@@ -113,7 +114,11 @@ Base URL: `/api/v1` (Node.js/Express API Gateway) · Auth: `Authorization: Beare
 | POST | `/admin/tags` | `{"name","category?"}` | `{"tag_id","name","category"}` | 201 |
 | PATCH | `/admin/tags/:tag_id` | `{"name?","category?"}` | `{"tag_id","name","category"}` | 200 |
 | DELETE | `/admin/tags/:tag_id` | — | `{}` | 204 |
-| GET | `/admin/reports/stats` | — | `{"total_users","total_novels","total_chapters","pending_review_count"}` | 200 |
+| GET | `/admin/reports/stats` | — | `{"total_users","total_novels","total_chapters","pending_appeal_count","unreviewed_novel_count","suspended_novel_count",...}` | 200 |
+
+**Post-moderation:** นิยายที่นักเขียนตั้ง `visibility: "published"` ขึ้นให้ผู้อ่านเห็นทันที ไม่มีคิวอนุมัติก่อน (`pending_review` ถูกยกเลิก)
+แอดมินตรวจทีหลังที่ `/admin/novels` แล้วระงับได้ → `visibility: "suspended"` + เคสใน `novel_moderation_cases` + แจ้งนักเขียน (แจ้งเตือนประเภท `moderation` ที่ปิดไม่ได้ + อีเมล) พร้อมชื่อเรื่อง เหตุผล และลิงก์ `/write/:novel_id?appeal=1`
+นักเขียนแก้เนื้อหาได้แต่เปลี่ยน visibility เองไม่ได้ (409) จนกว่าแอดมินจะคืนสถานะ — การ "จัดการ" รายงานเนื้อหาชนิดนิยายใช้การระงับเดียวกันนี้ (note = เหตุผล)
 
 ---
 
@@ -182,6 +187,7 @@ Rate limit: `login`, `register/*`, `login/verify-2fa`, `password/*` จำกั
 - นิยาย: `GET /novels/:id/comments`, `POST|DELETE /novels/:id/like`, `PATCH /novels/:id/plot-notes|theme-notes|map-drawings`, `GET|POST /novels/:id/map-versions`, `POST /map-versions/:id/restore`, `POST /novels/:id/location-edges`, `DELETE /location-edges/:id`
 - ของขวัญ: `GET /gifts/catalog`, `POST /gifts/send`, `GET /authors/:user_id/gifts/public`, `GET /me/gifts/received|sent|stats`, `POST /me/gifts/:id/thank`, `PATCH /me/gifts/:id`, `GET /users/:user_id/supporter-badges`, แอดมิน `/admin/gifts`, `/admin/gift-reports`
 - เติมเงิน: `POST /wallet/topup/checkout-session`, `GET /wallet/topup/orders/:order_id/status`, `POST /wallet/topup/verify-slip`, `POST /webhooks/stripe` (ยืนยันด้วยลายเซ็น Stripe)
+- ผู้อ่านออนไลน์: `POST /presence/heartbeat` `{ leaving?: boolean }` → 204 — หน้าอ่านตอนส่งทุก 1 นาทีตอนแท็บเปิดอยู่ (ล็อกอินเท่านั้น) หน้าภาพรวมแอดมินนับผู้ที่ส่งมาภายใน ~2 นาที
 
 ### 7. ปิดช่องว่างตาม Proposal (docs/gap-analysis-plan.md)
 
@@ -201,6 +207,7 @@ Rate limit: `login`, `register/*`, `login/verify-2fa`, `password/*` จำกั
 | DELETE | `/novels/:novel_id` | — | `{"novel_id","deleted_at","auto_delete_at"}` (ย้ายลงถังขยะ 30 วัน — เดิมลบถาวร 204) | 200 / 409 (มีผู้ซื้อตอนแล้ว) |
 | GET | `/novels/trash` | — | `{"retention_days":30,"novels":[{"novel_id","title","cover_image_url","chapter_count","deleted_at","auto_delete_at"}]}` | 200 |
 | POST | `/novels/:novel_id/restore` | — | `{"novel_id","visibility"}` (กลับเป็น visibility เดิม) | 200 |
+| POST | `/novels/:novel_id/appeal` | `{"message"}` (≥20 ตัวอักษร) | `{"novel_id","moderation_case":{"status":"appeal_pending",...}}` — เจ้าของเท่านั้น, นิยายต้องถูกระงับอยู่ | 201 / 409 |
 | DELETE | `/novels/:novel_id/permanent` | — | — (ต้องอยู่ในถังขยะก่อน) | 204 / 409 |
 | PATCH | `/chapters/:chapter_id/autosave` | เพิ่ม `"base_updated_at?"` | เพิ่ม `"chapter_updated_at"`; ถูกแก้จากที่อื่นหลัง base → `{"error","details":{"code":"EDIT_CONFLICT","server_updated_at"}}` | 200 / 409 |
 

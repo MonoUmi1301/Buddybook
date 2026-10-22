@@ -11,7 +11,7 @@ import { getCurrentUser } from "@/lib/api/session";
 interface NovelSummary {
   novel_id: string;
   title: string;
-  visibility: "published" | "private" | "pending_review";
+  visibility: "published" | "private" | "suspended";
   author: { user_id: string };
 }
 

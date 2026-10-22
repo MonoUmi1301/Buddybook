@@ -44,7 +44,7 @@ const REASON_LABEL: Record<ContentReportRow["reason"], string> = {
 
 /** สิ่งที่ปุ่ม "จัดการ" ทำกับเป้าหมายแต่ละชนิด (ดู apps/api/src/modules/reports/reports.service.ts) */
 const ACTION_LABEL: Record<TargetType, string> = {
-  novel: "ตั้งเป็นส่วนตัว",
+  novel: "ระงับนิยาย",
   chapter: "ซ่อนตอน",
   comment: "ลบคอมเมนต์",
   review: "ลบรีวิว",
@@ -98,12 +98,18 @@ export function ContentReports({ initial }: { initial: Page }) {
   }
 
   async function resolve(row: ContentReportRow, action: "dismiss" | "action") {
-    if (action === "action" && !window.confirm(`ยืนยัน "${ACTION_LABEL[row.target_type]}"?`)) return;
+    let note: string | undefined;
+    if (action === "action" && row.target_type === "novel") {
+      // post-moderation — หมายเหตุนี้คือเหตุผลการระงับที่นักเขียนเห็น (เว้นว่าง = สรุปจากประเภทรายงาน)
+      const input = window.prompt("เหตุผลการระงับนิยาย (นักเขียนจะเห็นข้อความนี้ เว้นว่างได้)");
+      if (input === null) return;
+      note = input.trim() || undefined;
+    } else if (action === "action" && !window.confirm(`ยืนยัน "${ACTION_LABEL[row.target_type]}"?`)) return;
     setBusyId(row.report_id);
     const res = await fetch(`/api/v1/admin/content-reports/${row.report_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, ...(note ? { note } : {}) }),
     });
     if (res.ok) {
       // รายงานอื่นที่ชี้เป้าหมายเดียวกันถูกปิดไปด้วย
@@ -117,8 +123,6 @@ export function ContentReports({ initial }: { initial: Page }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-neutral-900">รายงานเนื้อหา</h2>
-      <p className="mb-4 text-xs text-neutral-500">รายงานจากผู้ใช้ — การจัดการจะปิดทุกรายงานของเนื้อหาเดียวกันและแจ้งผลผู้รายงาน</p>
 
       <div className="mb-4 flex gap-2" role="tablist">
         {STATUS_TABS.map((t) => (

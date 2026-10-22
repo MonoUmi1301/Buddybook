@@ -16,9 +16,11 @@ const router = Router();
 
 router.use(requireAuth, requireAdmin);
 
-router.get("/novels/pending", asyncHandler(adminController.pendingNovels));
-router.patch("/novels/:novel_id/approve", asyncHandler(adminController.approveNovel));
-router.patch("/novels/:novel_id/reject", asyncHandler(adminController.rejectNovel));
+// post-moderation — นิยายเผยแพร่ทันที แอดมินตรวจทีหลัง (แทนคิว pending/approve/reject เดิม)
+router.get("/novels/moderation", asyncHandler(adminController.moderationQueue));
+router.patch("/novels/:novel_id/suspend", asyncHandler(adminController.suspendNovel));
+router.patch("/novels/:novel_id/reviewed", asyncHandler(adminController.markNovelReviewed));
+router.patch("/novels/:novel_id/moderation", asyncHandler(adminController.resolveModeration));
 
 router.get("/users", asyncHandler(adminController.listUsers));
 router.patch("/users/:user_id/role", asyncHandler(adminController.updateUserRole));
@@ -41,6 +43,10 @@ router.patch("/tags/:tag_id", asyncHandler(adminController.updateTag));
 router.delete("/tags/:tag_id", asyncHandler(adminController.deleteTag));
 
 router.get("/reports/stats", asyncHandler(adminController.stats));
+router.get("/reports/activity", asyncHandler(adminController.recentActivity));
+router.get("/dashboard", asyncHandler(adminController.dashboard));
+router.get("/recommendations/resync", asyncHandler(adminController.resyncRecommendationsStatus));
+router.post("/recommendations/resync", asyncHandler(adminController.resyncRecommendations));
 router.get("/reports/sentiment", asyncHandler(adminController.sentimentOverview));
 
 // เพิ่มภายหลัง (Gift donations) — แคตตาล็อกของขวัญ + การ์ดที่นักเขียนรายงาน

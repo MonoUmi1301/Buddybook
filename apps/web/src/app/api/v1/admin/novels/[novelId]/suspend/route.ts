@@ -1,9 +1,9 @@
 import { forwardToApi } from "@/lib/api/proxy";
 import { parseJsonBody, requireUuidParam } from "@/lib/api/validate";
-import { rejectNovelSchema } from "@/lib/api/schemas";
+import { suspendNovelSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
-// PATCH /api/v1/admin/novels/:novelId/reject
+// PATCH /api/v1/admin/novels/:novelId/suspend — ระงับนิยาย (เหตุผลบังคับ) แจ้งนักเขียนทั้งในเว็บและอีเมล
 export async function PATCH(request: Request, { params }: { params: { novelId: string } }) {
   const auth = requireAccessToken();
   if ("error" in auth) return auth.error;
@@ -11,13 +11,8 @@ export async function PATCH(request: Request, { params }: { params: { novelId: s
   const id = requireUuidParam(params.novelId, "novel_id");
   if ("error" in id) return id.error;
 
-  const parsed = await parseJsonBody(request, rejectNovelSchema);
+  const parsed = await parseJsonBody(request, suspendNovelSchema);
   if ("error" in parsed) return parsed.error;
 
-  return forwardToApi({
-    method: "PATCH",
-    path: `/admin/novels/${id.value}/reject`,
-    token: auth.token,
-    body: parsed.data,
-  });
+  return forwardToApi({ method: "PATCH", path: `/admin/novels/${id.value}/suspend`, token: auth.token, body: parsed.data });
 }

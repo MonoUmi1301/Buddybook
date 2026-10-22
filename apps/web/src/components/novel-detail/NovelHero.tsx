@@ -24,7 +24,7 @@ import {
 } from "@/lib/novelLabels";
 
 export interface NovelDetailData {
-  /** published | private | pending_review ... — ใช้บอกเจ้าของในโหมดทดลองอ่าน */
+  /** published | private | suspended ... — ใช้บอกเจ้าของในโหมดทดลองอ่าน */
   visibility?: string;
   novel_id: string;
   title: string;

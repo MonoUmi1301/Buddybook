@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 
 interface PublishVisibilityChoiceProps {
   novelId: string;
-  initialVisibility: "published" | "private" | "pending_review";
+  initialVisibility: "published" | "private" | "suspended";
 }
 
 /** เพิ่มภายหลัง (audit fix) — นิยายที่เพิ่งสร้างเริ่มที่ visibility=private เสมอ (ดู
@@ -40,6 +40,18 @@ export function PublishVisibilityChoice({ novelId, initialVisibility }: PublishV
     } finally {
       setSaving(false);
     }
+  }
+
+  // post-moderation — นิยายที่แอดมินระงับเลือกเผยแพร่เองไม่ได้ ต้องยื่นอุทธรณ์จากหน้าจัดการนิยาย
+  if (initialVisibility === "suspended") {
+    return (
+      <div className="mt-6 w-full rounded-card border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700">
+        นิยายเรื่องนี้ถูกทีมงานระงับการเผยแพร่ ดูเหตุผลและยื่นอุทธรณ์ได้ที่{" "}
+        <a href={`/write/${novelId}?appeal=1`} className="font-semibold underline underline-offset-2">
+          หน้าจัดการนิยาย
+        </a>
+      </div>
+    );
   }
 
   return (

@@ -219,7 +219,7 @@ export const updateReceivedGiftSchema = z
 // ---------------------------------------------------------------------------
 
 export const legalStatusEnum = z.enum(["original", "fan-fiction", "translation"]);
-export const visibilityEnum = z.enum(["published", "private", "pending_review"]);
+export const visibilityEnum = z.enum(["published", "private"]);
 export const chapterStatusEnum = z.enum(["draft", "published", "scheduled", "hidden"]);
 export const characterRoleEnum = z.enum(["protagonist", "antagonist", "supporting"]);
 export const novelFormatEnum = z.enum(["multi_chapter", "one_shot"]);
@@ -592,8 +592,23 @@ export const updateTimelineEventSchema = z
 // 5. Admin & System Management
 // ---------------------------------------------------------------------------
 
-export const rejectNovelSchema = z.object({
-  reason: z.string().trim().min(1).max(1000),
+// post-moderation — แทนคิวอนุมัติ (approve/reject) เดิม
+export const moderationQueueQuerySchema = z.object({
+  tab: z.enum(["unreviewed", "reported", "appeals", "suspended"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+});
+
+export const suspendNovelSchema = z.object({
+  reason: z.string().trim().min(10).max(2000),
+});
+
+export const resolveModerationSchema = z.object({
+  decision: z.enum(["reinstate", "uphold"]),
+  note: z.string().trim().max(2000).optional(),
+});
+
+export const appealNovelSchema = z.object({
+  message: z.string().trim().min(20).max(5000),
 });
 
 export const userRoleEnum = z.enum(["admin", "user"]);
@@ -726,6 +741,6 @@ export const supportMessageSchema = z.object({
 export const supportStatusSchema = z.object({ status: z.enum(["open", "in_progress", "resolved", "closed"]) });
 
 // gap 3.3 — หน้าแจ้งเตือน
-const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply"]);
+const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation"]);
 export const notificationReadAllSchema = z.object({ type: notificationTypeEnum.optional() });
 export const notificationPreferencesSchema = z.object({ muted_types: z.array(notificationTypeEnum).max(7) });
