@@ -9,6 +9,15 @@ interface SentimentOverview {
   avg_polarity: number | null;
   targets: Record<string, Record<Label, number>>;
   weekly: { week_start: string; count: number; neg: number; avg_polarity: number | null }[];
+  reviews_by_rating?: {
+    rating: number | null;
+    count: number;
+    pos: number;
+    neutral: number;
+    neg: number;
+    avg_raw_polarity: number | null;
+    avg_blended_polarity: number | null;
+  }[];
   novels_needing_attention: {
     novel_id: string;
     title: string;
@@ -86,7 +95,9 @@ export default async function AdminSentimentPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-card border border-neutral-200 p-5">
           <h2 className="text-base font-semibold text-neutral-900">ความรู้สึกพุ่งไปที่อะไร</h2>
-          <p className="mb-3 text-xs text-neutral-500">ป้ายจากกฎแยกเป้าหมาย (target.py) — ไม่เปลี่ยนผลบวก/ลบของโมเดล</p>
+          <p className="mb-3 text-xs text-neutral-500">
+            ป้ายจากกฎแยกเป้าหมาย (target.py) — ไม่เปลี่ยนผลบวก/ลบของโมเดล · ข้อความเดียวมีได้หลายป้าย จึงนับซ้ำได้
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -130,6 +141,46 @@ export default async function AdminSentimentPage() {
           </ul>
         </section>
       </div>
+
+      <section className="rounded-card border border-neutral-200 p-5">
+        <h2 className="text-base font-semibold text-neutral-900">รีวิวแยกตามดาว: ค่าดิบ เทียบ หลังผสมดาว</h2>
+        <p className="mb-3 text-xs text-neutral-500">
+          ค่าดิบ = ขั้วจากข้อความรีวิว (โมเดล) · หลังผสมดาว = 0.5 × ค่าดิบ + 0.5 × (ดาว − 3) / 2 ซึ่งระบบแนะนำใช้จริง
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[520px] text-sm">
+            <thead>
+              <tr className="text-left text-xs text-neutral-500">
+                <th className="py-1.5 font-medium">ดาว</th>
+                <th className="py-1.5 text-right font-medium">รีวิว</th>
+                {(["pos", "neutral", "neg"] as const).map((k) => (
+                  <th key={k} className="py-1.5 text-right font-medium">{LABEL[k]}</th>
+                ))}
+                <th className="py-1.5 text-right font-medium">ค่าดิบเฉลี่ย</th>
+                <th className="py-1.5 text-right font-medium">หลังผสมดาว</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.reviews_by_rating ?? []).map((r) => (
+                <tr key={r.rating ?? "none"} className="border-t border-neutral-100">
+                  <td className="py-1.5 text-neutral-700">{r.rating === null ? "ไม่ให้ดาว" : `${r.rating} ดาว`}</td>
+                  <td className="py-1.5 text-right tabular-nums text-neutral-900">{fmt(r.count)}</td>
+                  <td className="py-1.5 text-right tabular-nums text-neutral-700">{fmt(r.pos)}</td>
+                  <td className="py-1.5 text-right tabular-nums text-neutral-700">{fmt(r.neutral)}</td>
+                  <td className="py-1.5 text-right tabular-nums text-neutral-700">{fmt(r.neg)}</td>
+                  <td className="py-1.5 text-right tabular-nums text-neutral-900">{signed(r.avg_raw_polarity)}</td>
+                  <td className="py-1.5 text-right tabular-nums font-medium text-neutral-900">{signed(r.avg_blended_polarity)}</td>
+                </tr>
+              ))}
+              {(data.reviews_by_rating ?? []).length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-2 text-xs text-neutral-400">ยังไม่มีรีวิวที่วิเคราะห์แล้ว</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="rounded-card border border-neutral-200 p-5">
         <h2 className="text-base font-semibold text-neutral-900">นิยายที่ผู้อ่านไม่ค่อยพอใจ</h2>

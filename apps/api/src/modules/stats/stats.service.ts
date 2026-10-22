@@ -125,11 +125,11 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
     prisma.review.aggregate({ where: { novel_id, user_id: readerFilter }, _avg: { rating: true }, _count: { _all: true } }),
     prisma.comment.findMany({
       where: { user_id: readerFilter, chapter: { novel_id } },
-      select: { content: true, sentiment_label: true, sentiment_polarity: true, sentiment_target: true, created_at: true },
+      select: { content: true, sentiment_label: true, sentiment_polarity: true, sentiment_targets: true, created_at: true },
     }),
     prisma.review.findMany({
       where: { novel_id, user_id: readerFilter },
-      select: { comment_text: true, sentiment_label: true, sentiment_polarity: true, sentiment_target: true, created_at: true },
+      select: { comment_text: true, sentiment_label: true, sentiment_polarity: true, sentiment_targets: true, created_at: true },
     }),
     prisma.chapterPurchase.aggregate({
       where: { chapter: { novel_id } },
@@ -164,14 +164,14 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
       text: c.content,
       label: c.sentiment_label,
       polarity: c.sentiment_polarity,
-      target: c.sentiment_target,
+      targets: c.sentiment_targets,
       at: c.created_at,
     })),
     ...reviews.filter((r) => r.comment_text).map((r) => ({
       text: r.comment_text as string,
       label: r.sentiment_label,
       polarity: r.sentiment_polarity,
-      target: r.sentiment_target,
+      targets: r.sentiment_targets,
       at: r.created_at,
     })),
   ];
@@ -180,7 +180,7 @@ export async function getNovelStats(novel_id: string, user_id: string, days: num
   const positive = feedback.filter((f) => f.label === "pos");
   const pending = feedback.filter((f) => f.label === null).length;
   // ป้ายจาก target.py ใน NLP worker (ป้าย "work" ไม่ใช้ที่นี่) — ข้อความที่วิเคราะห์ก่อนมีป้ายนับเป็นไม่ระบุ
-  const immersed = positive.filter((f) => f.target === "character" || f.target === "immersion").length;
+  const immersed = positive.filter((f) => f.targets.includes("character") || f.targets.includes("immersion")).length;
   const names = [...new Set(characterNodes.map((n) => n.character_name.trim()).filter((n) => n.length >= 2))];
   const characters = names
     .map((name) => ({ name, count: positive.filter((f) => f.text.includes(name)).length }))

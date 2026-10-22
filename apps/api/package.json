@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "check:gift-assets": "tsx scripts/check-gift-assets.ts",
     "eval:recs": "tsx scripts/eval-recs.ts",
+    "report:sentiment": "tsx scripts/report-sentiment.ts",
     "openapi": "tsx scripts/generate-openapi.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "node ../../scripts/db-backup.mjs && prisma migrate dev",

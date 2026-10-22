@@ -68,18 +68,18 @@ describe("chapter view tracking", () => {
 describe("writer stats", () => {
   beforeAll(async () => {
     const c1 = await prisma.comment.create({
-      data: { chapter_id: chapterIds[0], user_id: reader.id, content: "พล็อตสนุก ตัวละครน่ารัก", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9, sentiment_target: "character" },
+      data: { chapter_id: chapterIds[0], user_id: reader.id, content: "พล็อตสนุก ตัวละครน่ารัก", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9, sentiment_targets: ["character"] },
     });
     await prisma.comment.create({
-      data: { chapter_id: chapterIds[1], user_id: reader2.id, content: "พล็อตสนุก แต่จบเร็ว ลิเลียน่ารักมาก", sentiment_label: "pos", sentiment_score: 0.7, sentiment_polarity: 0.5, sentiment_target: "character" },
+      data: { chapter_id: chapterIds[1], user_id: reader2.id, content: "พล็อตสนุก แต่จบเร็ว ลิเลียน่ารักมาก", sentiment_label: "pos", sentiment_score: 0.7, sentiment_polarity: 0.5, sentiment_targets: ["character"] },
     });
     await prisma.comment.create({
-      data: { chapter_id: chapterIds[1], user_id: reader.id, content: "ตอนนี้ยืดเยื้อ น่าเบื่อ ลิเลีย", sentiment_label: "neg", sentiment_score: 0.8, sentiment_polarity: -0.8, sentiment_target: "work" },
+      data: { chapter_id: chapterIds[1], user_id: reader.id, content: "ตอนนี้ยืดเยื้อ น่าเบื่อ ลิเลีย", sentiment_label: "neg", sentiment_score: 0.8, sentiment_polarity: -0.8, sentiment_targets: ["work"] },
     });
     await prisma.characterNode.create({ data: { novel_id: novelId, character_name: "ลิเลีย" } });
     // คอมเมนต์ของนักเขียนเอง — ต้องไม่ถูกนับ
     await prisma.comment.create({ data: { chapter_id: chapterIds[0], user_id: author.id, content: "ขอบคุณที่อ่านนะคะ", parent_comment_id: c1.comment_id } });
-    await prisma.review.create({ data: { novel_id: novelId, user_id: reader.id, rating: 4, comment_text: "สนุกดี", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9 } });
+    await prisma.review.create({ data: { novel_id: novelId, user_id: reader.id, rating: 4, comment_text: "สนุกดี", sentiment_label: "pos", sentiment_score: 0.9, sentiment_polarity: 0.9, blended_polarity: 0.7 } });
   });
 
   it("returns totals, a zero-filled daily series, chapter retention and sentiment", async () => {
@@ -115,6 +115,11 @@ describe("writer stats", () => {
     expect(res.json.counts.neg).toBeGreaterThanOrEqual(1);
     expect(res.json.targets.work.neg).toBeGreaterThanOrEqual(1);
     expect(res.json).toHaveProperty("avg_polarity");
+    // ตารางรีวิวตามดาว: ค่าดิบ vs หลังผสมดาว
+    const four = res.json.reviews_by_rating.find((r: { rating: number | null }) => r.rating === 4);
+    expect(four.count).toBeGreaterThanOrEqual(1);
+    expect(four).toHaveProperty("avg_raw_polarity");
+    expect(four).toHaveProperty("avg_blended_polarity");
     expect(Array.isArray(res.json.novels_needing_attention)).toBe(true);
   });
 

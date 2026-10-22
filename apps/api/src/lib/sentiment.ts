@@ -14,6 +14,24 @@ export function toPolarity(label: SentimentLabel, confidence: number): number {
   return 0;
 }
 
+/** ดาว 1..5 → ขั้ว −1..1 (3 ดาว = 0) */
+export function ratingPolarity(rating: number): number {
+  return Math.min(1, Math.max(-1, (rating - 3) / 2));
+}
+
+/** น้ำหนักของข้อความ (ผลโมเดล) เทียบกับดาว ตอนผสมขั้วของรีวิว */
+export const TEXT_WEIGHT = 0.5;
+
+/**
+ * ขั้วของรีวิวหลังผสมดาว — โมเดลอ่านรีวิวที่ทั้งชมทั้งติ (เช่น "โดยรวมดี แต่คำซ้ำเยอะ") แล้วได้บวกเกือบเต็ม
+ * ดาวที่ผู้อ่านให้เองช่วยดึงให้ใกล้ความจริง: 4 ดาว + ข้อความ +0.95 → 0.5×0.95 + 0.5×0.5 = +0.725
+ * ไม่มีดาว = ค่าดิบ ; ค่าดิบ (sentiment_polarity) เก็บแยกไว้เสมอเพื่อรายงาน/เทียบ
+ */
+export function blendReviewPolarity(textPolarity: number, rating: number | null | undefined): number {
+  if (rating == null) return textPolarity;
+  return TEXT_WEIGHT * textPolarity + (1 - TEXT_WEIGHT) * ratingPolarity(rating);
+}
+
 /** น้ำหนักของรีวิวเทียบกับคอมเมนต์ — รีวิวคือการตัดสินทั้งเรื่องโดยตรง ส่วนคอมเมนต์เป็นความเห็นรายตอน */
 export const REVIEW_WEIGHT = 0.6;
 
@@ -35,7 +53,7 @@ export async function refreshReadEdgeSentiment(user_id: string, novel_id: string
   const [review, comments] = await Promise.all([
     prisma.review.findUnique({
       where: { novel_id_user_id: { novel_id, user_id } },
-      select: { sentiment_polarity: true },
+      select: { blended_polarity: true },
     }),
     prisma.comment.findMany({
       where: { user_id, sentiment_polarity: { not: null }, chapter: { novel_id } },
@@ -43,7 +61,7 @@ export async function refreshReadEdgeSentiment(user_id: string, novel_id: string
     }),
   ]);
   const polarity = combinePolarity(
-    review?.sentiment_polarity ?? null,
+    review?.blended_polarity ?? null,
     comments.map((c) => c.sentiment_polarity as number)
   );
   await syncReadEdge(user_id, novel_id, polarity);

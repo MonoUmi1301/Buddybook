@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { refreshReadEdgeSentiment, toPolarity } from "@/lib/sentiment";
+import { blendReviewPolarity, refreshReadEdgeSentiment, toPolarity } from "@/lib/sentiment";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 import { purgeExpiredNovels } from "@/modules/novels/novels.service";
 
@@ -53,6 +53,8 @@ export async function getPendingQueue(limit = 20): Promise<{ items: PendingQueue
   return { items };
 }
 
+type SentimentTargetTag = "character" | "immersion" | "work";
+
 interface SentimentCallbackInput {
   target_type: "comment" | "review";
   target_id: string;
@@ -61,8 +63,10 @@ interface SentimentCallbackInput {
   sentiment_score: number;
   /** ขั้วความรู้สึก −1..1 — worker รุ่นใหม่ส่ง P(pos) − P(neg) มาเอง ถ้าไม่ส่งคำนวณจาก label+score */
   sentiment_polarity?: number;
-  /** ความรู้สึกพุ่งไปที่อะไร (target.py) — ไม่กระทบ label/polarity และระบบแนะนำ */
-  sentiment_target?: "character" | "immersion" | "work" | null;
+  /** ความรู้สึกพุ่งไปที่อะไร (target.py, ได้หลายป้าย) — ไม่กระทบ label/polarity และระบบแนะนำ */
+  sentiment_targets?: SentimentTargetTag[];
+  /** worker รุ่นเก่าส่งป้ายเดียว — แปลงเป็น array ให้ */
+  sentiment_target?: SentimentTargetTag | null;
 }
 
 /** Reference implementation — POST /internal/nlp/sentiment-callback
@@ -74,9 +78,10 @@ export async function submitSentimentCallback(input: SentimentCallbackInput) {
     sentiment_label: input.sentiment_label,
     sentiment_score: input.sentiment_score,
     sentiment_polarity,
-    sentiment_target: input.sentiment_target ?? null,
+    sentiment_targets: [...new Set(input.sentiment_targets ?? (input.sentiment_target ? [input.sentiment_target] : []))],
   };
 
+  let blended_polarity: number | undefined;
   let target_id: string;
   let user_id: string;
   let novel_id: string;
@@ -90,9 +95,12 @@ export async function submitSentimentCallback(input: SentimentCallbackInput) {
     user_id = updated.user_id;
     novel_id = updated.chapter.novel_id;
   } else {
+    // รีวิว: เก็บค่าดิบไว้ แล้วผสมดาวเป็น blended_polarity (ค่าที่ระบบแนะนำใช้)
+    const { rating } = await prisma.review.findUniqueOrThrow({ where: { review_id: input.target_id }, select: { rating: true } });
+    blended_polarity = blendReviewPolarity(sentiment_polarity, rating);
     const updated = await prisma.review.update({
       where: { review_id: input.target_id },
-      data,
+      data: { ...data, blended_polarity },
       select: { review_id: true, user_id: true, novel_id: true },
     });
     target_id = updated.review_id;
@@ -102,7 +110,7 @@ export async function submitSentimentCallback(input: SentimentCallbackInput) {
 
   refreshReadEdgeSentiment(user_id, novel_id).catch((err) => console.error("Neo4j refreshReadEdgeSentiment failed:", err));
 
-  return { target_id, ...data };
+  return { target_id, ...data, ...(blended_polarity !== undefined ? { blended_polarity } : {}) };
 }
 
 /** Reference implementation — POST /internal/trash-bin/purge (Cron รายวัน) */

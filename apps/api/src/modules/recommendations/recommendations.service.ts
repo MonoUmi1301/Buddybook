@@ -210,12 +210,13 @@ export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMM
     }),
     prisma.review.groupBy({
       by: ["novel_id"],
-      where: { novel_id: { in: ids }, sentiment_polarity: { not: null } },
-      _avg: { sentiment_polarity: true },
+      // ขั้วหลังผสมดาว (blended_polarity) — ค่าดิบจากโมเดลอย่างเดียวให้รีวิวที่ทั้งชมทั้งติเป็นบวกเกือบเต็ม
+      where: { novel_id: { in: ids }, blended_polarity: { not: null } },
+      _avg: { blended_polarity: true },
     }),
     getHeadViewThreshold(),
   ]);
-  const polarityByNovel = new Map(polarity.map((p) => [p.novel_id, p._avg.sentiment_polarity]));
+  const polarityByNovel = new Map(polarity.map((p) => [p.novel_id, p._avg.blended_polarity]));
   const interestSet = new Set(interestTagIds);
 
   const scored = novels.map((n) => {
@@ -327,7 +328,7 @@ export async function fullResync() {
   // รวม READ ต่อคู่ (user, novel) จาก 3 แหล่ง
   const [progress, reviews, comments] = await Promise.all([
     prisma.readingProgress.findMany({ select: { user_id: true, novel_id: true, last_chapter_number: true, last_read_at: true } }),
-    prisma.review.findMany({ select: { user_id: true, novel_id: true, sentiment_polarity: true } }),
+    prisma.review.findMany({ select: { user_id: true, novel_id: true, blended_polarity: true } }),
     prisma.comment.findMany({
       where: { sentiment_polarity: { not: null } },
       select: { user_id: true, sentiment_polarity: true, chapter: { select: { novel_id: true } } },
@@ -351,7 +352,7 @@ export async function fullResync() {
     return p;
   };
   for (const p of progress) pair(p.user_id, p.novel_id).progress = { last_chapter_number: p.last_chapter_number, last_read_at: p.last_read_at };
-  for (const r of reviews) pair(r.user_id, r.novel_id).review = r.sentiment_polarity;
+  for (const r of reviews) pair(r.user_id, r.novel_id).review = r.blended_polarity;
   for (const c of comments) pair(c.user_id, c.chapter.novel_id).comments.push(c.sentiment_polarity as number);
 
   let readEdges = 0;
