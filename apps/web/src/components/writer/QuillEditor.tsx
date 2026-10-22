@@ -91,5 +91,6 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={wrapperRef} />;
+  // quill-sticky: แถบเครื่องมือติดขอบบนจอตอนเลื่อนลงไปเขียนท้าย ๆ ตอน ไม่ต้องเลื่อนกลับขึ้นไปบนสุด (globals.css)
+  return <div ref={wrapperRef} className="quill-sticky" />;
 }

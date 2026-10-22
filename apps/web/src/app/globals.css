@@ -77,3 +77,14 @@
 .chapter-indent li p {
   text-indent: 0;
 }
+
+/* แถบเครื่องมือของ editor เขียนตอน (Quill) ติดขอบบนจอตอนเลื่อน — หน้าเขียนตอนไม่มี navbar จึงติดที่ top 0 */
+.quill-sticky .ql-toolbar.ql-snow {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background-color: #fff;
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.04);
+}
