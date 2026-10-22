@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { SupportCenter } from "@/components/support/SupportCenter";
-import { Plus } from "lucide-react";
+import Image from "next/image";
+import { FaqAccordion } from "@/components/ui/faq-chat-accordion";
 import { FAQ_DATA } from "@/lib/faq";
 import { callApi } from "@/lib/api/proxy";
 import { getAccessToken } from "@/lib/api/auth";
@@ -31,59 +32,57 @@ export default async function SupportPage() {
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="text-h2 text-neutral-900">ศูนย์ช่วยเหลือ</h1>
         <p className="mb-6 mt-1 text-sm text-neutral-500">
-          ลองหาคำตอบจากคำถามที่พบบ่อยก่อน ถ้าไม่เจอ แจ้งทีมงานได้ด้านล่าง ทีมงานจะตอบกลับและแจ้งเตือนคุณทันที
+          แจ้งปัญหาการใช้งานถึงทีมงาน ทีมงานจะตอบกลับและแจ้งเตือนคุณทันที หรือลองดูคำถามที่พบบ่อยก่อนก็ได้
         </p>
 
-        {/* คำถามที่พบบ่อยแบบย่อ — กล่องเรียบ 2 คอลัมน์ ไม่แย่งความเด่นจากส่วนแจ้งปัญหา (ห้องแชทเต็มอยู่ที่ /faq และปุ่มแชทลอย) */}
-        <section id="faq" className="scroll-mt-24">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 className="text-base font-semibold text-neutral-900">คำถามที่พบบ่อย</h2>
-            <Link href="/faq" className="shrink-0 text-sm font-medium text-primary-600 hover:underline">
-              ดูทั้งหมด
-            </Link>
-          </div>
-          <div className="grid items-start gap-2 md:grid-cols-2">
-            {FAQ_DATA.slice(0, FAQ_PREVIEW).map((item) => (
-              <details key={item.id} className="group rounded-xl border border-neutral-200 bg-white px-4 py-3 open:border-primary-200">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-neutral-800 [&::-webkit-details-marker]:hidden">
-                  {item.question}
-                  <Plus className="h-4 w-4 shrink-0 text-neutral-400 transition-transform group-open:rotate-45" aria-hidden />
-                </summary>
-                <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-                  {item.answer}
-                  {item.link && (
-                    <>
-                      {" "}
-                      <Link href={item.link.href} className="font-medium text-primary-600 hover:underline">
-                        {item.link.label}
-                      </Link>
-                    </>
-                  )}
-                </p>
-              </details>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-neutral-500">
-            ไม่เจอคำตอบ? ดู <Link href="/guide" className="text-primary-600 hover:underline">คู่มือการใช้งาน</Link> หรือแจ้งทีมงานด้านล่าง
-          </p>
-        </section>
+        {/* แจ้งปัญหาอยู่ก่อน (ซ้าย / บนในมือถือ) ส่วนคำถามที่พบบ่อยแบบแชทย่อลงไว้คอลัมน์ขวา ไม่แย่งความเด่น */}
+        <div className="grid items-start gap-8 lg:grid-cols-3">
+          <section id="ticket" className="scroll-mt-24 lg:col-span-2">
+            <h2 className="mb-4 text-h3 text-neutral-900">แจ้งปัญหาการใช้งาน</h2>
+            {user ? (
+              <SupportCenter tickets={tickets} />
+            ) : (
+              <div className="rounded-card border border-dashed border-neutral-300 px-6 py-10 text-center">
+                <p className="text-sm text-neutral-600">เข้าสู่ระบบก่อนแจ้งปัญหา เพื่อให้ทีมงานตรวจสอบบัญชีของคุณได้</p>
+                <Link
+                  href="/login?next=/support%23ticket"
+                  className="mt-4 inline-flex h-11 items-center rounded-pill bg-primary-500 px-6 text-sm font-semibold text-white hover:bg-primary-600"
+                >
+                  เข้าสู่ระบบ
+                </Link>
+              </div>
+            )}
+          </section>
 
-        <section id="ticket" className="mt-8 scroll-mt-24">
-          <h2 className="mb-4 text-h3 text-neutral-900">แจ้งปัญหาการใช้งาน</h2>
-          {user ? (
-            <SupportCenter tickets={tickets} />
-          ) : (
-            <div className="rounded-card border border-dashed border-neutral-300 px-6 py-10 text-center">
-              <p className="text-sm text-neutral-600">เข้าสู่ระบบก่อนแจ้งปัญหา เพื่อให้ทีมงานตรวจสอบบัญชีของคุณได้</p>
-              <Link
-                href="/login?next=/support%23ticket"
-                className="mt-4 inline-flex h-11 items-center rounded-pill bg-primary-500 px-6 text-sm font-semibold text-white hover:bg-primary-600"
-              >
-                เข้าสู่ระบบ
-              </Link>
+          <section
+            id="faq"
+            className="scroll-mt-24 overflow-hidden rounded-2xl border border-primary-200 bg-primary-50/40 dark:bg-transparent lg:sticky lg:top-24 lg:col-span-1"
+          >
+            <div className="flex items-center gap-2.5 border-b border-primary-200 px-4 py-3">
+              <Image src="/donate/mascot/mascot-bear.png" alt="" width={32} height={32} className="h-8 w-8 rounded-full bg-white" />
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-neutral-900">คำถามที่พบบ่อย</h2>
+                <p className="text-xs text-neutral-500">กดที่คำถาม น้องหมีจะตอบให้</p>
+              </div>
             </div>
-          )}
-        </section>
+            <FaqAccordion
+              data={FAQ_DATA.slice(0, FAQ_PREVIEW)}
+              timestamp={null}
+              className="p-3"
+              questionClassName="px-3 py-1.5 text-[13px]"
+              answerClassName="text-[13px]"
+            />
+            <p className="border-t border-primary-200 px-4 py-2.5 text-center text-xs">
+              <Link href="/faq" className="font-medium text-primary-600 hover:underline">
+                ดูคำถามทั้งหมด
+              </Link>
+              {" · "}
+              <Link href="/guide" className="font-medium text-primary-600 hover:underline">
+                คู่มือการใช้งาน
+              </Link>
+            </p>
+          </section>
+        </div>
       </main>
       <Footer />
     </div>
