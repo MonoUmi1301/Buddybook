@@ -79,9 +79,8 @@ export const updateMeSchema = z
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
 export const ageVerificationSchema = z.object({
-  birth_date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), {
-    message: "birth_date must be a valid date",
-  }),
+  // รูปแบบเดียวกับ <input type="date"> — ตรวจวันจริง/อนาคต/อายุเกินจริงซ้ำที่ API (parseBirthDate)
+  birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "birth_date must be YYYY-MM-DD" }),
 });
 
 export const interestsSchema = z.object({

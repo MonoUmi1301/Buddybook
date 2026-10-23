@@ -4,7 +4,7 @@ import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
-import { isViewerAgeVerified } from "@/lib/contentRating";
+import { assertContentRatingAllowed, contentRatingWhere } from "@/lib/contentRating";
 import { toSafeRichText } from "@/lib/richText";
 import { getOpenCasesForNovels, type ModerationCaseSummary } from "@/modules/admin/moderation.service";
 import type { ContentRating, LegalStatus, NovelFormat, NovelStatus, TagCategory, Visibility } from "@prisma/client";
@@ -31,13 +31,6 @@ interface SearchNovelsInput {
    *  จำเป็นสำหรับหน้า Writer Dashboard ที่ต้องเห็นผลงานตัวเองครบ ไม่ใช่แค่ที่เผยแพร่แล้ว) */
   mine?: boolean;
   requester_id?: string;
-}
-
-async function buildContentRatingGate(scopedToOwn: boolean, requester_id?: string) {
-  // เจ้าของดูผลงานตัวเองในหน้า Dashboard ได้ครบทุก rating เสมอ ไม่ต้องเช็ค age_verified
-  if (scopedToOwn) return {};
-  const verified = await isViewerAgeVerified(requester_id);
-  return verified ? {} : { content_rating: { not: "mature" as ContentRating } };
 }
 
 function buildTextSearchClause(q: string, field: SearchNovelsInput["field"]) {
@@ -78,7 +71,8 @@ export async function searchNovels({
   requester_id,
 }: SearchNovelsInput) {
   const scopedToOwn = Boolean(mine && requester_id);
-  const ratingGate = await buildContentRatingGate(scopedToOwn, requester_id);
+  // เจ้าของดูผลงานตัวเองในหน้า Dashboard ได้ครบทุกเรตเสมอ คนอื่นเห็นเฉพาะเรตที่อายุที่ยืนยันแล้วถึงเกณฑ์
+  const ratingGate = await contentRatingWhere(requester_id, scopedToOwn);
 
   const where = {
     // gap 2.4 — นิยายในถังขยะไม่โผล่ใน Dashboard ของเจ้าของ (ดูได้ที่ GET /novels/trash แทน)
@@ -707,9 +701,12 @@ export async function restoreMapVersion(version_id: string, user_id: string) {
 
 /** Reference implementation — GET /novels/:novel_id/reviews (Public, gated by novel visibility) */
 export async function listNovelReviews(novel_id: string, viewer_id?: string) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { visibility: true, author_id: true } });
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { visibility: true, author_id: true, content_rating: true },
+  });
   if (!novel) throw ApiError.notFound("Novel not found");
-  assertNovelVisible(novel, viewer_id);
+  await assertContentRatingAllowed(novel, viewer_id, assertNovelVisible(novel, viewer_id));
 
   const reviews = await prisma.review.findMany({
     where: { novel_id },
@@ -779,9 +776,12 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
 /** Reference implementation — GET /novels/:novel_id/donations (Public, gated by novel visibility —
  *  ส่วนขยายนอก API_Endpoints.md เดิม — จำเป็นเพื่อแสดง "ผู้สนับสนุนสูงสุด" หลังมี POST /donations จริงแล้ว) */
 export async function listNovelDonors(novel_id: string, viewer_id?: string) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { visibility: true, author_id: true } });
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { visibility: true, author_id: true, content_rating: true },
+  });
   if (!novel) throw ApiError.notFound("Novel not found");
-  assertNovelVisible(novel, viewer_id);
+  await assertContentRatingAllowed(novel, viewer_id, assertNovelVisible(novel, viewer_id));
 
   const grouped = await prisma.donation.groupBy({
     by: ["from_user_id"],
@@ -1010,11 +1010,7 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
   if (!novel || novel.deleted_at) throw ApiError.notFound("Novel not found");
 
   const isOwner = assertNovelVisible({ visibility: novel.visibility, author_id: novel.author.user_id }, viewer_id);
-  if (novel.content_rating === "mature" && !isOwner && !(await isViewerAgeVerified(viewer_id))) {
-    throw ApiError.forbidden("ต้องยืนยันอายุ 18 ปีขึ้นไปก่อนถึงจะดูนิยายเรื่องนี้ได้", {
-      code: "AGE_VERIFICATION_REQUIRED",
-    });
-  }
+  await assertContentRatingAllowed(novel, viewer_id, isOwner);
 
   const is_liked = viewer_id
     ? Boolean(await prisma.novelLike.findUnique({ where: { user_id_novel_id: { user_id: viewer_id, novel_id } } }))

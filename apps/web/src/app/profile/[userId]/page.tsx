@@ -14,6 +14,7 @@ import { SupporterBadges } from "@/components/gifts/SupporterBadges";
 import type { PublicGifts, SupporterBadge } from "@/lib/gifts";
 import { callApi } from "@/lib/api/proxy";
 import { getCurrentUser } from "@/lib/api/session";
+import { getAccessToken } from "@/lib/api/auth";
 import { FollowButton } from "@/components/social/FollowButton";
 import { ReportButton } from "@/components/social/ReportButton";
 import { getPenName } from "@/lib/displayName";
@@ -45,7 +46,8 @@ function StatRow({ icon: Icon, label, value }: { icon: typeof Eye; label: string
 export default async function ProfilePage({ params }: { params: { userId: string } }) {
   const [user, result] = await Promise.all([
     getCurrentUser(),
-    callApi({ method: "GET", path: `/users/${params.userId}` }),
+    // ส่ง token ให้ผู้ที่ยืนยันอายุแล้ว/เจ้าของโปรไฟล์เห็นนิยายเรต 18+ ในรายการผลงาน
+    callApi({ method: "GET", path: `/users/${params.userId}`, token: getAccessToken() }),
   ]);
 
   if ("error" in result || result.status === 404) notFound();

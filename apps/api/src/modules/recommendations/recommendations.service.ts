@@ -12,7 +12,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { env } from "@/config/env";
-import { isViewerAgeVerified } from "@/lib/contentRating";
+import { contentRatingWhere } from "@/lib/contentRating";
 import {
   type Candidate,
   type CandidateSource,
@@ -140,16 +140,16 @@ function toNum(v: unknown): number {
 /**
  * GET /recommendations — Recommendation v2 (gap 2.3)
  * 1) candidate: Neo4j (interest / similar_readers / hidden_gem) + Postgres (fresh / popular fallback)
- * 2) กรองใน Postgres (source of truth): เผยแพร่อยู่, ไม่ใช่ของตัวเอง, ยังไม่เคยอ่าน, เกตอายุ 18+
+ * 2) กรองใน Postgres (source of truth): เผยแพร่อยู่, ไม่ใช่ของตัวเอง, ยังไม่เคยอ่าน, เกตเรตตามอายุ (teen 13+, mature 18+)
  * 3) คำนวณแท็กที่ตรง + ขั้วความรู้สึกเฉลี่ยจาก Postgres ทุกตัว (Neo4j ล่มก็ยังจัดอันดับได้)
  * 4) relevanceScore → rerankLongTail → เหตุผลบนการ์ด
  */
 export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMMENDATION_LIMIT) {
   const now = new Date();
-  const [interests, readRows, ageVerified, graph] = await Promise.all([
+  const [interests, readRows, ratingGate, graph] = await Promise.all([
     prisma.userInterest.findMany({ where: { user_id }, select: { tag_id: true } }),
     prisma.readingProgress.findMany({ where: { user_id }, select: { novel_id: true } }),
-    isViewerAgeVerified(user_id),
+    contentRatingWhere(user_id),
     graphCandidates(user_id),
   ]);
   const interestTagIds = interests.map((i) => i.tag_id);
@@ -160,7 +160,7 @@ export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMM
     author_id: { not: user_id },
     novel_id: { notIn: readIds },
     author: { is_suspended: false },
-    ...(ageVerified ? {} : { content_rating: { not: "mature" } }),
+    ...ratingGate,
   };
 
   // Q4 — มาใหม่ตรงแนว: นิยายที่เพิ่งสร้างไม่มีทางมี sentiment/ยอดวิว จึงต้องมีช่องทางเข้าเองโดยตรง

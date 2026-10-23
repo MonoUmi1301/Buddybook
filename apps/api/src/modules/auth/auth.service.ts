@@ -14,7 +14,7 @@ import { isEmailConfigured, sendOAuthSignInHintEmail, sendOtpEmail, sendPassword
 import { generateTotpSecret, buildTotpUri, generateTotpQrCodeDataUrl, verifyTotpCode } from "@/lib/totp";
 import { env } from "@/config/env";
 import type { OAuthProfile } from "@/lib/oauthProfile";
-import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
+import { saveVerifiedBirthDate } from "@/lib/contentRating";
 import { normalizeEmail } from "@/lib/normalizeEmail";
 
 // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — เดิม 10 rounds ยังปลอดภัยอยู่ (ขั้นต่ำที่ OWASP
@@ -345,14 +345,7 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
   // gap 3.4 — provider ยืนยันวันเกิดมาให้ (Google People API) → ตั้งสถานะอายุจากแหล่งที่เชื่อถือได้
   // (ทับค่าที่ผู้ใช้กรอกเอง และหลังจากนี้กรอกเองทับไม่ได้อีก — ดู users.controller setAgeVerification)
   if (profile.birthdate) {
-    user = await prisma.user.update({
-      where: { user_id: user.user_id },
-      data: {
-        age_verified: ageOn(profile.birthdate) >= ADULT_AGE,
-        age_verification_source: profile.provider,
-        updated_at: new Date(),
-      },
-    });
+    await saveVerifiedBirthDate(user.user_id, profile.birthdate, "google");
   }
 
   if (user.totp_enabled) {

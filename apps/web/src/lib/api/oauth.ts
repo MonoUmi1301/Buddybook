@@ -53,6 +53,39 @@ export function clearOAuth2faCookie(response: NextResponse) {
   return response;
 }
 
+/**
+ * bb_oauth_age_verify: flow "ยืนยันอายุด้วย Google" ใช้ callback URL เดียวกับล็อกอิน (ลงทะเบียน redirect_uri ไว้อันเดียว)
+ * — cookie นี้บอก callback ว่าเป็นการยืนยันอายุของบัญชีที่ล็อกอินอยู่ ไม่ใช่การล็อกอิน และเก็บหน้าที่จะพากลับ
+ */
+export const OAUTH_AGE_VERIFY_COOKIE = "bb_oauth_age_verify";
+
+/** ยอมรับเฉพาะ path ภายในเว็บ ("/novels/..") — กัน open redirect ด้วย "//evil.com" หรือ URL เต็ม */
+export function safeReturnPath(value: string | null | undefined, fallback = "/settings"): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return fallback;
+  return value;
+}
+
+/** แนบผลการยืนยัน (?age_verify=ok|underage|no_birthday|failed|unavailable) ให้หน้าเกต/หน้าตั้งค่าแสดงข้อความ */
+export function withAgeVerifyResult(path: string, result: string) {
+  const url = new URL(path, "http://placeholder");
+  url.searchParams.set("age_verify", result);
+  return `${url.pathname}${url.search}`;
+}
+
+export function setOAuthAgeVerifyCookie(response: NextResponse, returnTo: string) {
+  response.cookies.set(OAUTH_AGE_VERIFY_COOKIE, returnTo, {
+    ...baseOptions,
+    path: "/api/v1/auth/oauth",
+    maxAge: OAUTH_STATE_MAX_AGE,
+  });
+  return response;
+}
+
+export function clearOAuthAgeVerifyCookie(response: NextResponse) {
+  response.cookies.set(OAUTH_AGE_VERIFY_COOKIE, "", { ...baseOptions, path: "/api/v1/auth/oauth", maxAge: 0 });
+  return response;
+}
+
 /** เทียบ state แบบ constant-time — ความยาวต่างกันคืน false (timingSafeEqual จะ throw) */
 export function stateMatches(expected: string | undefined, actual: string | null): boolean {
   if (!expected || !actual) return false;

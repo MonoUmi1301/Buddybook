@@ -3,7 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { BackButton } from "@/components/ui/BackButton";
 import { Tabs } from "@/components/ui/Tabs";
-import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
+import { AgeGateInterstitial, parseAgeGate } from "@/components/novel-detail/AgeGateInterstitial";
 import { NovelHero, type NovelDetailData } from "@/components/novel-detail/NovelHero";
 import { NovelOverview } from "@/components/novel-detail/NovelOverview";
 import { ChapterListCard, type ChapterListItem } from "@/components/novel-detail/ChapterListCard";
@@ -91,12 +91,13 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
     notFound();
   }
 
-  if (result.status === 403 && (result.json as { details?: { code?: string } })?.details?.code === "AGE_VERIFICATION_REQUIRED") {
+  const ageGate = parseAgeGate(result.status, result.json);
+  if (ageGate) {
     return (
       <div className="flex min-h-screen flex-col bg-neutral-50">
         <Navbar user={user} />
         <main className="flex-1">
-          <AgeGateInterstitial />
+          <AgeGateInterstitial gate={ageGate} loggedIn={Boolean(user)} returnTo={`/novels/${params.novelId}`} />
         </main>
         <Footer />
       </div>
@@ -125,7 +126,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
       token,
       searchParams: new URLSearchParams({ novel_id: novel.novel_id }),
     }),
-    callApi({ method: "GET", path: `/users/${novel.author.user_id}` }),
+    callApi({ method: "GET", path: `/users/${novel.author.user_id}`, token }),
     // "นิยายที่คล้ายกัน" = หมวดหมู่หลักเดียวกัน เรียงตามยอดวิว (ส่ง token เพื่อให้ gate เรต 18+ ตรงกับ viewer)
     novel.primary_tag
       ? callApi({

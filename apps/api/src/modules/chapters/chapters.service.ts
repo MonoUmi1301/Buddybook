@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { moveToTrash } from "@/lib/trash";
 import { ApiError } from "@/utils/ApiError";
 import { assertNovelVisible } from "@/lib/novelVisibility";
-import { isViewerAgeVerified } from "@/lib/contentRating";
+import { assertContentRatingAllowed } from "@/lib/contentRating";
 import { notifyLibraryOfNewChapter } from "@/lib/chapterNotifications";
 import { syncReadEdge } from "@/lib/graphSync";
 import { recordChapterView } from "@/lib/viewTracking";
@@ -120,11 +120,12 @@ export async function createChapter(novel_id: string, author_id: string, input: 
 export async function listNovelChapters(novel_id: string, requester_id?: string) {
   const novel = await prisma.novel.findUnique({
     where: { novel_id },
-    select: { author_id: true, visibility: true },
+    select: { author_id: true, visibility: true, content_rating: true },
   });
   if (!novel) throw ApiError.notFound("Novel not found");
 
   const isOwner = assertNovelVisible(novel, requester_id);
+  await assertContentRatingAllowed(novel, requester_id, isOwner);
 
   const chapters = await prisma.chapter.findMany({
     // เพิ่มภายหลัง — ผู้อ่านเห็นตอนที่ตั้งเวลาเผยแพร่ไว้ด้วย (แค่ชื่อ/เวลา ไม่มีเนื้อหา — list นี้ไม่ select content
@@ -188,11 +189,7 @@ export async function getChapterById(chapter_id: string, requester_id?: string, 
 
   // เพิ่มภายหลัง (Phase H) — เดิมจุดนี้ไม่เช็ค content_rating เลย ทำให้เดา/แชร์ chapter_id ตรง ๆ
   // อ่านเนื้อหาได้แม้หน้ารายละเอียดนิยาย (getNovelById) จะบล็อกไปแล้วก็ตาม ต้องเกตซ้ำที่นี่ด้วย
-  if (chapter.novel.content_rating === "mature" && !isOwner && !(await isViewerAgeVerified(requester_id))) {
-    throw ApiError.forbidden("ต้องยืนยันอายุ 18 ปีขึ้นไปก่อนถึงจะอ่านตอนนี้ได้", {
-      code: "AGE_VERIFICATION_REQUIRED",
-    });
-  }
+  await assertContentRatingAllowed(chapter.novel, requester_id, isOwner);
 
   // เพิ่มภายหลัง (ตอนติดเหรียญ) — ยังไม่ได้ซื้อ: ส่งข้อมูลตอนกลับไปได้ (ชื่อ/ราคา) แต่ไม่ส่งเนื้อหา
   const locked = chapter.price_coins > 0 && !isOwner && !(await hasPurchased(requester_id, chapter_id));
@@ -238,11 +235,7 @@ export async function purchaseChapter(user_id: string, chapter_id: string) {
   if (chapter.status !== "published") throw ApiError.notFound("Chapter not found");
   if (isOwner) throw ApiError.unprocessable("You already own this chapter");
   if (chapter.price_coins <= 0) throw ApiError.unprocessable("This chapter is free");
-  if (chapter.novel.content_rating === "mature" && !(await isViewerAgeVerified(user_id))) {
-    throw ApiError.forbidden("ต้องยืนยันอายุ 18 ปีขึ้นไปก่อนถึงจะอ่านตอนนี้ได้", {
-      code: "AGE_VERIFICATION_REQUIRED",
-    });
-  }
+  await assertContentRatingAllowed(chapter.novel, user_id, false);
 
   const author_id = chapter.novel.author_id;
   const price = chapter.price_coins;
@@ -500,6 +493,7 @@ export async function listChapterComments(chapter_id: string, requester_id?: str
   if (chapter.status !== "published" && !isOwner) {
     throw ApiError.notFound("Chapter not found");
   }
+  await assertContentRatingAllowed(chapter.novel, requester_id, isOwner);
 
   const rows = await prisma.comment.findMany({
     where: { chapter_id },
@@ -555,9 +549,12 @@ function buildCommentTree(rows: CommentRow[]): CommentNode[] {
  *  x 2 query ต่อ request, หน้าช้า ~580 ms บน production build) ตอนนี้ใช้ 1 query เช็คสิทธิ์ + 2 query
  *  คู่ขนาน ไม่ว่าจะมีกี่ตอน */
 export async function listNovelComments(novel_id: string, requester_id?: string) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true, visibility: true } });
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, visibility: true, content_rating: true },
+  });
   if (!novel) throw ApiError.notFound("Novel not found");
-  assertNovelVisible(novel, requester_id);
+  await assertContentRatingAllowed(novel, requester_id, assertNovelVisible(novel, requester_id));
 
   const [chapters, rows] = await Promise.all([
     prisma.chapter.findMany({

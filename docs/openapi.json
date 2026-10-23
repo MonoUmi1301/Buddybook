@@ -4065,6 +4065,32 @@
         }
       }
     },
+    "/api/v1/presence/heartbeat": {
+      "post": {
+        "tags": [
+          "presence"
+        ],
+        "summary": "POST /api/v1/presence/heartbeat",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
     "/api/v1/recommendations": {
       "get": {
         "tags": [
@@ -4456,7 +4482,7 @@
           "users"
         ],
         "summary": "GET /api/v1/users/:user_id",
-        "description": "สาธารณะ",
+        "description": "สาธารณะ (ล็อกอินแล้วได้ข้อมูลเพิ่ม)",
         "parameters": [
           {
             "name": "user_id",
@@ -4468,14 +4494,22 @@
             }
           }
         ],
-        "security": [],
-        "x-access": "public",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "optional-auth",
         "responses": {
           "200": {
             "description": "สำเร็จ"
           },
           "400": {
             "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
           }
         }
       }
@@ -4698,6 +4732,32 @@
           "users"
         ],
         "summary": "PATCH /api/v1/users/me/age-verification",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/users/me/age-verification/google": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "POST /api/v1/users/me/age-verification/google",
         "description": "ต้องล็อกอิน",
         "security": [
           {

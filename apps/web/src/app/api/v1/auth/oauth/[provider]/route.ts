@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { callApi } from "@/lib/api/proxy";
 import { appUrl } from "@/lib/api/config";
-import { setOAuthStateCookie } from "@/lib/api/oauth";
+import { clearOAuthAgeVerifyCookie, setOAuthStateCookie } from "@/lib/api/oauth";
 
 // GET /api/v1/auth/oauth/:provider — Public, browser navigates here directly (ไม่ใช่ fetch)
 // แล้วโดน redirect ต่อไปหน้า consent ของ provider จริง — เก็บ state ไว้ใน httpOnly cookie ของเบราว์เซอร์นี้
@@ -14,5 +14,6 @@ export async function GET(_request: Request, { params }: { params: { provider: s
   }
 
   const { redirect_url, state } = result.json as { redirect_url: string; state: string };
-  return setOAuthStateCookie(NextResponse.redirect(redirect_url), state);
+  // ล้าง flow ยืนยันอายุที่ค้างไว้ (ถ้ามี) ไม่ให้ callback ของการล็อกอินครั้งนี้ถูกตีความเป็นการยืนยันอายุ
+  return clearOAuthAgeVerifyCookie(setOAuthStateCookie(NextResponse.redirect(redirect_url), state));
 }

@@ -18,6 +18,25 @@ export function ageOn(birth: BirthDate, now = new Date()): number {
 }
 
 export const ADULT_AGE = 18;
+/** อายุมากสุดที่ยอมรับตอนกรอกวันเกิดเอง — กันค่าอย่าง 0001-01-01 ที่เลือกมาแค่ให้ผ่าน */
+export const MAX_DECLARED_AGE = 120;
+
+/**
+ * แปลงวันเกิดที่ผู้ใช้กรอกเอง — รับเฉพาะ YYYY-MM-DD ที่เป็นวันจริงในปฏิทิน ไม่อยู่ในอนาคต และอายุไม่เกิน
+ * MAX_DECLARED_AGE (เดิมใช้ Date.parse ซึ่งยอมรับ "1" เป็นปี 2001 และ "0001-01-01" ได้ด้วย)
+ */
+export function parseBirthDate(value: string, now = new Date()): BirthDate | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return null;
+  const birth = { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) };
+  const d = new Date(Date.UTC(birth.year, birth.month - 1, birth.day));
+  if (d.getUTCFullYear() !== birth.year || d.getUTCMonth() + 1 !== birth.month || d.getUTCDate() !== birth.day) {
+    return null; // เช่น 2001-02-30
+  }
+  const age = ageOn(birth, now);
+  if (age < 0 || age > MAX_DECLARED_AGE) return null;
+  return birth;
+}
 
 interface GooglePeopleBirthday {
   metadata?: { primary?: boolean; source?: { type?: string } };

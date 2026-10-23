@@ -52,7 +52,12 @@ async function main() {
 
   const writer = await make("core_writer", { pen_name: "นักเขียนแกนหลัก", age_verified: true, age_verification_source: "self_declared" });
   const reader = await make("core_reader", { age_verified: true, age_verification_source: "self_declared" });
-  const minor = await make("core_minor", { age_verified: false, age_verification_source: "self_declared" });
+  // ผู้เยาว์อายุ 15 ที่กรอกวันเกิดเองแล้ว — อ่านเรต 13+ ได้ แต่ 18+ ไม่ได้ และกรอกใหม่ไม่ได้
+  const minor = await make("core_minor", {
+    age_verified: false,
+    age_verification_source: "self_declared",
+    birth_date: new Date(Date.UTC(new Date().getUTCFullYear() - 15, 0, 1)),
+  });
   const admin = await make("core_admin", { role: "admin", age_verified: true });
 
   // เติมเหรียญตั้งต้นให้ผู้อ่าน (ledger แบบเดียวกับ top-up จริง — balance_after คือยอดล่าสุด)

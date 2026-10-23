@@ -1,14 +1,14 @@
 import { forwardToApi } from "@/lib/api/proxy";
 import { parseJsonBody, requireUuidParam } from "@/lib/api/validate";
 import { createCommentSchema } from "@/lib/api/schemas";
-import { requireAccessToken } from "@/lib/api/auth";
+import { getAccessToken, requireAccessToken } from "@/lib/api/auth";
 
-// GET /api/v1/chapters/:chapterId/comments — Public
+// GET /api/v1/chapters/:chapterId/comments — Public (แนบ token ถ้ามี — เกตเรตเนื้อหาตามอายุผู้ชม)
 export async function GET(_request: Request, { params }: { params: { chapterId: string } }) {
   const id = requireUuidParam(params.chapterId, "chapter_id");
   if ("error" in id) return id.error;
 
-  return forwardToApi({ method: "GET", path: `/chapters/${id.value}/comments` });
+  return forwardToApi({ method: "GET", path: `/chapters/${id.value}/comments`, token: getAccessToken() });
 }
 
 // POST /api/v1/chapters/:chapterId/comments

@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { syncInterestedIn, deleteUserGraphNode, deleteNovelGraphNode } from "@/lib/graphSync";
-import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
+import { parseBirthDate } from "@/lib/ageVerification";
+import { contentRatingWhere, getViewerAge, saveVerifiedBirthDate } from "@/lib/contentRating";
+import { exchangeGoogleCode, verifyOAuthState } from "@/lib/googleOAuth";
 
 /** Reference implementation ที่สอง — แสดง pattern การใช้ req.user จาก requireAuth */
 export async function getMe(req: Request, res: Response) {
@@ -21,6 +23,7 @@ export async function getMe(req: Request, res: Response) {
       avatar_url: true,
       bio: true,
       age_verified: true,
+      age_verification_source: true,
       totp_enabled: true,
       created_at: true,
       password_hash: true,
@@ -31,9 +34,16 @@ export async function getMe(req: Request, res: Response) {
   if (!user) throw ApiError.notFound("User not found");
 
   const { _count, password_hash, ...rest } = user;
+  // หน้าตั้งค่าแสดงสถานะยืนยันอายุ — อายุ ณ วันนี้จากวันเกิดที่ยืนยันแล้ว (null = ยังไม่ยืนยัน)
+  const verified_age = await getViewerAge(user.user_id);
   // audit fix — หน้า "ลบบัญชี" ต้องรู้ว่าบัญชีนี้ตั้งรหัสผ่านไว้หรือเป็น OAuth-only ล้วน ๆ ถึงจะ
   // โชว์ช่องกรอกรหัสผ่านยืนยันถูก — ส่งแค่ boolean ไปเท่านั้น ไม่เคยส่ง hash จริงออกไปฝั่ง client
-  res.status(200).json({ ...rest, has_interests: _count.user_interests > 0, has_password: Boolean(password_hash) });
+  res.status(200).json({
+    ...rest,
+    verified_age,
+    has_interests: _count.user_interests > 0,
+    has_password: Boolean(password_hash),
+  });
 }
 
 const updateMeBodySchema = z
@@ -143,8 +153,8 @@ export async function deleteMe(req: Request, res: Response) {
 }
 
 const ageVerificationBodySchema = z.object({
-  birth_date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), {
-    message: "birth_date must be a valid date",
+  birth_date: z.string().refine((v) => parseBirthDate(v) !== null, {
+    message: "birth_date must be a real past date in YYYY-MM-DD format",
   }),
 });
 
@@ -155,22 +165,38 @@ export async function setAgeVerification(req: Request, res: Response) {
   // gap 3.4 — อายุที่ยืนยันจากบัญชี Google แล้วแก้ด้วยการกรอกเองไม่ได้ (กันเด็กกรอกวันเกิดปลอมเพื่อปลดล็อก 18+)
   const current = await prisma.user.findUnique({
     where: { user_id: req.user!.user_id },
-    select: { age_verification_source: true },
+    select: { age_verification_source: true, age_verified: true, birth_date: true },
   });
   if (current?.age_verification_source && current.age_verification_source !== "self_declared") {
     throw ApiError.conflict("อายุของบัญชีนี้ยืนยันจากบัญชี Google แล้ว ไม่สามารถแก้ไขเองได้");
   }
+  // กรอกวันเกิดเองได้ครั้งเดียว (เดิมกรอกซ้ำด้วยปีอื่นได้ไม่จำกัดจนผ่าน) — รวมบัญชีเก่าที่เคยกรอกแล้วได้ต่ำกว่า 18
+  // ก่อนมีคอลัมน์ birth_date แก้ได้ทางเดียวคือยืนยันผ่านบัญชี Google (verifyAgeWithGoogle / ล็อกอิน Google)
+  if (current?.birth_date || (current?.age_verification_source === "self_declared" && !current.age_verified)) {
+    throw ApiError.conflict("บัญชีนี้ยืนยันอายุไปแล้ว จึงแก้ไขเองไม่ได้ หากกรอกผิดให้ยืนยันด้วยบัญชี Google หรือติดต่อฝ่ายสนับสนุน");
+  }
 
-  const d = new Date(birth_date);
-  const age = ageOn({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
-  const age_verified = age >= ADULT_AGE;
+  res.status(200).json(await saveVerifiedBirthDate(req.user!.user_id, parseBirthDate(birth_date)!, "self_declared"));
+}
 
-  await prisma.user.update({
-    where: { user_id: req.user!.user_id },
-    data: { age_verified, age_verification_source: "self_declared", updated_at: new Date() },
-  });
+const googleAgeVerificationBodySchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
+});
 
-  res.status(200).json({ age_verified, source: "self_declared" });
+/** POST /users/me/age-verification/google — ยืนยันอายุของบัญชีที่ล็อกอินอยู่ด้วยวันเกิดในบัญชี Google
+ *  (ไม่ล็อกอิน/ไม่ผูกบัญชี Google เข้ากับ BuddyBook — อีเมล Google ไม่ต้องตรงกับบัญชีนี้)
+ *  ทับค่าที่กรอกเองได้เสมอเพราะน่าเชื่อถือกว่า; บัญชี Google ไม่มีปีเกิด/ไม่ให้สิทธิ์ → 422 */
+export async function verifyAgeWithGoogle(req: Request, res: Response) {
+  const { code, state } = googleAgeVerificationBodySchema.parse(req.body);
+  if (!verifyOAuthState(state)) {
+    throw ApiError.unauthorized("Invalid OAuth state — possible CSRF attempt");
+  }
+  const profile = await exchangeGoogleCode(code, { requestBirthday: true });
+  if (!profile.birthdate) {
+    throw ApiError.unprocessable("ไม่พบวันเกิดพร้อมปีเกิดในบัญชี Google นี้ หรือไม่ได้อนุญาตให้เข้าถึงวันเกิด");
+  }
+  res.status(200).json(await saveVerifiedBirthDate(req.user!.user_id, profile.birthdate, "google"));
 }
 
 const interestsBodySchema = z.object({
@@ -190,8 +216,14 @@ export async function getPublicProfile(req: Request, res: Response) {
   });
   if (!user) throw ApiError.notFound("User not found");
 
+  // ซ่อนนิยายที่เรตเกินอายุที่ผู้ชมยืนยันไว้ (เดิมชื่อ/ปกโชว์ให้ทุกคน แม้หน้านิยายจะบล็อกแล้ว)
+  const viewer_id = req.user?.user_id;
   const novels = await prisma.novel.findMany({
-    where: { author_id: user_id, visibility: "published" },
+    where: {
+      author_id: user_id,
+      visibility: "published",
+      ...(await contentRatingWhere(viewer_id, viewer_id === user_id)),
+    },
     orderBy: { created_at: "desc" },
     select: {
       novel_id: true,

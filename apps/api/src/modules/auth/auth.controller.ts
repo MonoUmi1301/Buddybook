@@ -150,7 +150,7 @@ export async function resetPasswordHandler(req: Request, res: Response) {
 const oauthProviderSchema = z.object({ provider: z.enum(["google", "facebook", "line"]) });
 
 const buildAuthUrlByProvider: Partial<Record<"google" | "facebook" | "line", (state: string) => string>> = {
-  google: buildGoogleAuthUrl,
+  google: (state) => buildGoogleAuthUrl(state),
   line: buildLineAuthUrl,
   facebook: buildFacebookAuthUrl,
 };
@@ -158,7 +158,7 @@ const buildAuthUrlByProvider: Partial<Record<"google" | "facebook" | "line", (st
 const exchangeCodeByProvider: Partial<
   Record<"google" | "facebook" | "line", (code: string) => Promise<OAuthProfile>>
 > = {
-  google: exchangeGoogleCode,
+  google: (code) => exchangeGoogleCode(code),
   line: exchangeLineCode,
   facebook: exchangeFacebookCode,
 };
@@ -173,6 +173,13 @@ export async function oauthStart(req: Request, res: Response) {
   }
 
   const state = createOAuthState();
+  // ?purpose=verify_age — ปุ่ม "ยืนยันอายุด้วย Google" (Google เท่านั้น) ขอ scope วันเกิดเสมอ
+  // callback ของ flow นี้ไปที่ POST /users/me/age-verification/google แทนการล็อกอิน
+  if (req.query.purpose === "verify_age") {
+    if (provider !== "google") throw ApiError.badRequest("Age verification is only supported with Google");
+    res.status(200).json({ redirect_url: buildGoogleAuthUrl(state, { requestBirthday: true }), state });
+    return;
+  }
   res.status(200).json({ redirect_url: buildAuthUrl(state), state });
 }
 
