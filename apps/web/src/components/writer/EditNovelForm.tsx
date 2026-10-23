@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Camera, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
+import { IntroductionEditor } from "@/components/writer/IntroductionEditor";
 import { Button } from "@/components/ui/Button";
 import { TagInput } from "@/components/writer/TagInput";
 import { TagPicker } from "@/components/writer/TagPicker";
@@ -178,14 +179,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
 
       <Textarea label="เรื่องย่อ" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} rows={5} />
 
-      <Textarea
-        label="แนะนำนิยาย (คำเกริ่นนำยาว)"
-        hint="รายละเอียดเพิ่มเติม/คำโปรโมตฉบับยาว แสดงต่อท้ายเรื่องย่อในหน้านิยาย (ไม่บังคับ)"
-        value={introduction}
-        onChange={(e) => setIntroduction(e.target.value)}
-        rows={8}
-        maxLength={20000}
-      />
+      <IntroductionEditor defaultValue={novel.introduction ?? ""} onChange={setIntroduction} />
 
       {mainGenreTags.length > 0 && (
         <div className="grid grid-cols-2 gap-4">

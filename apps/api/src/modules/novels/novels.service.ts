@@ -5,6 +5,7 @@ import { ApiError } from "@/utils/ApiError";
 import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { isViewerAgeVerified } from "@/lib/contentRating";
+import { toSafeRichText } from "@/lib/richText";
 import { getOpenCasesForNovels, type ModerationCaseSummary } from "@/modules/admin/moderation.service";
 import type { ContentRating, LegalStatus, NovelFormat, NovelStatus, TagCategory, Visibility } from "@prisma/client";
 
@@ -266,7 +267,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
       author_id,
       title: input.title,
       synopsis: input.synopsis,
-      introduction: input.introduction,
+      introduction: toSafeRichText(input.introduction),
       cover_image_url: input.cover_image_url,
       legal_status: LEGAL_STATUS_MAP[input.legal_status],
       // audit fix — เดิมพึ่ง default ของ schema.prisma (visibility @default(published)) ทำให้นิยาย
@@ -342,6 +343,8 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
   await assertValidCategoryHierarchy(input.primary_tag_id, input.secondary_tag_id);
 
   const { tag_ids, tag_names, pairing_tag_ids, pairing_tag_names, fandom_tag_ids, fandom_tag_names, ...rest } = input;
+  // แนะนำเรื่องเป็น HTML จาก Quill — กรองก่อนเก็บเสมอ (null = ล้างค่า, undefined = ไม่แตะ)
+  if (rest.introduction !== undefined) rest.introduction = toSafeRichText(rest.introduction);
   // แตะแท็กกลุ่มไหนกลุ่มหนึ่ง = ถือว่าส่ง "ชุดแท็กที่ต้องการทั้งหมด" มาแทนที่ทั้งก้อน (novel_tags เป็น
   // ตารางเดียวแบนไม่แยกกลุ่มจริง — EditNovelForm ส่งครบทุกกลุ่มทุกครั้งที่บันทึกอยู่แล้ว)
   const touchingTags =
@@ -1023,6 +1026,8 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
   const { novel_tags, view_count, _count, deleted_at: _deleted, character_map_public, ...rest } = novel;
   return {
     ...rest,
+    // ข้อมูลเก่าเป็นข้อความธรรมดา → แปลงเป็นย่อหน้า HTML (และกรองซ้ำ) ให้หน้าเว็บ/editor ได้ HTML รูปแบบเดียว
+    introduction: toSafeRichText(rest.introduction),
     ...(isOwner ? { moderation_case } : {}),
     character_map: character_map_public ?? null,
     view_count: Number(view_count),

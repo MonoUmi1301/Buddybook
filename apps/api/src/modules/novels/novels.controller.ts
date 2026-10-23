@@ -113,7 +113,7 @@ const createNovelBodySchema = z
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
     // เพิ่มภายหลัง — "แนะนำนิยาย" คำเกริ่นนำยาว แยกจาก synopsis
-    introduction: z.string().max(20000).optional(),
+    introduction: z.string().max(50000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: z.enum(["original", "fan-fiction", "translation"]),
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -164,7 +164,7 @@ const updateNovelBodySchema = z
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
     // null = ล้างค่า (ผู้เขียนลบข้อความในช่องแนะนำนิยายทิ้ง)
-    introduction: z.string().max(20000).nullable().optional(),
+    introduction: z.string().max(50000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: z.enum(["ongoing", "completed", "hiatus"]).optional(),
     // post-moderation — เผยแพร่ได้ทันทีไม่ต้องรออนุมัติ; suspended ตั้งได้เฉพาะแอดมิน (PATCH /admin/novels/:id/suspend)
