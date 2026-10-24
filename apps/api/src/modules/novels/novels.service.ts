@@ -5,7 +5,7 @@ import { ApiError } from "@/utils/ApiError";
 import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
 import { assertContentRatingAllowed, contentRatingWhere } from "@/lib/contentRating";
-import { toSafeRichText } from "@/lib/richText";
+import { toSafeChapterHtml, toSafeRichText } from "@/lib/richText";
 import { getOpenCasesForNovels, type ModerationCaseSummary } from "@/modules/admin/moderation.service";
 import type { ContentRating, LegalStatus, NovelFormat, NovelStatus, TagCategory, Visibility } from "@prisma/client";
 
@@ -960,7 +960,7 @@ export async function getPrintPreview(novel_id: string, user_id: string) {
       cover_image_url: novel.cover_image_url,
       author: novel.author,
     },
-    chapters,
+    chapters: chapters.map((c) => ({ ...c, content: toSafeChapterHtml(c.content) })),
   };
 }
 

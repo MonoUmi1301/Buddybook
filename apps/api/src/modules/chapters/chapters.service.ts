@@ -11,6 +11,7 @@ import type { ChapterStatus } from "@prisma/client";
 import { env } from "@/config/env";
 import { getBalance, ledgerTimestamp, lockWallets, WALLET_TX_OPTIONS } from "@/modules/wallet/wallet.service";
 import { splitGiftFee } from "@/modules/gifts/gift-fee";
+import { toSafeChapterHtml } from "@/lib/richText";
 
 function stripHtml(html: string): string {
   return html.replace(/<[^<>]*>/g, " ");
@@ -77,6 +78,7 @@ interface CreateChapterInput {
  *  เดิมที่ novels.service.ts createReview ทำไว้ */
 export async function createChapter(novel_id: string, author_id: string, input: CreateChapterInput) {
   await assertNovelOwner(novel_id, author_id);
+  const content = toSafeChapterHtml(input.content);
 
   try {
     const chapter = await prisma.chapter.create({
@@ -84,9 +86,9 @@ export async function createChapter(novel_id: string, author_id: string, input: 
         novel_id,
         chapter_number: input.chapter_number,
         title: input.title,
-        content: input.content,
+        content,
         status: input.status,
-        word_count: computeWordCount(input.content),
+        word_count: computeWordCount(content),
         published_at: input.status === "published" ? new Date() : null,
         scheduled_publish_at: input.status === "scheduled" ? input.scheduled_publish_at : null,
         price_coins: input.price_coins ?? 0,
@@ -213,7 +215,8 @@ export async function getChapterById(chapter_id: string, requester_id?: string, 
   }
 
   const { novel: _novel, ...rest } = chapter;
-  return { ...rest, teaser: null, locked: false };
+  // กรองตอนส่งออกด้วย — ตอนที่บันทึกไว้ก่อนมีการกรองฝั่งเขียนอาจยังมี HTML อันตรายค้างอยู่
+  return { ...rest, content: toSafeChapterHtml(rest.content), teaser: null, locked: false };
 }
 
 async function hasPurchased(user_id: string | undefined, chapter_id: string) {
@@ -254,7 +257,7 @@ export async function purchaseChapter(user_id: string, chapter_id: string) {
         chapter_id,
         balance_after: await getBalance(user_id, tx),
         already_owned: true,
-        content: chapter.content,
+        content: toSafeChapterHtml(chapter.content),
       };
     }
 
@@ -299,7 +302,7 @@ export async function purchaseChapter(user_id: string, chapter_id: string) {
     }
 
     // คืนเนื้อหาไปด้วยเลย ให้หน้าอ่านแสดงตอนที่เพิ่งปลดล็อกได้ทันทีโดยไม่ต้องโหลดหน้าใหม่
-    return { ...purchase, chapter_id, balance_after, already_owned: false, content: chapter.content };
+    return { ...purchase, chapter_id, balance_after, already_owned: false, content: toSafeChapterHtml(chapter.content) };
   }, WALLET_TX_OPTIONS);
 }
 
@@ -340,14 +343,13 @@ export async function updateChapter(chapter_id: string, user_id: string, input: 
 
   const willPublishNow = input.status === "published" && chapter.status !== "published";
   const willSchedule = input.status === "scheduled";
+  const content = toSafeChapterHtml(input.content);
 
   const updated = await prisma.chapter.update({
     where: { chapter_id },
     data: {
       ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.content !== undefined
-        ? { content: input.content, word_count: computeWordCount(input.content) }
-        : {}),
+      ...(content !== undefined ? { content, word_count: computeWordCount(content) } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.price_coins !== undefined ? { price_coins: input.price_coins } : {}),
       ...(willPublishNow ? { published_at: new Date() } : {}),
@@ -411,10 +413,11 @@ export async function deleteChapter(chapter_id: string, user_id: string) {
 export async function autosaveChapter(
   chapter_id: string,
   user_id: string,
-  content_snapshot: string,
+  rawSnapshot: string,
   title?: string,
   base_updated_at?: Date
 ) {
+  const content_snapshot = toSafeChapterHtml(rawSnapshot);
   const chapter = await getChapterWithNovel(chapter_id);
   if (chapter.novel.author_id !== user_id) throw ApiError.forbidden("Forbidden");
 
@@ -662,11 +665,13 @@ export async function restoreChapterVersion(chapter_id: string, version_id: stri
   const version = await prisma.chapterVersion.findUnique({ where: { version_id } });
   if (!version || version.chapter_id !== chapter_id) throw ApiError.notFound("Version not found");
 
+  // เวอร์ชันเก่าอาจบันทึกไว้ก่อนมีการกรอง — กรองอีกรอบตอนกู้คืน
+  const content = toSafeChapterHtml(version.content_snapshot);
   const updated = await prisma.chapter.update({
     where: { chapter_id },
     data: {
-      content: version.content_snapshot,
-      word_count: computeWordCount(version.content_snapshot),
+      content,
+      word_count: computeWordCount(content),
       updated_at: new Date(),
     },
     select: { chapter_id: true, content: true, updated_at: true },

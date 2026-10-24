@@ -26,6 +26,33 @@ const OPTIONS: sanitizeHtml.IOptions = {
   },
 };
 
+/** เนื้อหาตอน (Quill ตัวเต็มใน ChapterEditorForm) — ชุดเดียวกับ "แนะนำเรื่อง" บวกรูป วิดีโอ และเส้นคั่นฉาก
+ *  วิดีโอ (Quill ใส่เป็น iframe.ql-video) รับเฉพาะ YouTube/Vimeo ; รูปรับ data: ด้วยเพราะตอนเก่าฝังรูปแบบ
+ *  base64 ไว้ก่อนมี image handler (data: ใน <img> รันสคริปต์ไม่ได้) */
+const CHAPTER_OPTIONS: sanitizeHtml.IOptions = {
+  ...OPTIONS,
+  allowedTags: [...(OPTIONS.allowedTags as string[]), "h1", "img", "iframe"],
+  allowedAttributes: {
+    ...OPTIONS.allowedAttributes,
+    img: ["src", "alt", "width", "height"],
+    iframe: ["src", "class", "frameborder", "allowfullscreen"],
+  },
+  allowedClasses: {
+    "*": [/^ql-align-(center|right|justify)$/, /^ql-indent-[1-8]$/, "scene-break", "ql-video"],
+  },
+  allowedSchemesByTag: { img: ["http", "https", "data"] },
+  allowedIframeHostnames: ["www.youtube.com", "youtube.com", "www.youtube-nocookie.com", "player.vimeo.com"],
+  allowIframeRelativeUrls: false,
+};
+
+/** กรองเนื้อหาตอนก่อนบันทึกและก่อนส่งออก — หน้าอ่านเรนเดอร์ด้วย dangerouslySetInnerHTML จึงต้องเป็น HTML
+ *  ที่ปลอดภัยเสมอ (กันนักเขียนยิง API ตรงใส่ <img onerror> / <script> ให้รันในเบราว์เซอร์ผู้อ่าน)
+ *  ข้อความธรรมดาผ่านได้เหมือนเดิม (แค่ escape อักขระพิเศษ) ไม่แปลงเป็น <p> เพื่อไม่ให้เนื้อหาเดิมเปลี่ยนรูป */
+export function toSafeChapterHtml<T extends string | null | undefined>(value: T): T {
+  if (!value) return value;
+  return sanitizeHtml(value, CHAPTER_OPTIONS) as T;
+}
+
 const HTML_RE = /<(p|br|strong|em|u|s|span|a|ol|ul|li|blockquote|h[1-6]|hr)\b[^>]*>/i;
 
 function escapeHtml(text: string) {
