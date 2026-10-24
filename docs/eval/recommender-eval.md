@@ -1,6 +1,6 @@
 # ผลประเมินระบบแนะนำ (Neo4j)
 
-รันเมื่อ 2026-10-22T13:52:28.537Z · ฐานข้อมูล localhost:5525/buddybook · seed 42 · สคริปต์ `apps/api/scripts/eval-recommender.ts` (อ่านอย่างเดียว)
+รันเมื่อ 2026-10-22T14:40:05.258Z · ฐานข้อมูล localhost:5525/buddybook · seed 42 · สคริปต์ `apps/api/scripts/eval-recommender.ts` (อ่านอย่างเดียว)
 
 ข้อมูลไม่ถูกแก้ระหว่างรัน: Postgres ✅ เท่าเดิม · Neo4j ✅ เท่าเดิม
 
@@ -19,19 +19,19 @@
 
 ## 1. Correctness
 
-### 1.1 จำนวนข้อมูล Postgres vs Neo4j — ✅ ตรงทุกรายการ
+### 1.1 จำนวนข้อมูล Postgres vs Neo4j — ❌ ไม่ตรง 4 รายการ
 
 | รายการ | Postgres | Neo4j | ตรง |
 |---|---|---|---|
-| User | 3216 | 3216 | ✅ |
-| Novel (published) | 824 | 824 | ✅ |
+| User | 3216 | 3221 | ❌ |
+| Novel (published) | 824 | 828 | ❌ |
 | Tag (ที่ถูกใช้) | 53 | 53 | ✅ |
 | HAS_TAG | 3728 | 3728 | ✅ |
 | INTERESTED_IN | 6228 | 6228 | ✅ |
-| READ (อ่าน ∪ รีวิว ∪ คอมเมนต์) | 46466 | 46466 | ✅ |
-| READ ที่มี sentiment_score (ขั้วรวม) | 22675 | 22675 | ✅ |
+| READ (อ่าน ∪ รีวิว ∪ คอมเมนต์) | 46467 | 46472 | ❌ |
+| READ ที่มี sentiment_score (ขั้วรวม) | 22675 | 22678 | ❌ |
 
-id ที่อยู่ฝั่งเดียว: นิยายเฉพาะใน Neo4j 0, นิยายเฉพาะใน Postgres 0, ผู้ใช้เฉพาะใน Neo4j 0, ผู้ใช้เฉพาะใน Postgres 0
+id ที่อยู่ฝั่งเดียว: นิยายเฉพาะใน Neo4j 3, นิยายเฉพาะใน Postgres 0, ผู้ใช้เฉพาะใน Neo4j 4, ผู้ใช้เฉพาะใน Postgres 0
 
 ### 1.2 ความคล้ายของ 20 คู่ผู้ใช้: คำนวณเองจาก Postgres vs Neo4j — ✅ ตรงทุกคู่
 
@@ -65,11 +65,11 @@ id ที่อยู่ฝั่งเดียว: นิยายเฉพา
 | รายการ | ผู้ใช้ที่ได้ผล | จำนวนเรื่อง | รีวิวไปแล้ว | อยู่ในชั้นหนังสือ/อ่านอยู่ | ไม่ published | ผลงานตัวเอง | ซ้ำในรายการ |
 |---|---|---|---|---|---|---|---|
 | items | 120 | 1200 | 0 | 1 | 0 | 0 | 0 |
-| content_based | 98 | 244 | 0 | 0 | 0 | 0 | 0 |
-| collaborative | 115 | 1126 | 0 | 1 | 0 | 0 | 0 |
-| underrated | 13 | 33 | 0 | 0 | 0 | 0 | 0 |
+| content_based | 96 | 240 | 0 | 0 | 0 | 0 | 0 |
+| collaborative | 116 | 1145 | 0 | 1 | 0 | 0 | 0 |
+| underrated | 10 | 29 | 0 | 0 | 0 | 0 | 0 |
 
-Latency ของ `getRecommendations()` (3 query พร้อมกัน + hydrate จาก Postgres, n=120, ไม่นับ warm-up): p50 137.6 ms · p95 262.5 ms · max 499.2 ms
+Latency ของ `getRecommendations()` (3 query พร้อมกัน + hydrate จาก Postgres, n=120, ไม่นับ warm-up): p50 131.2 ms · p95 262.3 ms · max 351.5 ms
 
 ## 2. Offline evaluation
 

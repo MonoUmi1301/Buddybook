@@ -35,4 +35,4 @@
 ## Testing
 - API tests: `npm test` (vitest, needs a migrated + seeded Postgres from `apps/api/.env`).
 - Typecheck both apps: `npm run typecheck`. CI: `.github/workflows/ci.yml`.
-- E2E (Playwright, needs api+web running and `npx tsx prisma/seed-e2e.ts`): `npm run test:e2e`. Load test: `k6 run loadtest/buddybook.k6.js`. See `docs/evaluation.md`.
+- E2E (Playwright, needs api+web running and `npx tsx prisma/seed-e2e.ts --rich` — without `--rich` only `e2e_writer` is created, no readers/`e2e_admin`; password `e2e12345`): `npm run test:e2e`. Load test: `k6 run loadtest/buddybook.k6.js`. See `docs/evaluation.md`.
