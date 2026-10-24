@@ -256,8 +256,8 @@ model User {
   avatar_url               String?            @db.Text
   bio                      String?            @db.Text
   age_verified             Boolean            @default(false)
-  /// gap 3.4 — แหล่งที่ยืนยันอายุ: "google" (People API ตอนล็อกอิน) หรือ "self_declared" (กรอกวันเกิดเอง)
-  /// ยืนยันจาก provider แล้วกรอกเองทับไม่ได้ (ดู users.controller setAgeVerification)
+  /// gap 3.4 — แหล่งที่ยืนยันอายุ: "kyc" (บัตร + สแกนใบหน้า ดู KycVerification) หรือ "google" (People API)
+  /// เท่านั้น (ไม่มีการกรอกวันเกิดเอง — CHECK chk_users_age_verification_source) kyc ทับ google ได้ แต่ไม่ย้อนกลับ
   age_verification_source  String?            @db.VarChar(20)
   /// วันเกิดที่ยืนยันแล้ว (Google หรือกรอกเอง) — เกตเรตเนื้อหาคำนวณอายุจากค่านี้ทุกครั้ง (teen 13+, mature 18+)
   /// อายุเพิ่มตามเวลาเองโดยไม่ต้องยืนยันใหม่; null + age_verified=true = บัญชีเก่าที่ยืนยันก่อนมีคอลัมน์นี้ (ถือว่า 18+)
@@ -280,6 +280,7 @@ model User {
 
   novels                 Novel[]               @relation("NovelAuthor")
   user_interests         UserInterest[]
+  kyc_verifications      KycVerification[]
   chapter_versions       ChapterVersion[]      @relation("ChapterVersionEditor")
   trash_bin_deletions    TrashBin[]            @relation("TrashDeletedBy")
   comments               Comment[]
@@ -1179,4 +1180,45 @@ model RecommenderEvalRun {
 
   @@index([created_at(sort: Desc)])
   @@map("recommender_eval_runs")
+}
+
+enum KycStatus {
+  pending
+  approved
+  rejected
+}
+
+/// e-KYC (บัตรประชาชน/พาสปอร์ต + Liveness) ผ่านผู้ให้บริการภายนอก — Data minimization ตาม PDPA:
+/// ไม่เก็บรูปบัตร/รูปใบหน้า/ชื่อ/เลขบัตร (ภาพวิ่งตรงจากเบราว์เซอร์ไปผู้ให้บริการ ไม่ผ่านเซิร์ฟเวอร์เรา)
+/// ผลอายุเก็บที่ User.birth_date + age_verification_source="kyc"; ตารางนี้เก็บแค่สถานะ หลักฐานความยินยอม
+/// และ hash เลขเอกสาร (HMAC มี secret — ย้อนกลับไม่ได้) ไว้กันเอกสารใบเดียวยืนยันหลายบัญชี
+model KycVerification {
+  verification_id  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String    @db.Uuid
+  /// ส่งให้ผู้ให้บริการเป็น vendor_data แทน user_id (ผู้ให้บริการไม่รู้ตัวตนบัญชีในระบบเรา)
+  external_ref     String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// session_id ของผู้ให้บริการ (Didit) — ใช้ดึงผลตรวจและสั่งลบภาพ/ข้อมูลชีวภาพฝั่งผู้ให้บริการ
+  provider_session_id String? @unique @db.VarChar(64)
+  provider         String    @db.VarChar(20)
+  status           KycStatus @default(pending)
+  /// ฉบับข้อความขอความยินยอม (PDPA ม.26 ข้อมูลชีวภาพ) ที่ผู้ใช้กดยอมรับ และเวลาที่ยอมรับ
+  consent_version  String    @db.VarChar(20)
+  consented_at     DateTime  @db.Timestamptz(6)
+  /// ID_CARD / PASSPORT และประเทศผู้ออก (ISO alpha-3) — ไม่เก็บเลขเอกสาร
+  document_type    String?   @db.VarChar(20)
+  document_country String?   @db.Char(3)
+  /// HMAC-SHA256(KYC_ID_HASH_SECRET, ประเทศ:ประเภท:เลขเอกสาร) — ต้องมี secret เพราะเลขบัตร 13 หลักเดาครบได้
+  id_number_hash   String?   @db.Char(64)
+  /// รหัสเหตุผลของเราเอง (เช่น PROVIDER_REJECTED, DUPLICATE_IDENTITY) ไม่เก็บข้อความอิสระจากผู้ให้บริการ
+  reject_reason    String?   @db.VarChar(40)
+  retry_allowed    Boolean   @default(true)
+  completed_at     DateTime? @db.Timestamptz(6)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([id_number_hash])
+  @@map("kyc_verifications")
 }

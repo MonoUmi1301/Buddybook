@@ -45,4 +45,9 @@ export class ApiError extends Error {
   static tooManyRequests(message = "Too many requests") {
     return new ApiError(429, message);
   }
+
+  /** บริการภายนอกที่ฟีเจอร์พึ่งพายังไม่ได้ตั้งค่า/ล่ม (เช่นผู้ให้บริการ e-KYC) */
+  static serviceUnavailable(message = "Service unavailable") {
+    return new ApiError(503, message);
+  }
 }

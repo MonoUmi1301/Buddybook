@@ -78,9 +78,11 @@ export const updateMeSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
-export const ageVerificationSchema = z.object({
-  // รูปแบบเดียวกับ <input type="date"> — ตรวจวันจริง/อนาคต/อายุเกินจริงซ้ำที่ API (parseBirthDate)
-  birth_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "birth_date must be YYYY-MM-DD" }),
+// e-KYC — ต้องติ๊กยินยอมจริง (true) และส่งฉบับข้อความที่ผู้ใช้เห็น (lib/kycConsent.ts)
+export const kycSessionSchema = z.object({
+  consent: z.literal(true),
+  consent_version: z.string().min(1).max(20),
+  return_to: z.string().max(300).optional(),
 });
 
 export const interestsSchema = z.object({

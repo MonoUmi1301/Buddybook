@@ -6,9 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { syncInterestedIn, deleteUserGraphNode, deleteNovelGraphNode } from "@/lib/graphSync";
-import { parseBirthDate } from "@/lib/ageVerification";
 import { contentRatingWhere, getViewerAge, saveVerifiedBirthDate } from "@/lib/contentRating";
 import { exchangeGoogleCode, verifyOAuthState } from "@/lib/googleOAuth";
+import { deleteProviderSessions } from "@/modules/kyc/kyc.service";
 
 /** Reference implementation ที่สอง — แสดง pattern การใช้ req.user จาก requireAuth */
 export async function getMe(req: Request, res: Response) {
@@ -121,6 +121,8 @@ export async function deleteMe(req: Request, res: Response) {
   // นิยายของบัญชีที่ลบต้องหายจากเว็บด้วย (เดิมยังเผยแพร่อยู่ในชื่อ "ผู้ใช้ที่ถูกลบ_xxx" ไม่มีเจ้าของดูแล)
   // ใช้ soft delete แบบเดียวกับนิยายที่นักเขียนลบเอง: ซ่อนทันที (private) แล้ว purge ลบถาวรตอนครบ 30 วัน
   // (เรื่องที่มีคนซื้อตอนไว้จะถูกซ่อนแต่ไม่ถูก purge — ดู purgeExpiredNovels) ทำใน transaction เดียวกับ anonymize
+  // session e-KYC ฝั่งผู้ให้บริการ (ภาพบัตร/ใบหน้า) ต้องตามลบด้วย — เก็บ id ไว้ก่อนแถวถูกลบในธุรกรรม
+  const kycSessions = await prisma.kycVerification.findMany({ where: { user_id }, select: { provider_session_id: true } });
   const trashedNovels = await prisma.$transaction(async (tx) => {
     const novels = await tx.$queryRaw<{ novel_id: string }[]>`
       UPDATE novels
@@ -137,46 +139,25 @@ export async function deleteMe(req: Request, res: Response) {
       oauth_id: null,
       avatar_url: null,
         bio: null,
+        // PDPA — บัญชีที่ลบแล้วไม่ต้องเก็บข้อมูลยืนยันอายุอีก (ลบแถว e-KYC ด้านล่างด้วย)
+        birth_date: null,
+        age_verified: false,
+        age_verification_source: null,
         deleted_at: new Date(),
         updated_at: new Date(),
       },
     });
+    await tx.kycVerification.deleteMany({ where: { user_id } });
     return novels;
   });
 
+  void deleteProviderSessions(kycSessions.map((k) => k.provider_session_id));
   deleteUserGraphNode(user_id).catch((err) => console.error("Neo4j deleteUserGraphNode failed:", err));
   for (const { novel_id } of trashedNovels) {
     deleteNovelGraphNode(novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
   }
 
   res.status(204).send();
-}
-
-const ageVerificationBodySchema = z.object({
-  birth_date: z.string().refine((v) => parseBirthDate(v) !== null, {
-    message: "birth_date must be a real past date in YYYY-MM-DD format",
-  }),
-});
-
-/** age_verified ใช้เปิด/ปิดการเข้าถึงเนื้อหา 18+ — ต้องคำนวณอายุจริงจาก birth_date
- *  ไม่ใช่ตั้งเป็น true ทันทีที่กรอกวันเกิดมา (ผู้ใช้อายุต่ำกว่า 18 จะได้ age_verified=false) */
-export async function setAgeVerification(req: Request, res: Response) {
-  const { birth_date } = ageVerificationBodySchema.parse(req.body);
-  // gap 3.4 — อายุที่ยืนยันจากบัญชี Google แล้วแก้ด้วยการกรอกเองไม่ได้ (กันเด็กกรอกวันเกิดปลอมเพื่อปลดล็อก 18+)
-  const current = await prisma.user.findUnique({
-    where: { user_id: req.user!.user_id },
-    select: { age_verification_source: true, age_verified: true, birth_date: true },
-  });
-  if (current?.age_verification_source && current.age_verification_source !== "self_declared") {
-    throw ApiError.conflict("อายุของบัญชีนี้ยืนยันจากบัญชี Google แล้ว ไม่สามารถแก้ไขเองได้");
-  }
-  // กรอกวันเกิดเองได้ครั้งเดียว (เดิมกรอกซ้ำด้วยปีอื่นได้ไม่จำกัดจนผ่าน) — รวมบัญชีเก่าที่เคยกรอกแล้วได้ต่ำกว่า 18
-  // ก่อนมีคอลัมน์ birth_date แก้ได้ทางเดียวคือยืนยันผ่านบัญชี Google (verifyAgeWithGoogle / ล็อกอิน Google)
-  if (current?.birth_date || (current?.age_verification_source === "self_declared" && !current.age_verified)) {
-    throw ApiError.conflict("บัญชีนี้ยืนยันอายุไปแล้ว จึงแก้ไขเองไม่ได้ หากกรอกผิดให้ยืนยันด้วยบัญชี Google หรือติดต่อฝ่ายสนับสนุน");
-  }
-
-  res.status(200).json(await saveVerifiedBirthDate(req.user!.user_id, parseBirthDate(birth_date)!, "self_declared"));
 }
 
 const googleAgeVerificationBodySchema = z.object({
@@ -186,11 +167,19 @@ const googleAgeVerificationBodySchema = z.object({
 
 /** POST /users/me/age-verification/google — ยืนยันอายุของบัญชีที่ล็อกอินอยู่ด้วยวันเกิดในบัญชี Google
  *  (ไม่ล็อกอิน/ไม่ผูกบัญชี Google เข้ากับ BuddyBook — อีเมล Google ไม่ต้องตรงกับบัญชีนี้)
- *  ทับค่าที่กรอกเองได้เสมอเพราะน่าเชื่อถือกว่า; บัญชี Google ไม่มีปีเกิด/ไม่ให้สิทธิ์ → 422 */
+ *  ไม่ทับผล e-KYC (น่าเชื่อถือกว่า); บัญชี Google ไม่มีปีเกิด/ไม่ให้สิทธิ์ → 422 */
 export async function verifyAgeWithGoogle(req: Request, res: Response) {
   const { code, state } = googleAgeVerificationBodySchema.parse(req.body);
   if (!verifyOAuthState(state)) {
     throw ApiError.unauthorized("Invalid OAuth state — possible CSRF attempt");
+  }
+  // ยืนยันด้วยบัตร (e-KYC) แล้ว — วันเกิดจาก Google น่าเชื่อถือน้อยกว่า ห้ามทับ
+  const current = await prisma.user.findUnique({
+    where: { user_id: req.user!.user_id },
+    select: { age_verification_source: true },
+  });
+  if (current?.age_verification_source === "kyc") {
+    throw ApiError.conflict("อายุของบัญชีนี้ยืนยันด้วยบัตรประชาชน/พาสปอร์ตแล้ว");
   }
   const profile = await exchangeGoogleCode(code, { requestBirthday: true });
   if (!profile.birthdate) {

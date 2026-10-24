@@ -52,8 +52,6 @@ async function main() {
       email,
       password_hash: await bcrypt.hash(password, 10),
       role: "admin",
-      age_verified: true,
-      age_verification_source: "self_declared",
       ...(genre ? { user_interests: { create: { tag_id: genre.tag_id } } } : {}),
     },
   });

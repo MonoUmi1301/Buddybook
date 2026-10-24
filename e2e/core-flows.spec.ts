@@ -372,9 +372,9 @@ test("6. age gate: 15-year-old reads 13+ but not 18+, guests must verify, adults
   const [, search] = await api(request, "minor", "GET", `/novels/search?q=${encodeURIComponent("นิยายสำหรับผู้ใหญ่")}`);
   expect(JSON.stringify(search)).not.toContain(novel.novel_id);
 
-  // กรอกวันเกิดใหม่ให้ผ่าน 18+ ไม่ได้ (กรอกเองได้ครั้งเดียว)
-  const [sRetry] = await api(request, "minor", "PATCH", "/users/me/age-verification", { birth_date: "1990-01-01" });
-  expect(sRetry).toBe(409);
+  // ไม่มีช่องทางกรอกวันเกิดเองแล้ว — ยืนยันได้เฉพาะ Google / e-KYC
+  const [sSelf] = await api(request, "minor", "PATCH", "/users/me/age-verification", { birth_date: "1990-01-01" });
+  expect(sSelf).toBe(404);
 
   const { context, page } = await pageAs(browser, "minor");
   await page.goto(`/novels/${novel.novel_id}`);

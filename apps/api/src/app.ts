@@ -8,6 +8,7 @@ import { env } from "@/config/env";
 import apiRoutes from "@/routes";
 import { asyncHandler } from "@/utils/asyncHandler";
 import { stripeWebhook } from "@/modules/wallet/wallet.controller";
+import { diditWebhook } from "@/modules/kyc/kyc.controller";
 import { notFoundHandler } from "@/middleware/notFound.middleware";
 import { errorHandler } from "@/middleware/error.middleware";
 import { prisma } from "@/lib/prisma";
@@ -27,6 +28,8 @@ app.use(morgan(env.NODE_ENV === "development" ? "dev" : "combined"));
 // ไม่ผ่าน requireAuth เหมือน route อื่นเพราะ Stripe เรียกตรงจาก server ของเขา ไม่มี JWT ผู้ใช้ —
 // ยืนยันตัวตนด้วยลายเซ็นแทน (ดู stripeWebhook ใน wallet.controller.ts)
 app.post("/api/v1/webhooks/stripe", express.raw({ type: "application/json" }), asyncHandler(stripeWebhook));
+// e-KYC (Didit) — เหตุผลเดียวกับ Stripe: ลายเซ็น X-Signature คำนวณจาก raw body (ดู modules/kyc)
+app.post("/api/v1/webhooks/kyc/didit", express.raw({ type: "application/json", limit: "1mb" }), asyncHandler(diditWebhook));
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));

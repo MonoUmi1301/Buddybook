@@ -13,13 +13,14 @@ export interface AgeGateInfo {
 export function parseAgeGate(status: number, json: unknown): AgeGateInfo | null {
   if (status !== 403) return null;
   const details = (json as { details?: { code?: string; required_age?: number } } | null)?.details;
-  if (details?.code !== "AGE_VERIFICATION_REQUIRED" && details?.code !== "AGE_RESTRICTED") return null;
-  return { code: details.code, required_age: details.required_age ?? 18 };
+  const codes: string[] = ["AGE_VERIFICATION_REQUIRED", "AGE_RESTRICTED"];
+  if (!details?.code || !codes.includes(details.code)) return null;
+  return { code: details.code as AgeGateInfo["code"], required_age: details.required_age ?? 18 };
 }
 
 /** หน้าจอเต็มหน้าแทนเนื้อหา ตอนเจอ 403 เกตเรต (backend ไม่ส่งเนื้อหามาเลย ไม่มีอะไรให้โชว์บางส่วน)
  *  - ยังไม่ล็อกอิน → ให้เข้าสู่ระบบก่อน (ยืนยันอายุผูกกับบัญชี)
- *  - ยังไม่ยืนยันอายุ → ยืนยันด้วย Google หรือกรอกวันเกิดเอง
+ *  - ยังไม่ยืนยันอายุ → ยืนยันด้วย Google หรือบัตรประชาชน/พาสปอร์ต (ไม่มีการกรอกวันเกิดเอง)
  *  - ยืนยันแล้วแต่อายุไม่ถึงเกณฑ์ (AGE_RESTRICTED) → แจ้งอย่างเดียว ยืนยันใหม่เองไม่ได้ */
 export function AgeGateInterstitial({
   gate,

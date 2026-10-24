@@ -343,8 +343,8 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
   }
 
   // gap 3.4 — provider ยืนยันวันเกิดมาให้ (Google People API) → ตั้งสถานะอายุจากแหล่งที่เชื่อถือได้
-  // (ทับค่าที่ผู้ใช้กรอกเอง และหลังจากนี้กรอกเองทับไม่ได้อีก — ดู users.controller setAgeVerification)
-  if (profile.birthdate) {
+  // ไม่ทับผล e-KYC (บัตร + สแกนใบหน้า) ซึ่งน่าเชื่อถือกว่าวันเกิดในบัญชี Google
+  if (profile.birthdate && user.age_verification_source !== "kyc") {
     await saveVerifiedBirthDate(user.user_id, profile.birthdate, "google");
   }
 

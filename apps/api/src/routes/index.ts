@@ -23,6 +23,7 @@ import supportRoutes from "@/modules/support/support.routes";
 import collectionsRoutes from "@/modules/collections/collections.routes";
 import reportsRoutes from "@/modules/reports/reports.routes";
 import presenceRoutes from "@/modules/presence/presence.routes";
+import kycRoutes from "@/modules/kyc/kyc.routes";
 
 /**
  * Router รวมทุกโมดูล mount ใต้ /api/v1 (ดู app.ts)
@@ -35,6 +36,8 @@ router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
 // ส่วนขยายนอก API_Endpoints.md เดิม — Cloudinary signed upload (ดู lib/cloudinary.ts)
 router.use("/uploads", uploadsRoutes);
+// e-KYC ยืนยันอายุด้วยบัตรประชาชน/พาสปอร์ต + สแกนใบหน้า (webhook อยู่ใน app.ts — ต้องใช้ raw body)
+router.use("/kyc", kycRoutes);
 
 // 2. Reader Features
 router.use("/novels", novelsRoutes);

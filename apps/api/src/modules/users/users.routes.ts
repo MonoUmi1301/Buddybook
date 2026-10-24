@@ -13,7 +13,6 @@ const router = Router();
 router.get("/me", requireAuth, asyncHandler(usersController.getMe));
 router.patch("/me", requireAuth, asyncHandler(usersController.updateMe));
 router.delete("/me", requireAuth, asyncHandler(usersController.deleteMe));
-router.patch("/me/age-verification", requireAuth, asyncHandler(usersController.setAgeVerification));
 router.post("/me/age-verification/google", requireAuth, asyncHandler(usersController.verifyAgeWithGoogle));
 router.post("/me/interests", requireAuth, asyncHandler(usersController.setInterests));
 // เพิ่มภายหลัง (ติดตามนักเขียน) — ดู modules/follows

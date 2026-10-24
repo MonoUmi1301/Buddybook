@@ -65,6 +65,16 @@ const envSchema = z.object({
   // ได้ค่านี้จาก `stripe listen` (dev) หรือ Dashboard > Developers > Webhooks (prod) — ใช้ยืนยันว่า
   // webhook ที่ยิงเข้ามาจริงมาจาก Stripe ไม่ใช่ปลอม (constructEvent ใน lib/stripe.ts)
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  // e-KYC ยืนยันอายุด้วยบัตรประชาชน/พาสปอร์ต + Liveness (ดู lib/kyc/) — "none" = ปิดฟีเจอร์ (ตอบ 503)
+  KYC_PROVIDER: z.enum(["none", "didit"]).default("none"),
+  // Didit Console: API key (สิทธิ์ write:sessions, read:sessions, delete:sessions), workflow แบบ KYC
+  // (ID verification + Liveness + Face match) และ secret ของ webhook destination (ได้ครั้งเดียวตอนสร้าง)
+  DIDIT_BASE_URL: z.string().url().default("https://verification.didit.me"),
+  DIDIT_API_KEY: z.string().default(""),
+  DIDIT_WORKFLOW_ID: z.string().default(""),
+  DIDIT_WEBHOOK_SECRET: z.string().default(""),
+  // secret สำหรับ HMAC เลขเอกสาร (กันบัตรใบเดียวยืนยันหลายบัญชี) — ห้ามเปลี่ยนหลังใช้งานจริง ไม่งั้น hash เดิมเทียบไม่ได้
+  KYC_ID_HASH_SECRET: z.string().default(""),
   // Gift donations — ค่าธรรมเนียมแพลตฟอร์ม (%) หักจากของขวัญก่อนเข้ากระเป๋านักเขียน (ปัดเศษลงให้ฝั่ง
   // นักเขียนได้มากกว่า) ไม่หักจาก "Custom coins" เพื่อให้โดเนท coin แบบเดิมได้เต็มจำนวนเหมือนก่อนมีระบบนี้
   GIFT_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(10),
@@ -101,7 +111,22 @@ const envSchema = z.object({
   COIN_TO_THB_RATE: z.coerce.number().positive().default(1),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const parsed = envSchema
+  .superRefine((v, ctx) => {
+    // เปิด KYC แล้วต้องตั้งค่าครบ — ไม่งั้นจะได้ผู้ใช้ที่สแกนบัตรเสร็จแต่ webhook ยืนยันลายเซ็นไม่ได้
+    if (v.KYC_PROVIDER !== "didit") return;
+    // webhook secret บังคับเฉพาะ production — ตอนพัฒนาบน localhost Didit ยิง webhook เข้ามาไม่ได้อยู่แล้ว
+    // (ผลมาทาง GET /kyc/status ที่ดึงจาก Didit เอง) ไม่มี secret = webhook ถูกปฏิเสธทุกครั้ง
+    const required: Array<"DIDIT_API_KEY" | "DIDIT_WORKFLOW_ID" | "DIDIT_WEBHOOK_SECRET"> = ["DIDIT_API_KEY", "DIDIT_WORKFLOW_ID"];
+    if (v.NODE_ENV === "production") required.push("DIDIT_WEBHOOK_SECRET");
+    for (const key of required) {
+      if (!v[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} is required when KYC_PROVIDER=didit` });
+    }
+    if (v.KYC_ID_HASH_SECRET.length < 32) {
+      ctx.addIssue({ code: "custom", path: ["KYC_ID_HASH_SECRET"], message: "KYC_ID_HASH_SECRET must be at least 32 characters" });
+    }
+  })
+  .safeParse(process.env);
 
 if (!parsed.success) {
   // eslint-disable-next-line no-console

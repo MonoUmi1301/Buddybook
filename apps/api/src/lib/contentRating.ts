@@ -1,22 +1,27 @@
-import type { ContentRating } from "@prisma/client";
+import type { ContentRating, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { ADULT_AGE, ageOn, type BirthDate } from "@/lib/ageVerification";
 
 /** อายุขั้นต่ำของแต่ละเรต — all_ages เปิดให้ทุกคนรวมถึงคนที่ยังไม่ล็อกอิน/ยังไม่ยืนยันอายุ
- *  เรตอื่นต้องยืนยันอายุแล้วและอายุถึงเกณฑ์ (ยังไม่ยืนยัน = เห็นแค่ all_ages) */
+ *  เรตอื่นต้องยืนยันอายุด้วยหลักฐานแล้วและอายุถึงเกณฑ์ (ยังไม่ยืนยัน = เห็นแค่ all_ages) */
 export const RATING_MIN_AGE: Record<ContentRating, number> = { all_ages: 0, teen: 13, mature: 18 };
 
-/** อายุที่ยืนยันแล้วของผู้ชม ณ วันนี้ — null = ไม่ได้ล็อกอินหรือยังไม่ยืนยันอายุ
+/** แหล่งยืนยันอายุที่ยอมรับ (ต้องมีหลักฐานเท่านั้น — ไม่มีการกรอกวันเกิดเอง) เรียงจากน่าเชื่อถือมากไปน้อย:
+ *  kyc (บัตร + สแกนใบหน้า) ทับ google (วันเกิดในบัญชี Google) ได้ แต่ไม่ย้อนกลับ */
+export type AgeSource = "kyc" | "google";
+const PROVEN_SOURCES: readonly string[] = ["kyc", "google"];
+
+/** อายุ ณ วันนี้จากวันเกิดที่ยืนยันแล้ว — null = ไม่ได้ล็อกอินหรือยังไม่ยืนยันอายุ
  *  คำนวณจาก birth_date ทุกครั้ง (อายุ 17 ที่ยืนยันไว้จะปลดล็อก 18+ เองเมื่อถึงวันเกิด)
- *  บัญชีเก่าที่ age_verified=true แต่ไม่มี birth_date (ยืนยันก่อนมีคอลัมน์นี้) ถือว่า 18 */
+ *  ค่าจากแหล่งอื่น (เช่น "self_declared" ข้อมูลเก่า) ไม่นับ; แหล่งที่ยอมรับแต่ไม่มี birth_date ถือว่า 18 */
 export async function getViewerAge(viewer_id?: string): Promise<number | null> {
   if (!viewer_id) return null;
   const viewer = await prisma.user.findUnique({
     where: { user_id: viewer_id },
-    select: { age_verified: true, birth_date: true },
+    select: { age_verified: true, birth_date: true, age_verification_source: true },
   });
-  if (!viewer) return null;
+  if (!viewer?.age_verification_source || !PROVEN_SOURCES.includes(viewer.age_verification_source)) return null;
   if (viewer.birth_date) {
     const d = viewer.birth_date;
     return ageOn({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
@@ -25,10 +30,15 @@ export async function getViewerAge(viewer_id?: string): Promise<number | null> {
 }
 
 /** บันทึกวันเกิดที่ยืนยันแล้ว — age_verified (18+ ณ วันที่ยืนยัน) คงไว้ให้ส่วนที่ยังอ่าน boolean นี้ (session/หน้าเว็บ)
- *  แต่เกตเรตคำนวณจาก birth_date ใหม่ทุกครั้งผ่าน getViewerAge */
-export async function saveVerifiedBirthDate(user_id: string, birth: BirthDate, source: "google" | "self_declared") {
+ *  แต่เกตเรตคำนวณจาก birth_date ใหม่ทุกครั้งผ่าน getViewerAge; ส่ง tx มาเมื่อต้องบันทึกพร้อมข้อมูลอื่น (e-KYC) */
+export async function saveVerifiedBirthDate(
+  user_id: string,
+  birth: BirthDate,
+  source: AgeSource,
+  tx: Prisma.TransactionClient = prisma
+) {
   const age = ageOn(birth);
-  await prisma.user.update({
+  await tx.user.update({
     where: { user_id },
     data: {
       birth_date: new Date(Date.UTC(birth.year, birth.month - 1, birth.day)),
@@ -57,8 +67,8 @@ export async function contentRatingWhere(viewer_id: string | undefined, scopedTo
 }
 
 /** เกตเรตเนื้อหาของทุก endpoint ที่คืนข้อมูลผูกกับนิยาย (ตัวนิยาย, ตอน, คอมเมนต์, รีวิว, ผู้สนับสนุน, ซื้อตอน)
- *  - ยังไม่ยืนยันอายุ → 403 AGE_VERIFICATION_REQUIRED (หน้าเว็บแสดงฟอร์มยืนยัน)
- *  - ยืนยันแล้วแต่อายุไม่ถึง → 403 AGE_RESTRICTED (ยืนยันซ้ำไม่ได้ ไม่ต้องแสดงฟอร์ม)
+ *  - ยังไม่ยืนยันอายุ → 403 AGE_VERIFICATION_REQUIRED (หน้าเว็บแสดงตัวเลือกยืนยันด้วย Google/บัตร)
+ *  - ยืนยันแล้วแต่อายุไม่ถึง → 403 AGE_RESTRICTED (ไม่ต้องแสดงตัวเลือก)
  *  เจ้าของนิยายผ่านเสมอ */
 export async function assertContentRatingAllowed(
   novel: { content_rating: ContentRating },

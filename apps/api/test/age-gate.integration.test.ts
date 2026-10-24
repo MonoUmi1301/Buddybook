@@ -25,7 +25,7 @@ vi.mock("@/lib/googleOAuth", async (importOriginal) => {
 });
 
 /** เกตเรตเนื้อหาตามอายุที่ยืนยันแล้ว: all_ages ทุกคน, teen 13+, mature 18+ (ยังไม่ยืนยัน = all_ages เท่านั้น)
- *  ครอบทุก endpoint ที่ผูกกับนิยาย + การยืนยันอายุ (กรอกเองครั้งเดียว / Google ทับได้) */
+ *  ครอบทุก endpoint ที่ผูกกับนิยาย + การยืนยันอายุ (เฉพาะ Google / e-KYC — ไม่มีการกรอกวันเกิดเอง) */
 describe("rating rules", () => {
   it("maps verified age to allowed ratings", () => {
     expect(allowedRatings(null)).toEqual(["all_ages"]);
@@ -57,11 +57,11 @@ describe("content rating gate", () => {
     {} as never;
   const year = new Date().getFullYear();
 
-  const withBirthDate = async (name: string, age: number) => {
+  const withBirthDate = async (name: string, age: number, source: "google" | "kyc" = "google") => {
     const u = await h.createUser(name);
     await prisma.user.update({
       where: { user_id: u.id },
-      data: { birth_date: new Date(Date.UTC(year - age, 0, 1)), age_verified: age >= 18, age_verification_source: "self_declared" },
+      data: { birth_date: new Date(Date.UTC(year - age, 0, 1)), age_verified: age >= 18, age_verification_source: source },
     });
     return u;
   };
@@ -72,8 +72,8 @@ describe("content rating gate", () => {
     unverified = await h.createUser("unverified");
     kid = await withBirthDate("kid", 10);
     teen = await withBirthDate("teen", 15);
-    adult = await withBirthDate("adult", 30);
-    legacyAdult = await h.createUser("legacy", { age_verified: true }); // ยืนยันก่อนมี birth_date
+    adult = await withBirthDate("adult", 30, "kyc");
+    legacyAdult = await h.createUser("legacy", { age_verified: true }); // age_verified ค้างแต่ไม่มีแหล่งที่พิสูจน์ได้ = ไม่นับ
     for (const rating of ["all_ages", "teen", "mature"] as const) {
       const title = `RATING_${rating}_${h.tag}`;
       const novel = await prisma.novel.create({
@@ -109,8 +109,8 @@ describe("content rating gate", () => {
       ["unverified", unverified.token, { all_ages: 200, teen: "AGE_VERIFICATION_REQUIRED", mature: "AGE_VERIFICATION_REQUIRED" }],
       ["kid (10)", kid.token, { all_ages: 200, teen: "AGE_RESTRICTED", mature: "AGE_RESTRICTED" }],
       ["teen (15)", teen.token, { all_ages: 200, teen: 200, mature: "AGE_RESTRICTED" }],
-      ["adult (30)", adult.token, { all_ages: 200, teen: 200, mature: 200 }],
-      ["legacy adult", legacyAdult.token, { all_ages: 200, teen: 200, mature: 200 }],
+      ["adult (30, e-KYC)", adult.token, { all_ages: 200, teen: 200, mature: 200 }],
+      ["age_verified without a source", legacyAdult.token, { all_ages: 200, teen: "AGE_VERIFICATION_REQUIRED", mature: "AGE_VERIFICATION_REQUIRED" }],
       ["author", author.token, { all_ages: 200, teen: 200, mature: 200 }],
     ];
     for (const [who, token, expected] of cases) {
@@ -150,37 +150,15 @@ describe("content rating gate", () => {
     expect((await profileTitles(author.token)).sort()).toEqual(t("all_ages", "teen", "mature"));
   });
 
-  it("rejects malformed birth dates without recording anything", async () => {
-    for (const birth_date of ["1", "0001-01-01", "2999-01-01", "2001-02-30"]) {
-      const res = await h.api("PATCH", "/users/me/age-verification", unverified.token, { birth_date });
-      expect(res.status, birth_date).toBe(400);
-    }
-    const user = await prisma.user.findUniqueOrThrow({ where: { user_id: unverified.id } });
-    expect(user.age_verification_source).toBeNull();
-    expect(user.birth_date).toBeNull();
+  it("has no self-declared birth date: the endpoint is gone and the DB rejects the source", async () => {
+    const res = await h.api("PATCH", "/users/me/age-verification", unverified.token, { birth_date: "1990-01-01" });
+    expect(res.status).toBe(404);
+    await expect(
+      prisma.user.update({ where: { user_id: unverified.id }, data: { age_verification_source: "self_declared" } })
+    ).rejects.toThrow();
   });
 
-  it("allows self-declaring once and stores the birth date", async () => {
-    const first = await h.api("PATCH", "/users/me/age-verification", unverified.token, { birth_date: `${year - 15}-01-01` });
-    expect(first.status).toBe(200);
-    expect(first.json).toMatchObject({ age_verified: false, source: "self_declared" });
-    expect(first.json.age).toBeGreaterThanOrEqual(15);
-
-    // teen 13+ เปิดทันที, 18+ ยังไม่ได้ และกรอกใหม่ด้วยปีอื่นไม่ได้
-    expect((await h.api("GET", `/chapters/${novels.teen.chapter_id}`, unverified.token)).status).toBe(200);
-    const retry = await h.api("PATCH", "/users/me/age-verification", unverified.token, { birth_date: "1990-01-01" });
-    expect(retry.status).toBe(409);
-    expect((await h.api("GET", `/chapters/${novels.mature.chapter_id}`, unverified.token)).json.details.code).toBe(
-      "AGE_RESTRICTED"
-    );
-
-    const me = await h.api("GET", "/users/me", unverified.token);
-    expect(me.json).toMatchObject({ age_verification_source: "self_declared", age_verified: false });
-    expect(me.json.verified_age).toBeGreaterThanOrEqual(15);
-  });
-
-  it("verifies with Google for the signed-in account and overrides a self-declared date", async () => {
-    // บัญชีนี้กรอกเองว่า 15 ไว้แล้ว (เทสต์ก่อนหน้า) — Google ยืนยันว่า 30 ทับได้
+  it("verifies with Google for the signed-in account", async () => {
     const res = await h.api("POST", "/users/me/age-verification/google", unverified.token, {
       code: "adult",
       state: createOAuthState(),
@@ -191,10 +169,12 @@ describe("content rating gate", () => {
     // ไม่ได้ล็อกอิน/ผูกบัญชี Google — oauth_id ของบัญชีนี้ไม่เปลี่ยน
     const user = await prisma.user.findUniqueOrThrow({ where: { user_id: unverified.id } });
     expect(user.oauth_id).toBeNull();
+  });
 
-    // ยืนยันด้วย Google แล้ว กรอกเองทับไม่ได้
-    const self = await h.api("PATCH", "/users/me/age-verification", unverified.token, { birth_date: `${year - 10}-01-01` });
-    expect(self.status).toBe(409);
+  it("never lets Google override an e-KYC result", async () => {
+    const res = await h.api("POST", "/users/me/age-verification/google", adult.token, { code: "teen", state: createOAuthState() });
+    expect(res.status).toBe(409);
+    expect((await prisma.user.findUniqueOrThrow({ where: { user_id: adult.id } })).age_verification_source).toBe("kyc");
   });
 
   it("records an underage Google birthday as restricted", async () => {
@@ -205,12 +185,12 @@ describe("content rating gate", () => {
   });
 
   it("rejects Google verification without a birthday, a bad state, or no session", async () => {
-    const noBday = await h.api("POST", "/users/me/age-verification/google", adult.token, {
+    const noBday = await h.api("POST", "/users/me/age-verification/google", legacyAdult.token, {
       code: "nobday",
       state: createOAuthState(),
     });
     expect(noBday.status).toBe(422);
-    const badState = await h.api("POST", "/users/me/age-verification/google", adult.token, { code: "adult", state: "x.y.z" });
+    const badState = await h.api("POST", "/users/me/age-verification/google", legacyAdult.token, { code: "adult", state: "x.y.z" });
     expect(badState.status).toBe(401);
     const guest = await h.api("POST", "/users/me/age-verification/google", undefined, { code: "adult", state: createOAuthState() });
     expect(guest.status).toBe(401);

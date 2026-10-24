@@ -12,7 +12,7 @@ export interface SessionUser {
   age_verified: boolean;
   /** อายุ ณ วันนี้จากวันเกิดที่ยืนยันแล้ว — null = ยังไม่ยืนยัน (เห็นได้แค่นิยายเรตทุกวัย) */
   verified_age: number | null;
-  age_verification_source: "google" | "self_declared" | null;
+  age_verification_source: "kyc" | "google" | null;
   has_interests: boolean;
   has_password: boolean;
   totp_enabled: boolean;

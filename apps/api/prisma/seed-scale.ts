@@ -153,7 +153,7 @@ const charName = () => pick(NAME_A) + pick(NAME_B);
 // ---------------------------------------------------------------------------
 type UserRow = {
   user_id: string; username: string; pen_name: string | null; email: string; password_hash: string;
-  bio: string | null; age_verified: boolean; age_verification_source: "self_declared"; created_at: Date;
+  bio: string | null; age_verified: boolean; age_verification_source: "google" | null; created_at: Date;
 };
 type NovelRow = {
   novel_id: string; author_id: string; title: string; synopsis: string; introduction: string; cover_image_url: string;
@@ -199,8 +199,11 @@ function generate() {
     return {
       user_id: randomUUID(), username, email: `${username}@${DOMAIN}`, password_hash: "",
       pen_name: role === "author" || rand() < 0.15 ? `${charName()}${pick(["", "ฟิค", "หมึก", "ราตรี", "นิยาย"])}` : null,
-      bio: role === "author" ? `เขียนแนว${pick(GENRES).main}เป็นหลัก` : null, age_verified: rand() < 0.85,
-      age_verification_source: "self_declared", created_at: at(day),
+      bio: role === "author" ? `เขียนแนว${pick(GENRES).main}เป็นหลัก` : null, created_at: at(day),
+      // ข้อมูลจำลอง: ผู้ใหญ่ที่ยืนยันอายุด้วย Google (ไม่มีวันเกิด → นับเป็น 18) — ไม่มีการกรอกวันเกิดเองแล้ว
+      ...(rand() < 0.85
+        ? { age_verified: true, age_verification_source: "google" as const }
+        : { age_verified: false, age_verification_source: null }),
     };
   };
 

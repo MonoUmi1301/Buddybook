@@ -1,17 +1,16 @@
 import { BadgeCheck, CalendarHeart } from "lucide-react";
 import { AgeVerificationOptions } from "@/components/age/AgeVerificationOptions";
+import { KycWithdrawButton } from "@/components/kyc/KycWithdrawButton";
+
+const sourceLabel: Record<string, string> = {
+  kyc: " ด้วยบัตรประชาชน/พาสปอร์ต",
+  google: " ด้วยบัญชี Google",
+};
 
 /** หน้าตั้งค่า — สถานะยืนยันอายุ ซึ่งกำหนดว่าเปิดอ่านนิยายเรตไหนได้ (ทุกวัย / 13+ / 18+)
- *  ยังไม่ยืนยัน: ยืนยันด้วย Google หรือกรอกวันเกิดเอง (ครั้งเดียว)
- *  กรอกเองแล้ว: เหลือปุ่ม Google ไว้ยืนยันซ้ำ (ทับค่าที่กรอกเองได้ เช่นกรอกผิด)
- *  ยืนยันด้วย Google แล้ว: แสดงสถานะอย่างเดียว */
-export function AgeVerificationSection({
-  verifiedAge,
-  source,
-}: {
-  verifiedAge: number | null;
-  source: string | null;
-}) {
+ *  ยังไม่ยืนยัน: ยืนยันด้วย Google หรือบัตร (e-KYC) — ไม่มีการกรอกวันเกิดเอง
+ *  ยืนยันแล้ว: แสดงสถานะ — ถ้าเป็นบัตรมีปุ่มถอนความยินยอม (PDPA) */
+export function AgeVerificationSection({ verifiedAge, source }: { verifiedAge: number | null; source: string | null }) {
   const verified = verifiedAge !== null;
   const access = !verified
     ? "นิยายเรตทุกวัยเท่านั้น"
@@ -34,9 +33,9 @@ export function AgeVerificationSection({
               <dt className="text-neutral-500">สถานะ:</dt>
               <dd className="font-medium text-neutral-900">
                 {verified ? (
-                  <span className="inline-flex items-center gap-1">
+                  <span className="inline-flex flex-wrap items-center gap-1">
                     <BadgeCheck className="h-4 w-4 text-emerald-600" />
-                    ยืนยันแล้ว{source === "google" ? " ด้วยบัญชี Google" : source === "self_declared" ? " (กรอกวันเกิดเอง)" : ""}
+                    ยืนยันแล้ว{sourceLabel[source ?? ""] ?? ""}
                     {" · "}อายุ {verifiedAge} ปี
                   </span>
                 ) : (
@@ -50,11 +49,12 @@ export function AgeVerificationSection({
             </div>
           </dl>
 
-          {source !== "google" && (
+          {!verified && (
             <div className="mt-5">
-              <AgeVerificationOptions returnTo="/settings" allowSelfDeclare={!verified && source === null} />
+              <AgeVerificationOptions returnTo="/settings" />
             </div>
           )}
+          {source === "kyc" && <KycWithdrawButton />}
         </div>
       </div>
     </section>

@@ -2220,6 +2220,84 @@
         }
       }
     },
+    "/api/v1/kyc": {
+      "delete": {
+        "tags": [
+          "kyc"
+        ],
+        "summary": "DELETE /api/v1/kyc",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/kyc/session": {
+      "post": {
+        "tags": [
+          "kyc"
+        ],
+        "summary": "POST /api/v1/kyc/session",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/kyc/status": {
+      "get": {
+        "tags": [
+          "kyc"
+        ],
+        "summary": "GET /api/v1/kyc/status",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
     "/api/v1/library": {
       "get": {
         "tags": [
@@ -4726,32 +4804,6 @@
         }
       }
     },
-    "/api/v1/users/me/age-verification": {
-      "patch": {
-        "tags": [
-          "users"
-        ],
-        "summary": "PATCH /api/v1/users/me/age-verification",
-        "description": "ต้องล็อกอิน",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "x-access": "user",
-        "responses": {
-          "200": {
-            "description": "สำเร็จ"
-          },
-          "400": {
-            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
-          },
-          "401": {
-            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
-          }
-        }
-      }
-    },
     "/api/v1/users/me/age-verification/google": {
       "post": {
         "tags": [
@@ -4991,6 +5043,25 @@
           },
           "401": {
             "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/kyc/didit": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "POST /api/v1/webhooks/kyc/didit",
+        "description": "สาธารณะ",
+        "security": [],
+        "x-access": "public",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
           }
         }
       }
