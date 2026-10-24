@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/Button";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 /** หมีมาสคอต (แว่นกลม) เวอร์ชันตกใจ — ตาโต ปากกลม เหงื่อตก สั่นนิด ๆ ตอนเปิด */
 export function ShockedBear({ className }: { className?: string }) {
@@ -108,13 +109,8 @@ function ConfirmDialog({
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose(false);
-      }}
-    >
-      <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="w-full max-w-sm rounded-card bg-white p-6 text-center shadow-xl">
+    <ModalBackdrop className="z-[60] items-center bg-black/40 px-4" onDismiss={() => onClose(false)}>
+      <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" className="relative w-full max-w-sm rounded-card bg-white p-6 text-center shadow-xl">
         <ShockedBear className="mx-auto mb-3 h-28 w-28" />
         <h2 id="confirm-title" className="text-lg font-semibold text-neutral-900">
           {title}
@@ -133,6 +129,6 @@ function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }

@@ -156,29 +156,32 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
           {items.map((n) => {
             const Icon = NOTIFICATION_ICON[n.type];
             return (
-              <li
-                key={n.notification_id}
-                onClick={() => handleItemClick(n)}
-                className={cn(
-                  "flex cursor-pointer gap-3 px-4 py-3 text-sm transition-colors",
-                  isDark ? "hover:bg-white/5" : "hover:bg-neutral-50"
-                )}
-              >
-                <span
+              <li key={n.notification_id}>
+                <button
+                  type="button"
+                  onClick={() => handleItemClick(n)}
                   className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                    n.type === "donation" ? "bg-amber-500/15 text-amber-500" : "bg-primary-500/15 text-primary-500"
+                    "flex w-full cursor-pointer gap-3 px-4 py-3 text-left text-sm transition-colors",
+                    isDark ? "hover:bg-white/5" : "hover:bg-neutral-50"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
-                </span>
-                <div className="min-w-0">
-                  <p className={cn(!n.is_read && "font-medium", isDark ? "text-zinc-200" : "text-neutral-800")}>
-                    {n.content}
-                  </p>
-                  <p className="mt-0.5 text-xs text-neutral-500">{timeAgo(n.created_at)}</p>
-                </div>
-                {!n.is_read && <span className="ml-auto mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary-500" />}
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                      n.type === "donation" ? "bg-amber-500/15 text-amber-500" : "bg-primary-500/15 text-primary-500"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  {/* ใน <button> ใช้ได้แค่ phrasing content — span แบบ block แทน div/p */}
+                  <span className="block min-w-0">
+                    <span className={cn("block", !n.is_read && "font-medium", isDark ? "text-zinc-200" : "text-neutral-800")}>
+                      {n.content}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-neutral-500">{timeAgo(n.created_at)}</span>
+                  </span>
+                  {!n.is_read && <span className="ml-auto mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary-500" />}
+                </button>
               </li>
             );
           })}

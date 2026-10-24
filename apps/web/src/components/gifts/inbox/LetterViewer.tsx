@@ -22,6 +22,7 @@ import {
 } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
 import { errorText } from "@/lib/formatApiError";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 interface LetterViewerProps {
   item: InboxItem;
@@ -64,12 +65,7 @@ export function LetterViewer({ item, authorName, feePercent, onChange, onClose }
   const where = [item.novel?.title, item.chapter ? `ตอนที่ ${item.chapter.chapter_number}` : null].filter(Boolean).join(" · ");
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 md:items-center md:p-6"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && busy === null) onClose();
-      }}
-    >
+    <ModalBackdrop className="z-[60] items-end bg-black/45 md:items-center md:p-6" onDismiss={() => busy === null && onClose()}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -284,6 +280,6 @@ export function LetterViewer({ item, authorName, feePercent, onChange, onClose }
           )}
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }

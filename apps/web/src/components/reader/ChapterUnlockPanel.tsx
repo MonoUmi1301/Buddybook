@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toaster";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { fetchBalance, formatCoins } from "@/lib/gifts";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 interface ChapterUnlockPanelProps {
   chapterId: string;
@@ -147,15 +148,14 @@ function ConfirmUnlockModal({ priceCoins, balance, loading, onConfirm, onClose }
   useDialogA11y(dialogRef, onClose, !loading);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !loading && onClose()}>
+    <ModalBackdrop className="z-50 items-center bg-black/40 p-4" onDismiss={() => !loading && onClose()}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="unlock-dialog-title"
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-sm rounded-2xl bg-white p-5 text-left text-neutral-800 shadow-xl"
+        className="relative w-full max-w-sm rounded-2xl bg-white p-5 text-left text-neutral-800 shadow-xl"
       >
         <div className="flex items-center justify-between">
           <h2 id="unlock-dialog-title" className="text-base font-semibold">
@@ -196,6 +196,6 @@ function ConfirmUnlockModal({ priceCoins, balance, loading, onConfirm, onClose }
           </Button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }

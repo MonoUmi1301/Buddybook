@@ -78,5 +78,5 @@ if (res.status !== 0) {
 console.log(`สำรองแล้ว: ${path.relative(root, file)} (${(statSync(file).size / 1024).toFixed(0)} KB)`);
 
 // เก็บไว้แค่ KEEP ไฟล์ล่าสุด
-const dumps = readdirSync(dir).filter((f) => f.endsWith(".dump")).sort();
+const dumps = readdirSync(dir).filter((f) => f.endsWith(".dump")).sort((a, b) => a.localeCompare(b));
 for (const old of dumps.slice(0, Math.max(0, dumps.length - KEEP))) unlinkSync(path.join(dir, old));

@@ -23,7 +23,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: buddybook
-      POSTGRES_PASSWORD: buddybook
+      # ตั้ง POSTGRES_PASSWORD ใน .env ที่ root (gitignored) ได้ — ไม่ตั้งจะใช้รหัส dev เดิม
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-buddybook}
       POSTGRES_DB: buddybook
     # ปรับให้กินแรมน้อย — ข้อมูล dev มีไม่กี่พันแถว ไม่ต้องใช้ค่า default ที่เผื่อ production
     command:

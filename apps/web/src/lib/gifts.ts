@@ -132,7 +132,9 @@ export function resumeHref(returnTo: string) {
 
 export function newIdempotencyKey() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `gift-${crypto.randomUUID()}`;
-  return `gift-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  // randomUUID มีแค่ใน secure context (https/localhost) — เปิดผ่าน IP ในวง LAN แบบ http ใช้ getRandomValues แทน
+  const [a, b] = globalThis.crypto.getRandomValues(new Uint32Array(2));
+  return `gift-${Date.now().toString(36)}-${a.toString(36)}${b.toString(36)}`;
 }
 
 // ---------------------------------------------------------------------------

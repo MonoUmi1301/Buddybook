@@ -856,6 +856,7 @@ export default function CollectionFolder({
               ref={menuRef}
               id={"gf-menu-" + uid}
               role="menu"
+              tabIndex={-1}
               aria-label={label + " options"}
               className="gf-menu"
               data-open={menuOpen || undefined}

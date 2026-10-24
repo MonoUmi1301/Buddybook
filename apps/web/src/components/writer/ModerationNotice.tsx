@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
 import { MODERATION_STATUS_LABEL, canAppeal, type ModerationCase } from "@/lib/moderation";
 import { THAI_TIME_ZONE } from "@/lib/format";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 const MIN_APPEAL = 20;
 const MAX_APPEAL = 5000;
@@ -111,13 +112,12 @@ export function ModerationNotice({ novelId, novelTitle, moderationCase: c, openA
       </section>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !submitting && setOpen(false)}>
+        <ModalBackdrop className="z-50 items-center bg-black/40 px-4" onDismiss={() => !submitting && setOpen(false)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="appeal-dialog-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-white p-6 shadow-xl"
           >
             <h2 id="appeal-dialog-title" className="text-h3 text-neutral-900">
               ยื่นอุทธรณ์
@@ -153,7 +153,7 @@ export function ModerationNotice({ novelId, novelTitle, moderationCase: c, openA
               </Button>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </>
   );

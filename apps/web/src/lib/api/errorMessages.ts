@@ -13,10 +13,10 @@
 /** ชื่อช่องข้อมูลที่ผู้ใช้เห็นบนฟอร์ม — ช่องที่ไม่มีในนี้จะแสดงแค่ข้อความ ไม่โชว์ชื่อ field ภาษาโปรแกรม */
 export const FIELD_LABELS: Record<string, string> = {
   email: "อีเมล",
-  password: "รหัสผ่าน",
-  new_password: "รหัสผ่านใหม่",
-  current_password: "รหัสผ่านปัจจุบัน",
-  confirmPassword: "ยืนยันรหัสผ่าน",
+  password: "รหัสผ่าน", // NOSONAR — ชื่อช่องบนฟอร์ม ไม่ใช่รหัสผ่าน
+  new_password: "รหัสผ่านใหม่", // NOSONAR — ชื่อช่องบนฟอร์ม ไม่ใช่รหัสผ่าน
+  current_password: "รหัสผ่านปัจจุบัน", // NOSONAR — ชื่อช่องบนฟอร์ม ไม่ใช่รหัสผ่าน
+  confirmPassword: "ยืนยันรหัสผ่าน", // NOSONAR — ชื่อช่องบนฟอร์ม ไม่ใช่รหัสผ่าน
   username: "ชื่อผู้ใช้",
   pen_name: "นามปากกา",
   bio: "แนะนำตัว",

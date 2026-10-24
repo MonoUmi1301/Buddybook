@@ -6,7 +6,7 @@
 // นับเป็น "ตัวอักษร" ไม่ใช่ "คำ" — ภาษาไทยไม่มีช่องว่างระหว่างคำแบบภาษาอังกฤษ split-by-space
 // นับคำไม่ได้ผล
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ");
+  return html.replace(/<[^<>]*>/g, " ");
 }
 
 export function countCharacters(html?: string | null): number {

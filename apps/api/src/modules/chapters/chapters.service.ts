@@ -13,7 +13,7 @@ import { getBalance, ledgerTimestamp, lockWallets, WALLET_TX_OPTIONS } from "@/m
 import { splitGiftFee } from "@/modules/gifts/gift-fee";
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, " ");
+  return html.replace(/<[^<>]*>/g, " ");
 }
 
 /** นับความยาวเนื้อหาเป็นตัวอักษร ไม่ใช่คำ — ภาษาไทยไม่มีช่องว่างระหว่างคำแบบภาษาอังกฤษ

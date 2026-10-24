@@ -406,6 +406,6 @@ const shots: Record<string, (page: Page) => Promise<void>> = {
     }
   }
   await browser.close();
-  writeFileSync(MANIFEST, JSON.stringify(Object.fromEntries(Object.entries(sizes).sort()), null, 2) + "\n");
+  writeFileSync(MANIFEST, JSON.stringify(Object.fromEntries(Object.entries(sizes).sort(([a], [b]) => a.localeCompare(b))), null, 2) + "\n");
   if (failed) process.exit(1);
 })();

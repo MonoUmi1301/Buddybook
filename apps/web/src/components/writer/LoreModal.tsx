@@ -52,8 +52,9 @@ export function LoreModal({ novelId, locationName, initialLore, initialChapterId
           </button>
         </div>
 
-        <label className="mb-1.5 block text-xs font-medium text-neutral-500">เนื้อหา / ประวัติของสถานที่นี้</label>
+        <label htmlFor="lore-content" className="mb-1.5 block text-xs font-medium text-neutral-500">เนื้อหา / ประวัติของสถานที่นี้</label>
         <textarea
+            id="lore-content"
           value={lore}
           onChange={(e) => setLore(e.target.value)}
           rows={5}
@@ -61,8 +62,9 @@ export function LoreModal({ novelId, locationName, initialLore, initialChapterId
           className="w-full resize-none rounded-lg border border-neutral-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
         />
 
-        <label className="mb-1.5 mt-3 block text-xs font-medium text-neutral-500">ผูกกับตอน (ถ้ามี)</label>
+        <label htmlFor="lore-chapter" className="mb-1.5 mt-3 block text-xs font-medium text-neutral-500">ผูกกับตอน (ถ้ามี)</label>
         <select
+            id="lore-chapter"
           value={chapterId ?? ""}
           onChange={(e) => setChapterId(e.target.value || null)}
           className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:border-primary-400 focus:outline-none"

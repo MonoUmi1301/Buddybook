@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/cn";
 import { formatThaiDate } from "@/lib/format";
 import { MODERATION_STATUS_LABEL, type ModerationCase } from "@/lib/moderation";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 export type ModerationTab = "unreviewed" | "reported" | "appeals" | "suspended";
 
@@ -316,13 +317,12 @@ export function ModerationQueue({ initial }: { initial: ModerationQueuePage }) {
       )}
 
       {dialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !busyId && setDialog(null)}>
+        <ModalBackdrop className="z-50 items-center bg-black/40 px-4" onDismiss={() => !busyId && setDialog(null)}>
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="moderation-dialog-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-white p-6 shadow-xl"
           >
             <h2 id="moderation-dialog-title" className="text-h3 text-neutral-900">
               {dialog.kind === "suspend" ? "ระงับนิยาย" : dialog.kind === "uphold" ? "ยืนยันการระงับ" : "คืนสถานะนิยาย"}
@@ -362,7 +362,7 @@ export function ModerationQueue({ initial }: { initial: ModerationQueuePage }) {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </div>
   );

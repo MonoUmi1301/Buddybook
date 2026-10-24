@@ -235,8 +235,9 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
 function jitterPoints(points: { x: number; y: number }[], amount: number): { x: number; y: number }[] {
   if (amount <= 0) return points;
   return points.map((p) => ({
-    x: p.x + (Math.random() - 0.5) * amount,
-    y: p.y + (Math.random() - 0.5) * amount,
+    // ความขรุขระของเส้นที่วาด ไม่เกี่ยวกับความปลอดภัย
+    x: p.x + (Math.random() - 0.5) * amount, // NOSONAR
+    y: p.y + (Math.random() - 0.5) * amount, // NOSONAR
   }));
 }
 
@@ -984,7 +985,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
   // ---------- ชิ้นส่วนแผนที่ / ชื่อพื้นที่ ----------
 
   function newId(prefix: string) {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    return `${prefix}-${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
   }
 
   /** จุดกึ่งกลางของพื้นที่แผนที่ที่มองเห็นอยู่ (พิกัดแผนที่) */
@@ -1536,7 +1537,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       if (!lastStampPosRef.current || distance(lastStampPosRef.current, pos) >= MIN_STAMP_SPACING * stampScale) {
         lastStampPosRef.current = pos;
-        const el: MapElement = { id: `stamp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, kind: "stamp", icon: stampIcon, x: pos.x, y: pos.y, ...newStampStyle() };
+        const el: MapElement = { id: newId("stamp"), kind: "stamp", icon: stampIcon, x: pos.x, y: pos.y, ...newStampStyle() };
         setElements((prev) => {
           const next = [...prev, el];
           saveElements(next);

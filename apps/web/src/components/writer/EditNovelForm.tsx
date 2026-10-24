@@ -184,8 +184,9 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
       {mainGenreTags.length > 0 && (
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่หลัก</label>
+            <label htmlFor="edit-novel-primary-genre" className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่หลัก</label>
             <select
+            id="edit-novel-primary-genre"
               value={primaryTagId ?? ""}
               onChange={(e) => handlePrimaryTagChange(e.target.value ? Number(e.target.value) : null)}
               className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:border-primary-400 focus:outline-none"
@@ -199,8 +200,9 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่รอง</label>
+            <label htmlFor="edit-novel-secondary-genre" className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่รอง</label>
             <select
+            id="edit-novel-secondary-genre"
               value={secondaryTagId ?? ""}
               onChange={(e) => setSecondaryTagId(e.target.value ? Number(e.target.value) : null)}
               disabled={!primaryTagId}

@@ -92,8 +92,9 @@ function EventForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-neutral-500">ชื่อเหตุการณ์</label>
+          <label htmlFor="timeline-event-title" className="mb-1.5 block text-xs font-medium text-neutral-500">ชื่อเหตุการณ์</label>
           <input
+            id="timeline-event-title"
             type="text"
             value={draft.title}
             onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -103,8 +104,9 @@ function EventForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-500">วันที่ (ถ้ามี)</label>
+          <label htmlFor="timeline-event-date" className="mb-1.5 block text-xs font-medium text-neutral-500">วันที่ (ถ้ามี)</label>
           <input
+            id="timeline-event-date"
             type="date"
             value={draft.date}
             onChange={(e) => setDraft({ ...draft, date: e.target.value })}
@@ -113,8 +115,9 @@ function EventForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-500">เวลา (ถ้ามี)</label>
+          <label htmlFor="timeline-event-time" className="mb-1.5 block text-xs font-medium text-neutral-500">เวลา (ถ้ามี)</label>
           <input
+            id="timeline-event-time"
             type="time"
             value={draft.time}
             onChange={(e) => setDraft({ ...draft, time: e.target.value })}
@@ -123,8 +126,9 @@ function EventForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-500">เส้นเรื่อง / ตัวละคร</label>
+          <label htmlFor="timeline-event-thread" className="mb-1.5 block text-xs font-medium text-neutral-500">เส้นเรื่อง / ตัวละคร</label>
           <input
+            id="timeline-event-thread"
             type="text"
             list="thread-options"
             value={draft.thread}
@@ -140,8 +144,8 @@ function EventForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-500">สี</label>
-          <div className="flex gap-2 pt-1.5">
+          <p id="timeline-event-color" className="mb-1.5 block text-xs font-medium text-neutral-500">สี</p>
+          <div role="group" aria-labelledby="timeline-event-color" className="flex gap-2 pt-1.5">
             {THREAD_COLORS.map((c) => (
               <button
                 key={c.hex}
@@ -161,10 +165,11 @@ function EventForm({
 
         <div className="sm:col-span-2">
           <div className="mb-1.5 flex items-center justify-between">
-            <label className="block text-xs font-medium text-neutral-500">ความเข้มข้น / อารมณ์ของฉาก</label>
+            <label htmlFor="timeline-event-intensity" className="block text-xs font-medium text-neutral-500">ความเข้มข้น / อารมณ์ของฉาก</label>
             <span className="text-xs font-semibold text-primary-500">{draft.intensity} / 10</span>
           </div>
           <input
+            id="timeline-event-intensity"
             type="range"
             min={1}
             max={10}
@@ -180,8 +185,9 @@ function EventForm({
         </div>
 
         <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-neutral-500">รายละเอียด</label>
+          <label htmlFor="timeline-event-description" className="mb-1.5 block text-xs font-medium text-neutral-500">รายละเอียด</label>
           <textarea
+            id="timeline-event-description"
             value={draft.description}
             onChange={(e) => setDraft({ ...draft, description: e.target.value })}
             placeholder="สิ่งที่เกิดขึ้นในฉากนี้..."

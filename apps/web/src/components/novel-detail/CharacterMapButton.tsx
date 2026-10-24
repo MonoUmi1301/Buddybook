@@ -12,6 +12,7 @@ import {
   withDefaultHandles,
   type CharacterRecord,
 } from "@/components/writer/CharacterGraph";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 export interface PublicCharacterMap {
   characters: CharacterRecord[];
@@ -64,14 +65,13 @@ export function CharacterMapButton({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
-          onClick={() => setOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="แผนผังตัวละคร"
-        >
-          <div className="w-full max-w-4xl rounded-card bg-white p-4 shadow-xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <ModalBackdrop className="z-50 items-center bg-black/50 px-4" onDismiss={() => setOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="แผนผังตัวละคร"
+            className="relative w-full max-w-4xl rounded-card bg-white p-4 shadow-xl sm:p-6"
+          >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-h3 text-neutral-900">แผนผังตัวละคร</h2>
               <button type="button" onClick={() => setOpen(false)} aria-label="ปิด" className="text-neutral-400 hover:text-neutral-600">
@@ -99,7 +99,7 @@ export function CharacterMapButton({
             </div>
             <p className="mt-2 text-center text-xs text-neutral-400">เลื่อน/ซูมดูได้ — แผนผังนี้นักเขียนเป็นคนเลือกเผยแพร่</p>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
     </>
   );

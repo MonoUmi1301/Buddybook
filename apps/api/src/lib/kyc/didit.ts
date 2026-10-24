@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
 import type { KycReview } from "@/lib/kyc/evaluate";
+import { byCodeUnit } from "@/lib/compare";
 
 /**
  * Didit client (e-KYC: บัตรประชาชน/พาสปอร์ต OCR + Liveness + Face match) — คุยแบบ server-to-server เท่านั้น
@@ -156,7 +157,7 @@ function sortKeys(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(sortKeys);
   if (v && typeof v === "object") {
     return Object.keys(v as object)
-      .sort()
+      .sort(byCodeUnit)
       .reduce<Record<string, unknown>>((acc, k) => {
         acc[k] = sortKeys((v as Record<string, unknown>)[k]);
         return acc;

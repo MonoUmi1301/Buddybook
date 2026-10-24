@@ -32,6 +32,7 @@ import {
   type SendGiftError,
 } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 type Selection = { kind: "gift"; giftId: string } | { kind: "custom" } | null;
 type Stage = "compose" | "confirm" | "sending" | "done";
@@ -306,12 +307,7 @@ export function GiftDialog({ target, viewerName, initialGiftSlug, draft, onClose
   const catalogItems = useMemo(() => catalog?.items ?? [], [catalog]);
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 md:items-center md:p-6"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget && !busy) onClose();
-      }}
-    >
+    <ModalBackdrop className="z-[60] items-end bg-black/45 md:items-center md:p-6" onDismiss={() => !busy && onClose()}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -798,6 +794,6 @@ export function GiftDialog({ target, viewerName, initialGiftSlug, draft, onClose
           </div>
         )}
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }

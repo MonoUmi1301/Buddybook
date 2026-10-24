@@ -21,7 +21,8 @@ export function signUpload({ folder }: SignUploadParams) {
   const timestamp = Math.floor(Date.now() / 1000);
   const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;
   const signature = crypto
-    .createHash("sha1")
+    // SHA-1 เป็นอัลกอริทึมที่ Cloudinary กำหนดให้ใช้เซ็น upload (ไม่ได้ใช้เก็บรหัสผ่าน) — เปลี่ยนเองฝั่งเดียวจะเซ็นไม่ผ่าน
+    .createHash("sha1") // NOSONAR
     .update(paramsToSign + env.CLOUDINARY_API_SECRET)
     .digest("hex");
 

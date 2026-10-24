@@ -173,7 +173,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
   const lastPublishedAt = publishedChapters
     .map((c) => c.published_at)
     .filter((d): d is string => !!d)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .slice(-1)[0];
 
   const rated = reviews.filter((r) => r.rating > 0);

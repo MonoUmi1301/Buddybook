@@ -269,7 +269,7 @@ async function generateUniqueUsername(base: string, opts: { unicode?: boolean } 
     ).slice(0, 40);
   const safe = [...cleaned].length >= 3 ? cleaned : "reader";
   for (let attempt = 0; attempt < 20; attempt++) {
-    const candidate = attempt === 0 ? safe : `${safe}${Math.floor(Math.random() * 10000)}`;
+    const candidate = attempt === 0 ? safe : `${safe}${crypto.randomInt(10000)}`;
     const existing = await prisma.user.findUnique({ where: { username: candidate }, select: { user_id: true } });
     if (!existing) return candidate;
   }

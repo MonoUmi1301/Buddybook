@@ -272,7 +272,7 @@ async function compareSimilarity(session: Session, pg: PgData): Promise<PairResu
     const others = byNovel.get(via.novel_id)!.filter((r) => r.user_id !== a);
     if (!others.length) continue;
     const b = others[Math.floor(rand() * others.length)].user_id;
-    pairs.add([a, b].sort().join("|"));
+    pairs.add([a, b].sort((x, y) => x.localeCompare(y)).join("|"));
   }
 
   const results: PairResult[] = [];

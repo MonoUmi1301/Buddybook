@@ -8,6 +8,7 @@ import { verifySlip, transRefToUuid } from "@/lib/slipok";
 import { getStripeClient, isStripeConfigured } from "@/lib/stripe";
 import { stringToUuid } from "@/lib/idHash";
 import { resolveOrderStatus, resolveStripeSession } from "@/lib/payments/resolveStatus";
+import { byCodeUnit } from "@/lib/compare";
 
 type QueryClient = typeof prisma | Prisma.TransactionClient;
 
@@ -42,7 +43,7 @@ const WALLET_LOCK_NAMESPACE = 7310;
  *  advisory lock ระดับ transaction (ปลดเองตอน commit/rollback) ต่อ user_id — เรียงก่อนล็อกเสมอ
  *  เพื่อให้สองรายการที่โอนสวนทางกัน (A→B กับ B→A) ล็อกลำดับเดียวกัน ไม่ deadlock */
 export async function lockWallets(tx: Prisma.TransactionClient, user_ids: string[]): Promise<void> {
-  for (const id of [...new Set(user_ids)].sort()) {
+  for (const id of [...new Set(user_ids)].sort(byCodeUnit)) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${WALLET_LOCK_NAMESPACE}::int, hashtext(${id}))`;
   }
 }

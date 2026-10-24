@@ -20,14 +20,18 @@ const server = app.listen(env.PORT, () => {
 // เพิ่มภายหลัง (scheduler) — เผยแพร่ตอนที่ตั้งเวลาไว้ / ล้างถังขยะเกิน 30 วัน / sync กราฟ Neo4j
 const stopScheduler = isSchedulerEnabled() ? startScheduler() : () => {};
 
-async function shutdown(signal: string) {
+async function closeConnections() {
+  await prisma.$disconnect();
+  await neo4jDriver.close();
+}
+
+function shutdown(signal: string) {
   // eslint-disable-next-line no-console
   console.log(`\n${signal} received — shutting down gracefully...`);
   stopScheduler();
-  server.close(async () => {
-    await prisma.$disconnect();
-    await neo4jDriver.close();
-    process.exit(0);
+  // callback ของ server.close ไม่รอ promise — ถ้าปิด connection พังก็ยังต้องออกจาก process
+  server.close(() => {
+    void closeConnections().finally(() => process.exit(0));
   });
 }
 
