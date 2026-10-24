@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Camera, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { cn } from "@/lib/cn";
 import { errorText } from "@/lib/formatApiError";
@@ -34,10 +35,17 @@ export function AddCharacterModal({ onClose, onSubmit }: AddCharacterModalProps)
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { upload, uploading, error: uploadError } = useCloudinaryUpload("avatars");
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
-  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // เลือกไฟล์แล้วเปิดป๊อปอัปครอปก่อน (ขยับ/ซูม/หมุน) แล้วค่อยอัปโหลดรูปที่ครอปแล้ว
+  function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (file?.type.startsWith("image/")) setCropFile(file);
+  }
+
+  async function handleAvatarChange(file: File) {
+    setCropFile(null);
     const url = await upload(file);
     if (url) setAvatarUrl(url);
   }
@@ -79,10 +87,18 @@ export function AddCharacterModal({ onClose, onSubmit }: AddCharacterModalProps)
             ) : (
               <Camera className="h-6 w-6 text-neutral-300" />
             )}
-            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} disabled={uploading} />
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarPick} disabled={uploading} />
           </label>
         </div>
         {uploadError && <p className="mb-2 text-center text-xs text-red-500">{uploadError}</p>}
+        {cropFile && (
+          <ImageCropDialog
+            file={cropFile}
+            title="ปรับรูปตัวละคร"
+            onCancel={() => setCropFile(null)}
+            onConfirm={handleAvatarChange}
+          />
+        )}
 
         <p className="mb-1.5 text-center text-xs text-neutral-400">หรือเลือกอวาตาร์ตัวอย่าง (เผื่อยังไม่มีรูปตัวละคร)</p>
         <div className="mb-4 flex flex-wrap justify-center gap-2">

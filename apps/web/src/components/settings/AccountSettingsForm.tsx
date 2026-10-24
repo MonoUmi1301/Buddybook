@@ -7,6 +7,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
+import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { cn } from "@/lib/cn";
 
@@ -44,10 +45,17 @@ export function AccountSettingsForm({ username: initialUsername, penName: initia
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const { upload, uploading, error: uploadError } = useCloudinaryUpload("avatars");
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // เลือกไฟล์แล้วเปิดป๊อปอัปครอปก่อน (ขยับ/ซูม/หมุน) แล้วค่อยอัปโหลดรูปที่ครอปแล้ว
+  function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (file?.type.startsWith("image/")) setCropFile(file);
+  }
+
+  async function handleAvatarUpload(file: File) {
+    setCropFile(null);
     const url = await upload(file);
     if (url) {
       setAvatarUrl(url);
@@ -101,7 +109,7 @@ export function AccountSettingsForm({ username: initialUsername, penName: initia
             <label className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-pill border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500">
               {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
               อัปโหลดรูปของฉัน
-              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploading} />
+              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarPick} disabled={uploading} />
             </label>
             <button
               type="button"
@@ -113,6 +121,14 @@ export function AccountSettingsForm({ username: initialUsername, penName: initia
           </div>
         </div>
         {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
+        {cropFile && (
+          <ImageCropDialog
+            file={cropFile}
+            title="ปรับรูปโปรไฟล์"
+            onCancel={() => setCropFile(null)}
+            onConfirm={handleAvatarUpload}
+          />
+        )}
 
         {showAvatarPicker && (
           <div className="mt-3 grid grid-cols-4 gap-2.5 sm:grid-cols-8">
