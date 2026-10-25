@@ -39,6 +39,24 @@ const nextConfig = {
       },
     ],
   },
+  // code audit H2 — header ที่ไม่ขึ้นกับ request (CSP ที่ต้องมี nonce ต่อ request อยู่ใน src/middleware.ts)
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // ยืนยันตัวตน e-KYC ใช้กล้องบนหน้าของ Didit (redirect ออกไป) ไม่ใช่บนหน้าเรา
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(self \"https://js.stripe.com\")" },
+          ...(process.env.NODE_ENV === "production"
+            ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+            : []),
+        ],
+      },
+    ];
+  },
   async rewrites() {
     // Fallback เท่านั้น — endpoint ส่วนใหญ่มี Route Handler จริงใน src/app/api/v1/...
     // (validate + attach httpOnly cookie เป็น Authorization header ก่อนส่งต่อ Express)

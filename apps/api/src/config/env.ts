@@ -113,6 +113,19 @@ const envSchema = z.object({
 
 const parsed = envSchema
   .superRefine((v, ctx) => {
+    // code audit M4 — production ต้องใช้ secret ที่เดาไม่ได้ (JWT_SECRET ใช้เซ็น state ของ OAuth ด้วย)
+    // ตอนพัฒนา/เทสต์ยังใช้ค่าสั้น ๆ ใน .env ได้เหมือนเดิม
+    if (v.NODE_ENV === "production") {
+      for (const key of ["JWT_SECRET", "JWT_REFRESH_SECRET"] as const) {
+        if (v[key].length < 32) ctx.addIssue({ code: "custom", path: [key], message: `${key} must be at least 32 characters in production` });
+      }
+      if (v.JWT_SECRET === v.JWT_REFRESH_SECRET) {
+        ctx.addIssue({ code: "custom", path: ["JWT_REFRESH_SECRET"], message: "JWT_REFRESH_SECRET must differ from JWT_SECRET" });
+      }
+      if (v.INTERNAL_SERVICE_TOKEN && v.INTERNAL_SERVICE_TOKEN.length < 32) {
+        ctx.addIssue({ code: "custom", path: ["INTERNAL_SERVICE_TOKEN"], message: "INTERNAL_SERVICE_TOKEN must be at least 32 characters in production" });
+      }
+    }
     // เปิด KYC แล้วต้องตั้งค่าครบ — ไม่งั้นจะได้ผู้ใช้ที่สแกนบัตรเสร็จแต่ webhook ยืนยันลายเซ็นไม่ได้
     if (v.KYC_PROVIDER !== "didit") return;
     // webhook secret บังคับเฉพาะ production — ตอนพัฒนาบน localhost Didit ยิง webhook เข้ามาไม่ได้อยู่แล้ว

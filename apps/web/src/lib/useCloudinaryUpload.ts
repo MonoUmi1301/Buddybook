@@ -10,6 +10,7 @@ interface SignResponse {
   api_key: string;
   cloud_name: string;
   folder: string;
+  allowed_formats: string;
 }
 
 /**
@@ -42,6 +43,8 @@ export function useCloudinaryUpload(folder: UploadFolder) {
       form.append("timestamp", String(signData.timestamp));
       form.append("signature", signData.signature);
       form.append("folder", signData.folder);
+      // ต้องส่งค่าเดียวกับที่ API เซ็นไว้ ไม่งั้น Cloudinary ตอบ Invalid Signature
+      form.append("allowed_formats", signData.allowed_formats);
 
       const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${signData.cloud_name}/image/upload`, {
         method: "POST",

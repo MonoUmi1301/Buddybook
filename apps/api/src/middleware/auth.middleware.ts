@@ -1,8 +1,16 @@
+import crypto from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { verifyAccessToken } from "@/lib/jwt";
 import { ApiError } from "@/utils/ApiError";
 import { env } from "@/config/env";
 import { isUserSuspended } from "@/lib/suspension";
+
+/** เทียบ secret แบบเวลาคงที่ (code audit L1) — timingSafeEqual throw ถ้าความยาวไม่เท่า จึงเช็คก่อน */
+function safeEqual(a: string, b: string) {
+  const x = Buffer.from(a);
+  const y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
 
 /**
  * ตรวจ `Authorization: Bearer <access_token>` แล้วแนบ req.user
@@ -78,7 +86,7 @@ export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
  */
 export function requireInternalService(req: Request, _res: Response, next: NextFunction) {
   const token = req.headers["x-internal-token"];
-  if (!env.INTERNAL_SERVICE_TOKEN || token !== env.INTERNAL_SERVICE_TOKEN) {
+  if (!env.INTERNAL_SERVICE_TOKEN || typeof token !== "string" || !safeEqual(token, env.INTERNAL_SERVICE_TOKEN)) {
     throw ApiError.unauthorized("Invalid internal service token");
   }
   next();

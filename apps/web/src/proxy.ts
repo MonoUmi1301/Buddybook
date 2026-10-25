@@ -58,6 +58,45 @@ function isOnboardingExempt(pathname: string): boolean {
   return ONBOARDING_EXEMPT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/** Content-Security-Policy แบบ nonce (code audit H2) — Next.js อ่าน nonce จาก header นี้ใน request แล้วใส่ให้
+ *  สคริปต์ของตัวเองอัตโนมัติ ส่วนสคริปต์ธีมใน layout.tsx อ่านจาก x-nonce เอง
+ *  'strict-dynamic' = สคริปต์ที่สคริปต์มี nonce โหลดต่อ (เช่น js.stripe.com จาก loadStripe) ผ่านได้ — inline handler
+ *  อย่าง <img onerror> ที่ถูกยัดมากับเนื้อหาจะไม่รันแม้หลุดตัวกรองฝั่ง API ไปได้ */
+function buildCsp(nonce: string): string {
+  const dev = process.env.NODE_ENV !== "production";
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://js.stripe.com${dev ? " 'unsafe-eval'" : ""}`,
+    // Quill, สีตัวอักษรในเนื้อหา และ style={...} ของ React ต้องใช้ inline style
+    "style-src 'self' 'unsafe-inline'",
+    // ปก/อวตารมาจาก Cloudinary และรูปโปรไฟล์ของ OAuth provider หลายเจ้า ; รูป base64 ในตอนเก่า
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    `connect-src 'self' https://api.cloudinary.com https://api.stripe.com https://*.stripe.com${dev ? " ws: wss:" : ""}`,
+    // Stripe embedded checkout + วิดีโอที่ฝังในเนื้อหาตอน (ตัวกรองฝั่ง API รับแค่ YouTube/Vimeo)
+    "frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://player.vimeo.com",
+    "media-src 'self' https: blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    ...(dev ? [] : ["upgrade-insecure-requests"]),
+  ].join("; ");
+}
+
+/** ส่ง request ต่อพร้อม nonce/CSP และติด CSP ที่ response — คง Set-Cookie ที่ตั้งไว้แล้ว (token ที่เพิ่ง refresh) */
+function withCsp(request: NextRequest, pending: NextResponse | null): NextResponse {
+  const nonce = btoa(crypto.randomUUID());
+  const csp = buildCsp(nonce);
+  const headers = new Headers(request.headers);
+  headers.set("x-nonce", nonce);
+  headers.set("Content-Security-Policy", csp);
+  const response = NextResponse.next({ request: { headers } });
+  pending?.cookies.getAll().forEach((c) => response.cookies.set(c));
+  response.headers.set("Content-Security-Policy", csp);
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
@@ -130,7 +169,7 @@ export async function proxy(request: NextRequest) {
     return redirectResponse;
   }
 
-  return response ?? NextResponse.next();
+  return withCsp(request, response);
 }
 
 export const config = {
