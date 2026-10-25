@@ -1222,3 +1222,13 @@ model KycVerification {
   @@index([id_number_hash])
   @@map("kyc_verifications")
 }
+
+/// ตัวนับ rate limit (middleware/rateLimit.middleware.ts) — fixed window ต่อ key, แถวเก่าถูกล้างโดย scheduler
+model RateLimit {
+  key          String   @id @db.VarChar(200)
+  window_start DateTime @db.Timestamptz(6)
+  count        Int
+
+  @@index([window_start])
+  @@map("rate_limits")
+}

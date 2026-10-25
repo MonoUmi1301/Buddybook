@@ -1,13 +1,32 @@
 import type { NextFunction, Request, Response } from "express";
+import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 
 /**
- * เพิ่มภายหลัง (Gift donations) — rate limit แบบ sliding window ต่อผู้ใช้ เก็บใน memory ของ process
- * (ยังไม่มี Redis) ถ้ารัน api หลาย instance ลิมิตจะเป็นต่อ instance — ใช้หลัง requireAuth เท่านั้น
+ * เพิ่มภายหลัง (Gift donations) — rate limit ต่อผู้ใช้ ใช้หลัง requireAuth เท่านั้น
  * หลาย route ใช้ bucket เดียวกันได้ด้วยการส่ง bucket ชื่อเดียวกัน (เช่น POST /gifts/send กับ
  * POST /donations นับรวมกัน)
+ *
+ * code audit L4 — ตัวนับอยู่ในตาราง rate_limits (fixed window ต่อ key) แทน memory ของ process เดิม
+ * จึงนับรวมทุก instance ของ api และไม่รีเซ็ตเมื่อรีสตาร์ต — นับ+เช็คใน statement เดียว (upsert) ไม่มี race
  */
-const buckets = new Map<string, number[]>();
+async function hit(key: string, windowMs: number): Promise<number> {
+  const rows = await prisma.$queryRaw<{ count: number }[]>`
+    INSERT INTO rate_limits (key, window_start, count) VALUES (${key}, now(), 1)
+    ON CONFLICT (key) DO UPDATE SET
+      count = CASE WHEN rate_limits.window_start <= now() - make_interval(secs => ${windowMs / 1000}) THEN 1
+                   ELSE rate_limits.count + 1 END,
+      window_start = CASE WHEN rate_limits.window_start <= now() - make_interval(secs => ${windowMs / 1000}) THEN now()
+                          ELSE rate_limits.window_start END
+    RETURNING count`;
+  return rows[0].count;
+}
+
+/** ล้างแถวที่หมดหน้าต่างไปนานแล้ว — เรียกจาก scheduler (key ของผู้ใช้/อีเมลที่ไม่กลับมาอีกจะไม่ค้างตลอดไป) */
+export async function purgeExpiredRateLimits(olderThanMs = 24 * 60 * 60 * 1000) {
+  const { count } = await prisma.rateLimit.deleteMany({ where: { window_start: { lt: new Date(Date.now() - olderThanMs) } } });
+  return count;
+}
 
 export function rateLimitPerUser(options: { bucket: string; max: number | (() => number); windowMs: number }) {
   return rateLimitByKey({ ...options, key: (req) => req.user?.user_id });
@@ -32,25 +51,18 @@ export function rateLimitByKey(options: {
     if (!id) return next();
 
     const max = typeof options.max === "function" ? options.max() : options.max;
-    const key = `${options.bucket}:${id}`;
-    const now = Date.now();
-    const hits = (buckets.get(key) ?? []).filter((t) => now - t < options.windowMs);
-
-    if (hits.length >= max) {
-      buckets.set(key, hits);
-      throw ApiError.tooManyRequests(options.message ?? "ส่งถี่เกินไป กรุณารอสักครู่แล้วลองใหม่");
-    }
-
-    hits.push(now);
-    buckets.set(key, hits);
-
-    // เก็บกวาด key ที่หมดอายุเป็นครั้งคราว กัน Map โตไม่จำกัด
-    if (buckets.size > 10000) {
-      for (const [k, times] of buckets) {
-        if (times.every((t) => now - t >= options.windowMs)) buckets.delete(k);
-      }
-    }
-    next();
+    // key ยาวไม่เกินคอลัมน์ (อีเมลยาวผิดปกติ) — ตัดท้ายไว้ก่อน ให้ zod ใน controller เป็นคนตอบ 400
+    const key = `${options.bucket}:${id}`.slice(0, 200);
+    hit(key, options.windowMs)
+      .then((count) => {
+        if (count > max) next(ApiError.tooManyRequests(options.message ?? "ส่งถี่เกินไป กรุณารอสักครู่แล้วลองใหม่"));
+        else next();
+      })
+      .catch((err: unknown) => {
+        // นับไม่ได้ (DB สะดุด) = ปล่อยผ่าน ไม่ให้ทุก request ล้มเพราะตัวนับ — endpoint ที่ป้องกันต้องใช้ DB อยู่แล้ว
+        console.error(`rate limit check failed (${options.bucket}), allowing request:`, err);
+        next();
+      });
   };
 }
 
@@ -63,6 +75,6 @@ export function bodyField(field: string) {
 }
 
 /** ใช้ในเทสต์เท่านั้น */
-export function resetRateLimits() {
-  buckets.clear();
+export async function resetRateLimits() {
+  await prisma.rateLimit.deleteMany({});
 }
