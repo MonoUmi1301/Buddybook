@@ -1,6 +1,8 @@
 import { Prisma, type LibraryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { countChaptersByNovel } from "@/lib/novelCounts";
+import { assertContentRatingAllowed, contentRatingWhere } from "@/lib/contentRating";
+import { assertNovelVisible } from "@/lib/novelVisibility";
 import { ApiError } from "@/utils/ApiError";
 
 /** ข้อมูลนิยายที่หน้า My Library / "อ่านต่อ" ใช้ — ใช้ร่วมกันทั้ง library และ collections */
@@ -14,6 +16,15 @@ export const libraryNovelSelect = {
 } satisfies Prisma.NovelSelect;
 
 type LibraryNovelRow = Prisma.NovelGetPayload<{ select: typeof libraryNovelSelect }>;
+
+/** นิยายที่ยังแสดงในชั้นหนังสือ/collection ได้ (code audit M3) — ไม่ถูกลบ และเผยแพร่อยู่พร้อมเรตที่ผู้ใช้ดูได้
+ *  (ผลงานของตัวเองเห็นทุกสถานะ/ทุกเรต) แถวในชั้นไม่ถูกลบทิ้ง เรื่องที่ถูกซ่อนจะกลับมาเองเมื่อเปิดอีกครั้ง */
+export async function readableNovelWhere(user_id: string): Promise<Prisma.NovelWhereInput> {
+  return {
+    deleted_at: null,
+    OR: [{ author_id: user_id }, { visibility: "published", ...(await contentRatingWhere(user_id)) }],
+  };
+}
 
 /** จำนวนตอนที่เผยแพร่แล้วของชุดนิยายที่จะแสดง — นับแยกครั้งเดียวต่อรายการ ไม่ใช้ _count ใน select
  *  (ดู lib/novelCounts.ts — _count ใน findMany สแกนตอนทั้งตาราง) */
@@ -35,8 +46,9 @@ function toProgress(p: ProgressRow | undefined | null) {
  *  เพิ่มภายหลัง (หน้า My Library) — แนบ status, ความคืบหน้าการอ่าน และ collection ที่นิยายอยู่
  *  รูปร่าง response เดิม (library_id/novel/added_at) ยังอยู่ครบ — หน้ารายละเอียดนิยายยังใช้อยู่ */
 export async function listLibrary(user_id: string, status?: LibraryStatus) {
+  const novel = await readableNovelWhere(user_id);
   const items = await prisma.userLibrary.findMany({
-    where: { user_id, ...(status ? { status } : {}) },
+    where: { user_id, novel, ...(status ? { status } : {}) },
     orderBy: { added_at: "desc" },
     include: { novel: { select: libraryNovelSelect } },
   });
@@ -49,7 +61,7 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
       select: { novel_id: true, collection_id: true },
     }),
     // นับทุกสถานะเสมอ (ไม่ขึ้นกับ ?status) — ให้ปุ่มกรองโชว์ตัวเลขครบแม้กำลังกรองอยู่
-    prisma.userLibrary.groupBy({ by: ["status"], where: { user_id }, _count: { _all: true } }),
+    prisma.userLibrary.groupBy({ by: ["status"], where: { user_id, novel }, _count: { _all: true } }),
     countLibraryChapters(items.map((i) => i.novel)),
   ]);
   const progressByNovel = new Map(progress.map((p) => [p.novel_id, p]));
@@ -76,8 +88,13 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
 
 /** Reference implementation — POST /library */
 export async function addToLibrary(user_id: string, novel_id: string, status?: LibraryStatus) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true } });
-  if (!novel) throw ApiError.notFound("Novel not found");
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, visibility: true, content_rating: true, deleted_at: true },
+  });
+  if (!novel || novel.deleted_at) throw ApiError.notFound("Novel not found");
+  const isOwner = assertNovelVisible(novel, user_id);
+  await assertContentRatingAllowed(novel, user_id, isOwner);
 
   // ถ้าเคยเปิดอ่านมาก่อนแล้ว ให้เข้าชั้นเป็น "กำลังอ่าน" เลย ไม่ใช่ "อ่านต่อไป"
   const hasProgress = status
@@ -120,7 +137,12 @@ export async function listContinueReading(user_id: string, limit: number) {
   const rows = await prisma.readingProgress.findMany({
     where: {
       user_id,
-      novel: { visibility: "published", NOT: { user_library: { some: { user_id, status: "completed" } } } },
+      novel: {
+        visibility: "published",
+        deleted_at: null,
+        ...(await contentRatingWhere(user_id)),
+        NOT: { user_library: { some: { user_id, status: "completed" } } },
+      },
     },
     orderBy: { last_read_at: "desc" },
     take: limit,
