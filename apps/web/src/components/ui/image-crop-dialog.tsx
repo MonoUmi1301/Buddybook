@@ -7,16 +7,26 @@ import { cn } from "@/lib/cn";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 import { handleAsync } from "@/lib/handleAsync";
 
-const FRAME_SIZE = 224;
-const OUTPUT_SIZE = 512;
-const MIN_ZOOM = 1;
+// ด้านยาวของกรอบครอปบนจอ (px) — วงกลมเล็กกว่านิดเพราะไม่มีมุมให้ดู
+const CIRCLE_FRAME = 224;
+const RECT_FRAME = 256;
 const MAX_ZOOM = 3;
 
 interface ImageCropDialogProps {
   file: File;
   title?: string;
+  /** กว้าง/สูงของรูปที่ได้ เช่น 3 / 4 สำหรับปกนิยาย — ค่าเริ่มต้น 1 (จัตุรัส) */
+  aspect?: number;
+  /** กรอบวงกลม (อวาตาร์) หรือสี่เหลี่ยม — แค่หน้าตาตอนครอป รูปที่ได้เป็นสี่เหลี่ยมเสมอ */
+  shape?: "circle" | "rect";
+  /** ความกว้างของรูปที่ได้ (px) ความสูงคิดจาก aspect */
+  outputWidth?: number;
+  /** "image/png" เก็บพื้นหลังโปร่งใสไว้ (รูปสถานที่) — ค่าเริ่มต้น JPEG พื้นขาว */
+  outputType?: "image/jpeg" | "image/png";
+  /** ยอมให้ซูมออกจนเห็นทั้งรูป (เหลือที่ว่างในกรอบ) แทนที่จะบังคับให้รูปคลุมกรอบเต็ม */
+  allowFit?: boolean;
   onCancel: () => void;
-  /** ได้ไฟล์ JPEG สี่เหลี่ยมจัตุรัสที่ครอปแล้ว (OUTPUT_SIZE px) — เอาไปอัปโหลดต่อได้เลย */
+  /** ได้ไฟล์ที่ครอปแล้วขนาด outputWidth × outputWidth/aspect — เอาไปอัปโหลดต่อได้เลย */
   onConfirm: (cropped: File) => void;
 }
 
@@ -29,10 +39,23 @@ function loadImage(src: string) {
   });
 }
 
-/** ป๊อปอัปครอปรูปโปรไฟล์/อวาตาร์ — ลากเพื่อขยับ, เลื่อนสไลเดอร์หรือ scroll เมาส์เพื่อซูม, หมุนทีละ 90°
+/** ป๊อปอัปครอปรูป (อวาตาร์ ปกนิยาย รูปสถานที่) — ลากเพื่อขยับ, เลื่อนสไลเดอร์หรือ scroll เมาส์เพื่อซูม, หมุนทีละ 90°
  *  ดัดแปลงจาก file-upload-05 (shadcn) ให้ใช้ Button/cn ของโปรเจกต์ ไม่ต้องลง radix/react-dropzone
- *  รูปถูกบังคับให้คลุมกรอบเต็มเสมอ (clamp offset) จะได้ไม่มีขอบว่างในรูปที่ครอปออกมา */
-export function ImageCropDialog({ file, title = "ปรับตำแหน่งรูป", onCancel, onConfirm }: ImageCropDialogProps) {
+ *  รูปถูกบังคับให้คลุมกรอบเต็มเสมอ (clamp offset) จะได้ไม่มีขอบว่างในรูปที่ครอปออกมา — ยกเว้น allowFit */
+export function ImageCropDialog({
+  file,
+  title = "ปรับตำแหน่งรูป",
+  aspect = 1,
+  shape = "circle",
+  outputWidth = 512,
+  outputType = "image/jpeg",
+  allowFit = false,
+  onCancel,
+  onConfirm,
+}: ImageCropDialogProps) {
+  const base = shape === "circle" ? CIRCLE_FRAME : RECT_FRAME;
+  const frame = aspect >= 1 ? { width: base, height: base / aspect } : { width: base * aspect, height: base };
+  const output = { width: outputWidth, height: Math.round(outputWidth / aspect) };
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [zoom, setZoom] = useState(1);
@@ -68,12 +91,19 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
     return () => window.removeEventListener("keydown", onKey);
   }, [onCancel]);
 
-  // ด้านสั้นของรูปพอดีกรอบที่ zoom = 1
+  // zoom = 1 คือรูปคลุมกรอบพอดี (เหมือน object-cover)
   const displayScale = useMemo(() => {
     const { width, height } = naturalSize;
     if (!width || !height) return 1;
-    return FRAME_SIZE / Math.min(width, height);
-  }, [naturalSize]);
+    return Math.max(frame.width / width, frame.height / height);
+  }, [naturalSize, frame.width, frame.height]);
+
+  // allowFit: ซูมออกได้จนทั้งรูปอยู่ในกรอบ (เหมือน object-contain)
+  const minZoom = useMemo(() => {
+    const { width, height } = naturalSize;
+    if (!allowFit || !width || !height) return 1;
+    return Math.min(frame.width / width, frame.height / height) / displayScale;
+  }, [allowFit, naturalSize, frame.width, frame.height, displayScale]);
 
   const displaySize = {
     width: naturalSize.width * displayScale * zoom,
@@ -85,8 +115,8 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
     const sideways = rot % 180 !== 0;
     const w = naturalSize.width * displayScale * z;
     const h = naturalSize.height * displayScale * z;
-    const maxX = Math.max(0, ((sideways ? h : w) - FRAME_SIZE) / 2);
-    const maxY = Math.max(0, ((sideways ? w : h) - FRAME_SIZE) / 2);
+    const maxX = Math.max(0, ((sideways ? h : w) - frame.width) / 2);
+    const maxY = Math.max(0, ((sideways ? w : h) - frame.height) / 2);
     return {
       x: Math.min(maxX, Math.max(-maxX, next.x)),
       y: Math.min(maxY, Math.max(-maxY, next.y)),
@@ -94,7 +124,7 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
   }
 
   function applyZoom(z: number) {
-    const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+    const next = Math.min(MAX_ZOOM, Math.max(minZoom, z));
     setZoom(next);
     setOffset((o) => clampOffset(o, next));
   }
@@ -140,25 +170,29 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
     try {
       const img = await loadImage(imageUrl);
       const canvas = document.createElement("canvas");
-      canvas.width = OUTPUT_SIZE;
-      canvas.height = OUTPUT_SIZE;
+      canvas.width = output.width;
+      canvas.height = output.height;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       // ลำดับเดียวกับ CSS transform ของรูปพรีวิว: เลื่อน (พิกัดกรอบ) → หมุนรอบกลางรูป → ย่อขยาย
-      const outputScale = OUTPUT_SIZE / FRAME_SIZE;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-      ctx.translate(OUTPUT_SIZE / 2 + offset.x * outputScale, OUTPUT_SIZE / 2 + offset.y * outputScale);
+      const outputScale = output.width / frame.width;
+      if (outputType === "image/jpeg") {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, output.width, output.height);
+      }
+      ctx.imageSmoothingQuality = "high";
+      ctx.translate(output.width / 2 + offset.x * outputScale, output.height / 2 + offset.y * outputScale);
       ctx.rotate((rotation * Math.PI) / 180);
       const scale = displayScale * zoom * outputScale;
       ctx.scale(scale, scale);
       ctx.drawImage(img, -naturalSize.width / 2, -naturalSize.height / 2);
 
-      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, 0.9));
       if (!blob) return;
-      const baseName = file.name.replace(/\.[^.]+$/, "") || "avatar";
-      onConfirm(new File([blob], `${baseName}-cropped.jpg`, { type: "image/jpeg" }));
+      const baseName = file.name.replace(/\.[^.]+$/, "") || "image";
+      const ext = outputType === "image/png" ? "png" : "jpg";
+      onConfirm(new File([blob], `${baseName}-cropped.${ext}`, { type: outputType }));
     } finally {
       setProcessing(false);
     }
@@ -185,10 +219,15 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
             className={cn(
-              "relative touch-none select-none overflow-hidden rounded-full border-2 border-dashed border-primary-400/60 bg-neutral-100",
+              "relative touch-none select-none overflow-hidden border-2 border-dashed border-primary-400/60",
+              shape === "circle" ? "rounded-full" : "rounded-lg",
+              // พื้นลายตารางให้เห็นว่าส่วนไหนโปร่งใส (PNG)
+              outputType === "image/png"
+                ? "bg-[repeating-conic-gradient(#e5e5e5_0%_25%,#fafafa_0%_50%)] bg-[length:16px_16px]"
+                : "bg-neutral-100",
               isDragging ? "cursor-grabbing" : "cursor-grab"
             )}
-            style={{ width: FRAME_SIZE, height: FRAME_SIZE }}
+            style={{ width: frame.width, height: frame.height }}
           >
             {imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element -- blob: URL ใช้ next/image ไม่ได้
@@ -209,7 +248,12 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
                 {loadError ? "เปิดรูปนี้ไม่ได้" : "กำลังโหลดรูป…"}
               </p>
             )}
-            <div className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-white/50" />
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/50",
+                shape === "circle" ? "rounded-full" : "rounded-lg"
+              )}
+            />
           </div>
 
           <div className="flex w-full items-center gap-3">
@@ -223,7 +267,7 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
             </button>
             <input
               type="range"
-              min={MIN_ZOOM}
+              min={minZoom}
               max={MAX_ZOOM}
               step={0.01}
               value={zoom}

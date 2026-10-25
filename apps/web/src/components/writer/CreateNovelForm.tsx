@@ -13,6 +13,7 @@ import { TagPicker } from "@/components/writer/TagPicker";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { formatApiError } from "@/lib/formatApiError";
 import { handleAsync } from "@/lib/handleAsync";
+import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 
 export interface NovelWizardTag {
   tag_id: number;
@@ -75,6 +76,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { upload, uploading, error: uploadError } = useCloudinaryUpload("covers");
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   // เพิ่มภายหลัง (Phase L) — หมวดหมู่หลัก = genre ที่ไม่มี parent, หมวดหมู่รอง = genre ที่ parent
   // ตรงกับหมวดหมู่หลักที่เลือกไว้เท่านั้น (cascading select)
@@ -90,9 +92,15 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
     if (!stillValid) setSecondaryTagId(null);
   }
 
-  async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // เลือกไฟล์แล้วเปิดป๊อปอัปครอป (3:4 เท่ากับการ์ดนิยาย/หน้านิยาย) ก่อน แล้วค่อยอัปโหลดรูปที่ครอปแล้ว
+  function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (file?.type.startsWith("image/")) setCropFile(file);
+  }
+
+  async function handleCoverChange(file: File) {
+    setCropFile(null);
     const url = await upload(file);
     if (url) setCoverImageUrl(url);
   }
@@ -236,9 +244,20 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
           ) : (
             <Camera className="h-6 w-6 text-neutral-300" />
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handleAsync(handleCoverChange)} disabled={uploading} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleCoverPick} disabled={uploading} />
         </label>
         {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
+        {cropFile && (
+          <ImageCropDialog
+            file={cropFile}
+            title="ปรับปกนิยาย"
+            aspect={3 / 4}
+            shape="rect"
+            outputWidth={900}
+            onCancel={() => setCropFile(null)}
+            onConfirm={handleAsync(handleCoverChange)}
+          />
+        )}
       </div>
 
       <Input

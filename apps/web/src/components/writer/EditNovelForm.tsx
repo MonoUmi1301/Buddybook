@@ -13,6 +13,7 @@ import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel } from "@/components/writer/novelManagementTypes";
 import { handleAsync } from "@/lib/handleAsync";
+import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 
 interface EditNovelFormProps {
   novel: ManagedNovel;
@@ -69,6 +70,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { upload, uploading, error: uploadError } = useCloudinaryUpload("covers");
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   const mainGenreTags = tags.filter((t) => t.category === "genre" && !t.parent_tag_id);
   const subGenreTags = tags.filter((t) => t.category === "genre" && t.parent_tag_id === primaryTagId);
@@ -81,9 +83,15 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
     if (!stillValid) setSecondaryTagId(null);
   }
 
-  async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // เลือกไฟล์แล้วเปิดป๊อปอัปครอป (3:4 เท่ากับการ์ดนิยาย/หน้านิยาย) ก่อน แล้วค่อยอัปโหลดรูปที่ครอปแล้ว
+  function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (file?.type.startsWith("image/")) setCropFile(file);
+  }
+
+  async function handleCoverChange(file: File) {
+    setCropFile(null);
     const url = await upload(file);
     if (url) setCoverImageUrl(url);
   }
@@ -171,9 +179,20 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
           ) : (
             <Camera className="h-6 w-6 text-neutral-300" />
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handleAsync(handleCoverChange)} disabled={uploading} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleCoverPick} disabled={uploading} />
         </label>
         {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
+        {cropFile && (
+          <ImageCropDialog
+            file={cropFile}
+            title="ปรับปกนิยาย"
+            aspect={3 / 4}
+            shape="rect"
+            outputWidth={900}
+            onCancel={() => setCropFile(null)}
+            onConfirm={handleAsync(handleCoverChange)}
+          />
+        )}
       </div>
 
       <Input label="ชื่อเรื่อง" value={title} onChange={(e) => setTitle(e.target.value)} required />

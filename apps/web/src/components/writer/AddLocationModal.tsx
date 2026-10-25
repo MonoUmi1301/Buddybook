@@ -15,6 +15,7 @@ import {
 import { errorText } from "@/lib/formatApiError";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { handleAsync } from "@/lib/handleAsync";
+import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 
 interface AddLocationModalProps {
   onClose: () => void;
@@ -36,7 +37,10 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const { upload, uploading, error: uploadError } = useCloudinaryUpload("locations");
 
-  async function handleFile(file: File | undefined) {
+  const [cropFile, setCropFile] = useState<File | null>(null);
+
+  // ตรวจไฟล์ก่อน แล้วเปิดป๊อปอัปครอป (จัตุรัส, PNG เก็บพื้นโปร่งใส, ซูมออกให้เห็นทั้งรูปได้)
+  function handleFilePick(file: File | undefined) {
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       setError("ไฟล์ต้องเป็นรูปภาพ (PNG, JPG, WEBP)");
@@ -47,6 +51,11 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
       return;
     }
     setError(null);
+    setCropFile(file);
+  }
+
+  async function handleCroppedFile(file: File) {
+    setCropFile(null);
     const url = await upload(file);
     if (url) {
       setCustomUrl(url);
@@ -137,10 +146,21 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
             accept="image/png,image/jpeg,image/webp"
             className="hidden"
             onChange={(e) => {
-              void handleFile(e.target.files?.[0]);
+              handleFilePick(e.target.files?.[0]);
               e.target.value = "";
             }}
           />
+          {cropFile && (
+            <ImageCropDialog
+              file={cropFile}
+              title="ปรับรูปสถานที่"
+              shape="rect"
+              outputType="image/png"
+              allowFit
+              onCancel={() => setCropFile(null)}
+              onConfirm={handleAsync(handleCroppedFile)}
+            />
+          )}
           {customUrl && (
             <button
               type="button"
