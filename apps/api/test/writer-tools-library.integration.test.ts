@@ -67,6 +67,20 @@ describe("writer tools belong to the novel's author", () => {
   });
 });
 
+describe("novel search ?mine=", () => {
+  it("treats mine=false like no flag (query strings are not coerced to true)", async () => {
+    const title = `mine-flag ${h.tag}`;
+    await makeNovel({ title, visibility: "private" });
+    const titles = async (qs: string) =>
+      (await h.api("GET", `/novels/search?q=${encodeURIComponent(title)}${qs}`, author.token)).json.novels.map(
+        (n: { title: string }) => n.title
+      );
+    expect(await titles("&mine=true")).toContain(title);
+    expect(await titles("&mine=false")).not.toContain(title);
+    expect((await h.api("GET", "/novels/search?mine=yes", author.token)).status).toBe(400);
+  });
+});
+
 describe("library only shows novels the reader may see", () => {
   it("refuses to add hidden or age-restricted novels", async () => {
     const hidden = await makeNovel({ visibility: "private" });

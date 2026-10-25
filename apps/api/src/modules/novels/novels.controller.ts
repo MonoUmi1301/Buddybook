@@ -38,7 +38,8 @@ const searchQuerySchema = z.object({
   sort: z.enum(["newest", "views"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
-  mine: z.coerce.boolean().optional(),
+  // query string เป็นสตริงเสมอ — z.coerce.boolean() แปลง "false" เป็น true จึงรับเฉพาะ "true"/"false" ตรง ๆ
+  mine: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
 });
 
 export async function search(req: Request, res: Response) {

@@ -115,7 +115,8 @@ export const novelsSearchQuerySchema = z.object({
   sort: z.enum(["newest", "views"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   // ส่วนขยายนอก API_Endpoints.md เดิม — ดูเหตุผลใน apps/api/src/modules/novels/novels.service.ts
-  mine: z.coerce.boolean().optional(),
+  // query string เป็นสตริงเสมอ — z.coerce.boolean() แปลง "false" เป็น true จึงรับเฉพาะ "true"/"false" ตรง ๆ
+  mine: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
 });
 
 // เพิ่มภายหลัง (หน้า My Library) — สถานะในชั้นหนังสือ ต้องตรงกับ enum LibraryStatus ใน schema.prisma
