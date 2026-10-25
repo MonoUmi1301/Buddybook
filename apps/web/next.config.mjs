@@ -1,6 +1,12 @@
+import { fileURLToPath } from "node:url";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // production image (docker/web.Dockerfile) รัน .next/standalone — ไม่มีผลกับ next dev
+  // tracing root = root ของ monorepo เพราะ dependency ถูก hoist ไปไว้ที่ node_modules ของ root
+  output: "standalone",
+  outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
   // เพิ่มภายหลัง — ปิด client Router Cache ของหน้า dynamic (ค่าเดิมของ Next 14.2 = เก็บไว้ 30 วิ)
   // เดิมกลับเข้าหน้าจัดการนิยายหลังลบ/สร้าง/ตั้งเวลาตอน จะได้หน้าเก่าจาก cache ต้องกดรีเฟรชเองถึงจะอัปเดต
   experimental: {
