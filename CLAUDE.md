@@ -1,7 +1,8 @@
 # Project: BuddyBook (Web Novel & Fanfiction Platform)
 
 ## Tech Stack
-- Frontend: Next.js (apps/web) - Port 3000
+- Node.js ≥22.12 (CI/Docker use 24) — sanitize-html and vitest need it.
+- Frontend: Next.js 16 + React 19 (apps/web) - Port 3000. Request APIs are async (`await cookies()`, `await params`); `src/proxy.ts` (formerly middleware) refreshes tokens and sets a per-request CSP nonce.
 - Backend: Express (apps/api) - Port 4000
 - Database: PostgreSQL + Prisma ORM + Neo4j
   - Dev DB the app actually uses: native Windows PostgreSQL 18 at `localhost:5525/buddybook`, user `postgres` (`apps/api/.env`). PostgreSQL 17 on port 1301 is a different server (different password) — the app does not use it. The Docker `postgres` service also maps 5525 — don't run both.
@@ -29,10 +30,14 @@
 - Recommendations: candidates → `ranking.ts` (`relevanceScore` + `rerankLongTail`); never use views as a positive signal. Validate changes with `npm run eval:recs`.
 - Content rating gate: `all_ages` open to everyone, `teen` needs verified age ≥13, `mature` ≥18; unverified = `all_ages` only. Only proven sources count: `kyc` or `google` (no self-declared birth dates — removed, DB CHECK enforces it). Age comes from `users.birth_date` via `lib/contentRating.ts` — every endpoint returning novel data must use `assertContentRatingAllowed` / `contentRatingWhere`. kyc overrides google, never the reverse. e-KYC (ID/passport + liveness via Didit hosted flow, `modules/kyc`, `docs/age-verification-kyc.md`) never stores images, names or ID numbers — only birth date, status, consent record and an HMAC of the document number; provider sessions are deleted via API as soon as the result is final.
 - Deleting a novel is a 30-day soft delete (`deleted_at`, visibility forced to private); owner-scoped queries must filter `deleted_at: null`.
+- Security headers: CSP lives in `apps/web/src/proxy.ts` (nonce + `strict-dynamic`); a new inline script needs `nonce={(await headers()).get("x-nonce")}`, and a new third-party script/frame/API host must be added there. Static headers are in `next.config.mjs`.
+- Chapter content is HTML rendered with `dangerouslySetInnerHTML`: always pass it through `toSafeChapterHtml` (`lib/richText.ts`) on write and on read; novel introductions use `toSafeRichText`.
+- Rate limits (`middleware/rateLimit.middleware.ts`) are stored in the `rate_limits` table (shared across instances); tests reset them with `await resetRateLimits()`.
+- Async event handlers in the web app go through `handleAsync` (`lib/handleAsync.ts`); lint enforces `no-floating-promises` / `no-misused-promises` in both apps.
 - Chapter autosave locks the chapter row (`FOR UPDATE`) to number versions; editor keeps a localStorage draft (`lib/draftStore.ts`).
 - Responsive: desktop-first, then iPad (820/1180) and phone (390) — no page-level horizontal scroll.
 
 ## Testing
 - API tests: `npm test` (vitest, needs a migrated + seeded Postgres from `apps/api/.env`).
-- Typecheck both apps: `npm run typecheck`. CI: `.github/workflows/ci.yml`.
+- Typecheck both apps: `npm run typecheck`. Lint: `npm run lint` (web uses ESLint 9 flat config `apps/web/eslint.config.mjs`). CI: `.github/workflows/ci.yml`.
 - E2E (Playwright, needs api+web running and `npx tsx prisma/seed-e2e.ts --rich` — without `--rich` only `e2e_writer` is created, no readers/`e2e_admin`; password `e2e12345`): `npm run test:e2e`. Load test: `k6 run loadtest/buddybook.k6.js`. See `docs/evaluation.md`.
