@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface ChapterOption {
   chapter_id: string;
@@ -94,7 +95,7 @@ export function LoreModal({ novelId, locationName, initialLore, initialChapterId
           <Button type="button" variant="outline" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button type="button" variant="primary" onClick={handleSave} loading={saving}>
+          <Button type="button" variant="primary" onClick={handleAsync(handleSave)} loading={saving}>
             บันทึก
           </Button>
         </div>

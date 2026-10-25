@@ -12,6 +12,7 @@ import { formatApiError } from "@/lib/formatApiError";
 import { countCharacters, estimatePageCount } from "@/lib/textStats";
 import { type LocalDraft, chapterDraftKey, clearDraft, readDraft, writeDraft } from "@/lib/draftStore";
 import { formatThaiDateTime } from "@/lib/format";
+import { handleAsync } from "@/lib/handleAsync";
 
 // Quill แตะ DOM ตรง ๆ ตอน construct — โหลดแบบ ssr:false (ทำได้เฉพาะใน Client Component)
 // ตาม pattern มาตรฐานของ Next.js App Router
@@ -433,7 +434,7 @@ export function ChapterEditorForm({
             <p className="font-medium">ตอนนี้ถูกแก้ไขจากแท็บหรืออุปกรณ์อื่นหลังจากที่คุณเปิดไว้</p>
             <p className="mt-0.5 text-xs">งานของคุณในแท็บนี้สำรองไว้ในเครื่องแล้ว เลือกว่าจะทำอย่างไร:</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Button size="sm" variant="primary" onClick={overwriteServerCopy}>
+              <Button size="sm" variant="primary" onClick={handleAsync(overwriteServerCopy)}>
                 ใช้ฉบับในแท็บนี้ทับ
               </Button>
               <Button size="sm" variant="outline" onClick={() => window.location.reload()}>
@@ -514,7 +515,7 @@ export function ChapterEditorForm({
         {errorMessage && <p className="mt-3 text-sm text-red-500">{errorMessage}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
-          <Button variant="outline" onClick={handleSaveDraft} loading={saveStatus === "saving"}>
+          <Button variant="outline" onClick={handleAsync(handleSaveDraft)} loading={saveStatus === "saving"}>
             บันทึกร่าง
           </Button>
           <Button variant="primary" onClick={() => setShowPublishModal(true)} loading={publishing}>
@@ -530,7 +531,7 @@ export function ChapterEditorForm({
             setPublishError(null);
           }}
           onConfirm={(choice, scheduledPublishAt) => {
-            handlePublishConfirm(choice, scheduledPublishAt);
+            void handlePublishConfirm(choice, scheduledPublishAt);
           }}
           submitting={publishing}
           errorMessage={publishError}

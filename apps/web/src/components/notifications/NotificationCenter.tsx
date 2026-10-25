@@ -14,6 +14,7 @@ import {
   type NotificationItem,
   type NotificationType,
 } from "@/lib/notifications";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface Page {
   notifications: NotificationItem[];
@@ -120,7 +121,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
             ยังไม่อ่าน <strong className="tabular-nums text-neutral-900">{data.unread_count.toLocaleString("th-TH")}</strong> รายการ
           </p>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={markAll} disabled={data.unread_count === 0}>
+            <Button size="sm" variant="outline" onClick={handleAsync(markAll)} disabled={data.unread_count === 0}>
               <CheckCheck className="h-4 w-4" /> อ่านทั้งหมด
             </Button>
             <Button size="sm" variant="outline" className="lg:hidden" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>
@@ -165,7 +166,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
                   <li key={n.notification_id}>
                     <button
                       type="button"
-                      onClick={() => open(n)}
+                      onClick={handleAsync(() => open(n))}
                       className={cn("flex w-full gap-3 px-4 py-3.5 text-left hover:bg-neutral-50", !n.is_read && "bg-primary-50/40")}
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-primary-600">
@@ -223,7 +224,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
                     role="switch"
                     aria-checked={on}
                     checked={on}
-                    onChange={() => toggleMute(t)}
+                    onChange={handleAsync(() => toggleMute(t))}
                     className="peer sr-only"
                   />
                   <span

@@ -117,7 +117,7 @@ export function usePaymentResult(orderId: string | null, onOutcome: (outcome: Pa
 
     setChecking(true);
     void check();
-    timer = window.setInterval(check, POLL_INTERVAL_MS);
+    timer = window.setInterval(() => void check(), POLL_INTERVAL_MS);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 

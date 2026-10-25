@@ -10,6 +10,7 @@ import { giftImage } from "@/lib/donate-assets";
 import { THAI_TIME_ZONE } from "@/lib/format";
 import { formatCoins, type GiftAnimation, type GiftTier } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface AdminGiftRow {
   gift_id: string;
@@ -215,7 +216,7 @@ export function GiftsManager({ initialGifts }: { initialGifts: AdminGiftRow[] })
       </div>
 
       {editing && f && (
-        <form onSubmit={save} className="mb-6 rounded-card border border-neutral-200 bg-white p-4 sm:p-5">
+        <form onSubmit={handleAsync(save)} className="mb-6 rounded-card border border-neutral-200 bg-white p-4 sm:p-5">
           <h3 className="mb-4 font-semibold text-neutral-900">{editing.id ? `แก้ไข ${f.name_th}` : "เพิ่มของขวัญใหม่"}</h3>
           <div className="grid gap-4 sm:grid-cols-[96px_minmax(0,1fr)]">
             <div className="mx-auto h-24 w-24 rounded-xl bg-gift-paper p-1 sm:mx-0">
@@ -343,7 +344,7 @@ export function GiftsManager({ initialGifts }: { initialGifts: AdminGiftRow[] })
                 <button
                   type="button"
                   disabled={busyId === g.gift_id}
-                  onClick={() => toggleActive(g)}
+                  onClick={handleAsync(() => toggleActive(g))}
                   className="min-h-[44px] rounded-lg px-3 text-sm text-neutral-600 hover:bg-neutral-100 disabled:opacity-50"
                 >
                   {g.is_active ? "ปิดขาย" : "เปิดขาย"}
@@ -351,7 +352,7 @@ export function GiftsManager({ initialGifts }: { initialGifts: AdminGiftRow[] })
                 <button
                   type="button"
                   disabled={busyId === g.gift_id}
-                  onClick={() => remove(g)}
+                  onClick={handleAsync(() => remove(g))}
                   className="min-h-[44px] rounded-lg px-3 text-sm text-red-600 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
                 >
                   ลบ

@@ -5,6 +5,7 @@ import { RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 const FRAME_SIZE = 224;
 const OUTPUT_SIZE = 512;
@@ -250,7 +251,7 @@ export function ImageCropDialog({ file, title = "ปรับตำแหน่�
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               ยกเลิก
             </Button>
-            <Button type="button" size="sm" onClick={confirmCrop} loading={processing} disabled={!imageUrl}>
+            <Button type="button" size="sm" onClick={handleAsync(confirmCrop)} loading={processing} disabled={!imageUrl}>
               ใช้รูปนี้
             </Button>
           </div>

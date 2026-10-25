@@ -9,6 +9,7 @@ import { toast } from "@/components/ui/Toaster";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { fetchBalance, formatCoins } from "@/lib/gifts";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface ChapterUnlockPanelProps {
   chapterId: string;
@@ -37,9 +38,11 @@ export function ChapterUnlockPanel({ chapterId, priceCoins, teaser, isLoggedIn, 
   useEffect(() => {
     if (!isLoggedIn) return;
     let cancelled = false;
-    fetchBalance().then((b) => {
-      if (!cancelled) setBalance(b);
-    });
+    fetchBalance()
+      .then((b) => {
+        if (!cancelled) setBalance(b);
+      })
+      .catch(console.error);
     return () => {
       cancelled = true;
     };
@@ -127,7 +130,7 @@ export function ChapterUnlockPanel({ chapterId, priceCoins, teaser, isLoggedIn, 
           priceCoins={priceCoins}
           balance={balance}
           loading={loading}
-          onConfirm={unlock}
+          onConfirm={handleAsync(unlock)}
           onClose={() => setConfirming(false)}
         />
       )}

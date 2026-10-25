@@ -8,6 +8,7 @@ import { Button, buttonClasses } from "@/components/ui/Button";
 import { KycConsentModal } from "@/components/kyc/KycConsentModal";
 import { KYC_CONSENT_VERSION } from "@/lib/kycConsent";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface KycStatus {
   enabled: boolean;
@@ -71,14 +72,17 @@ export function VerifyIdentityFlow({ initialStatus, returnTo }: { initialStatus:
   useEffect(() => {
     if (step !== "waiting") return;
     let cancelled = false;
-    const timer = setInterval(async () => {
-      const next = await refreshStatus();
-      if (cancelled || !next) return;
-      if (next.status === "approved" || next.status === "rejected") {
-        setStep(stepFor(next, true));
-        router.refresh();
-      }
-    }, POLL_MS);
+    const timer = setInterval(
+      handleAsync(async () => {
+        const next = await refreshStatus();
+        if (cancelled || !next) return;
+        if (next.status === "approved" || next.status === "rejected") {
+          setStep(stepFor(next, true));
+          router.refresh();
+        }
+      }),
+      POLL_MS
+    );
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -106,7 +110,7 @@ export function VerifyIdentityFlow({ initialStatus, returnTo }: { initialStatus:
 
   const consentModal = consentOpen && (
     <KycConsentModal
-      onAccept={handleConsentAccepted}
+      onAccept={handleAsync(handleConsentAccepted)}
       onClose={() => setConsentOpen(false)}
       submitting={starting}
       error={error}

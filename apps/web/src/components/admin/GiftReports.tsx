@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/Toaster";
 import { formatThaiDate } from "@/lib/format";
 import { giftLabel, type GiftSummary, type GiftUser } from "@/lib/gifts";
 import type { CardTemplate } from "@/lib/donate-assets";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface GiftReportRow {
   donation_id: string;
@@ -133,7 +134,7 @@ export function GiftReports({ initialItems, initialCursor }: { initialItems: Gif
                 <button
                   type="button"
                   disabled={busyId === row.donation_id}
-                  onClick={() => resolve(row, "dismiss")}
+                  onClick={handleAsync(() => resolve(row, "dismiss"))}
                   className="min-h-[44px] rounded-pill border border-neutral-300 px-5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                 >
                   ปล่อยผ่าน
@@ -141,7 +142,7 @@ export function GiftReports({ initialItems, initialCursor }: { initialItems: Gif
                 <button
                   type="button"
                   disabled={busyId === row.donation_id}
-                  onClick={() => resolve(row, "hide")}
+                  onClick={handleAsync(() => resolve(row, "hide"))}
                   className="inline-flex min-h-[44px] items-center gap-2 rounded-pill bg-red-600 px-5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
                 >
                   {busyId === row.donation_id && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
@@ -157,7 +158,7 @@ export function GiftReports({ initialItems, initialCursor }: { initialItems: Gif
         <div className="mt-4 flex justify-center">
           <button
             type="button"
-            onClick={loadMore}
+            onClick={handleAsync(loadMore)}
             disabled={loadingMore}
             className="min-h-[44px] rounded-pill border border-neutral-300 px-6 text-sm disabled:opacity-50"
           >

@@ -11,6 +11,7 @@ import { AttachmentPicker } from "@/components/support/AttachmentPicker";
 import { formatApiError } from "@/lib/formatApiError";
 import { SUPPORT_CATEGORY_LABEL, type SupportCategory, type SupportTicketSummary } from "@/lib/support";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 /**
  * gap 3.2 — ศูนย์ช่วยเหลือ: แจ้งปัญหาใหม่ + รายการเรื่องที่เคยแจ้ง
@@ -50,7 +51,7 @@ export function SupportCenter({ tickets }: { tickets: SupportTicketSummary[] }) 
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <form onSubmit={submit} className="rounded-card border border-neutral-200 p-4 sm:p-6">
+      <form onSubmit={handleAsync(submit)} className="rounded-card border border-neutral-200 p-4 sm:p-6">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-neutral-900">
           <MessageSquarePlus className="h-5 w-5 text-primary-500" /> แจ้งปัญหาใหม่
         </h2>

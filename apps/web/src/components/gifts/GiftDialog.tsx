@@ -33,6 +33,7 @@ import {
 } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 type Selection = { kind: "gift"; giftId: string } | { kind: "custom" } | null;
 type Stage = "compose" | "confirm" | "sending" | "done";
@@ -160,7 +161,7 @@ export function GiftDialog({ target, viewerName, initialGiftSlug, draft, onClose
 
   useEffect(() => {
     loadCatalog();
-    fetchBalance().then(setBalance);
+    fetchBalance().then(setBalance).catch(console.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- โหลดครั้งเดียวตอนเปิด
   }, []);
 
@@ -759,7 +760,7 @@ export function GiftDialog({ target, viewerName, initialGiftSlug, draft, onClose
                 </button>
                 <button
                   type="button"
-                  onClick={submit}
+                  onClick={handleAsync(submit)}
                   disabled={busy || !canConfirm}
                   data-autofocus
                   className="inline-flex min-h-[48px] items-center gap-2 rounded-pill bg-gift-bear px-6 text-sm font-semibold text-white shadow-sm disabled:opacity-60 md:px-8"

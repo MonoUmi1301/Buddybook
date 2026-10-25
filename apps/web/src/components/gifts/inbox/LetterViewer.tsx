@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/cn";
 import { errorText } from "@/lib/formatApiError";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface LetterViewerProps {
   item: InboxItem;
@@ -189,7 +190,7 @@ export function LetterViewer({ item, authorName, feePercent, onChange, onClose }
                   <button
                     type="button"
                     disabled={busy !== null || thankCount === 0 || thankCount > THANK_MESSAGE_MAX}
-                    onClick={() => run("thank", () => thankInboxItem(item.donation_id, thankText.trim()), "ส่งคำขอบคุณแล้ว")}
+                    onClick={handleAsync(() => run("thank", () => thankInboxItem(item.donation_id, thankText.trim()), "ส่งคำขอบคุณแล้ว"))}
                     className="mb-5 inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-pill bg-gift-bear px-5 text-sm font-semibold text-white disabled:opacity-50"
                   >
                     {busy === "thank" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
@@ -226,8 +227,8 @@ export function LetterViewer({ item, authorName, feePercent, onChange, onClose }
                 <button
                   type="button"
                   disabled={busy !== null || countCardChars(reportReason) > REPORT_REASON_MAX}
-                  onClick={() =>
-                    run("report", () => updateInboxItem(item.donation_id, { report_reason: reportReason.trim() }), "ส่งรายงานแล้ว")
+                  onClick={handleAsync(() =>
+                    run("report", () => updateInboxItem(item.donation_id, { report_reason: reportReason.trim() }), "ส่งรายงานแล้ว"))
                   }
                   className="inline-flex min-h-[44px] items-center gap-2 rounded-pill bg-red-600 px-5 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -249,12 +250,12 @@ export function LetterViewer({ item, authorName, feePercent, onChange, onClose }
           <button
             type="button"
             disabled={busy !== null}
-            onClick={() =>
+            onClick={handleAsync(() =>
               run(
                 "hide",
                 () => updateInboxItem(item.donation_id, { hidden: !item.hidden_at }),
                 item.hidden_at ? "แสดงการ์ดนี้อีกครั้งแล้ว" : "ซ่อนการ์ดแล้ว"
-              )
+              ))
             }
             className="inline-flex min-h-[44px] items-center gap-2 rounded-pill border border-gift-edge px-4 text-sm hover:border-gift-bear disabled:opacity-50"
           >

@@ -10,6 +10,7 @@ import { AttachmentPicker } from "@/components/support/AttachmentPicker";
 import { formatApiError } from "@/lib/formatApiError";
 import { SUPPORT_CATEGORY_LABEL, SUPPORT_STATUS_LABEL, type SupportStatus, type SupportTicketDetail } from "@/lib/support";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 /** gap 3.2 — บทสนทนาของเรื่องแจ้งปัญหา (ผู้ใช้และทีมงานใช้หน้าเดียวกัน — ทีมงานมีตัวเลือกสถานะเพิ่ม) */
 export function SupportThread({ ticket, isStaff }: { ticket: SupportTicketDetail; isStaff: boolean }) {
@@ -69,7 +70,7 @@ export function SupportThread({ ticket, isStaff }: { ticket: SupportTicketDetail
             <select
               value={ticket.status}
               disabled={busy}
-              onChange={(e) => setStatus(e.target.value as SupportStatus)}
+              onChange={handleAsync((e) => setStatus(e.target.value as SupportStatus))}
               className="min-h-[40px] rounded-lg border border-neutral-300 px-2 text-sm"
             >
               {(Object.keys(SUPPORT_STATUS_LABEL) as SupportStatus[]).map((s) => (
@@ -81,7 +82,7 @@ export function SupportThread({ ticket, isStaff }: { ticket: SupportTicketDetail
           </label>
         ) : (
           !closed && (
-            <Button variant="outline" size="sm" onClick={() => setStatus("closed")} loading={busy}>
+            <Button variant="outline" size="sm" onClick={handleAsync(() => setStatus("closed"))} loading={busy}>
               ปัญหาหายแล้ว ปิดเรื่อง
             </Button>
           )
@@ -123,7 +124,7 @@ export function SupportThread({ ticket, isStaff }: { ticket: SupportTicketDetail
           เรื่องนี้ปิดแล้ว หากยังมีปัญหา กรุณาแจ้งเรื่องใหม่
         </p>
       ) : (
-        <form onSubmit={send} className="mt-6 rounded-card border border-neutral-200 p-3 sm:p-4">
+        <form onSubmit={handleAsync(send)} className="mt-6 rounded-card border border-neutral-200 p-3 sm:p-4">
           <label htmlFor="support-reply" className="sr-only">
             ตอบกลับ
           </label>

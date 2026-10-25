@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, Trash2, Pencil, X, Check, Clock, Filter, List, LineChart, MapPin } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface TimelineEventData {
   id: string;
@@ -472,7 +473,7 @@ export function TimelineBuilder({ novelId, initialEvents }: TimelineBuilderProps
       </div>
 
       {draft && !editingId && (
-        <EventForm draft={draft} setDraft={setDraft} editingId={editingId} threads={threads} saving={saving} error={error} onSave={saveDraft} onCancel={closeForm} />
+        <EventForm draft={draft} setDraft={setDraft} editingId={editingId} threads={threads} saving={saving} error={error} onSave={handleAsync(saveDraft)} onCancel={closeForm} />
       )}
 
       {visibleEvents.length === 0 && !draft && (
@@ -493,7 +494,7 @@ export function TimelineBuilder({ novelId, initialEvents }: TimelineBuilderProps
             {visibleEvents.map((ev) =>
               editingId === ev.id ? (
                 <div key={ev.id} className="-ml-7 sm:-ml-9">
-                  <EventForm draft={draft as Draft} setDraft={setDraft} editingId={editingId} threads={threads} saving={saving} error={error} onSave={saveDraft} onCancel={closeForm} />
+                  <EventForm draft={draft as Draft} setDraft={setDraft} editingId={editingId} threads={threads} saving={saving} error={error} onSave={handleAsync(saveDraft)} onCancel={closeForm} />
                 </div>
               ) : (
                 <div key={ev.id} className="group relative">
@@ -537,7 +538,7 @@ export function TimelineBuilder({ novelId, initialEvents }: TimelineBuilderProps
                           <>
                             <button
                               type="button"
-                              onClick={() => deleteEvent(ev.id)}
+                              onClick={handleAsync(() => deleteEvent(ev.id))}
                               className="rounded-full bg-red-500 px-2.5 py-1 text-xs font-semibold text-white"
                             >
                               ลบ

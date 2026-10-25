@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UserCheck, UserPlus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { toast } from "@/components/ui/Toaster";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface FollowStatus {
   follower_count: number;
@@ -58,7 +59,7 @@ export function FollowButton({ authorId, isLoggedIn, className }: FollowButtonPr
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={handleAsync(toggle)}
       disabled={pending || (isLoggedIn && !status)}
       aria-pressed={following}
       className={cn(

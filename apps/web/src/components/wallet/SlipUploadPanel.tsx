@@ -5,6 +5,7 @@ import { Camera, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import type { CoinPackage } from "@/components/wallet/CoinPackageRow";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface SlipUploadPanelProps {
   pkg: CoinPackage;
@@ -84,7 +85,7 @@ export function SlipUploadPanel({ pkg, onClose, onSuccess }: SlipUploadPanelProp
               <Loader2 className="h-6 w-6 animate-spin text-primary-500" />
             </div>
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} disabled={busy} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleAsync(handleFileChange)} disabled={busy} />
         </label>
 
         {error && <p className="mt-3 text-sm text-red-500">{error}</p>}

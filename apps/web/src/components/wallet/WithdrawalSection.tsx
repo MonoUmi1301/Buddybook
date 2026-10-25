@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toaster";
 import { formatThaiDate } from "@/lib/format";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface WithdrawalRow {
   withdrawal_id: string;
@@ -126,7 +127,7 @@ export function WithdrawalSection({ onBalanceChange }: { onBalanceChange: (balan
       ) : !canWithdraw ? (
         <p className="mt-4 text-sm text-neutral-500">ยอดที่ถอนได้ยังไม่ถึงขั้นต่ำ</p>
       ) : (
-        <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-2">
+        <form onSubmit={handleAsync(submit)} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="text-sm text-neutral-700">
             จำนวนคอยน์
             <input

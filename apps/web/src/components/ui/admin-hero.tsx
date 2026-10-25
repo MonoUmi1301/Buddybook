@@ -23,6 +23,7 @@ import { cn } from "@/lib/cn";
 import { formatRelativeThai } from "@/lib/format";
 import { getPenName } from "@/lib/displayName";
 import type { AdminStats } from "@/lib/adminStats";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface ActivityUser {
   user_id: string;
@@ -116,10 +117,10 @@ export function AdminHero() {
         {/* sm+ โทรศัพท์วางข้างหน้าต่างและซ้อนขอบขวาล่างเล็กน้อย (ไม่บังทางลัด) / มือถือเรียงต่อกันลงมา */}
         <div className="min-w-0 sm:flex sm:items-end sm:pb-4">
           <div className="min-w-0 sm:flex-1">
-            <DesktopWindow state={state} onRetry={load} />
+            <DesktopWindow state={state} onRetry={handleAsync(load)} />
           </div>
           <div className="mt-4 sm:relative sm:-ml-6 sm:mt-0 sm:w-48 sm:shrink-0 sm:translate-y-4">
-            <PhoneMockup state={state} onRetry={load} />
+            <PhoneMockup state={state} onRetry={handleAsync(load)} />
           </div>
         </div>
       </div>

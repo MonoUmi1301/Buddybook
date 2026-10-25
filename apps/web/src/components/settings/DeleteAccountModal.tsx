@@ -6,6 +6,7 @@ import { X, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface DeleteAccountModalProps {
   hasPassword: boolean;
@@ -108,7 +109,7 @@ export function DeleteAccountModal({ hasPassword, onClose }: DeleteAccountModalP
             type="button"
             variant="primary"
             className="bg-red-600 hover:bg-red-700"
-            onClick={handleConfirm}
+            onClick={handleAsync(handleConfirm)}
             loading={submitting}
             disabled={!confirmValid}
           >

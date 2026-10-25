@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { MODERATION_STATUS_LABEL, canAppeal, type ModerationCase } from "@/lib/moderation";
 import { THAI_TIME_ZONE } from "@/lib/format";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 const MIN_APPEAL = 20;
 const MAX_APPEAL = 5000;
@@ -148,7 +149,7 @@ export function ModerationNotice({ novelId, novelTitle, moderationCase: c, openA
               <Button variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
                 ยกเลิก
               </Button>
-              <Button onClick={submit} loading={submitting} disabled={tooShort}>
+              <Button onClick={handleAsync(submit)} loading={submitting} disabled={tooShort}>
                 ส่งคำอุทธรณ์
               </Button>
             </div>

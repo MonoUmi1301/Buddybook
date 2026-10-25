@@ -10,6 +10,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { FacebookIcon, LineIcon, GoogleIcon } from "@/components/ui/SocialIcon";
 import { PasswordRequirementsHint } from "@/components/auth/PasswordRequirementsHint";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface AuthFormProps {
   mode: "login" | "register";
@@ -207,7 +208,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
       </div>
 
       {isLogin && step === "2fa" ? (
-        <form className="space-y-3" onSubmit={handleVerifyTwoFactor}>
+        <form className="space-y-3" onSubmit={handleAsync(handleVerifyTwoFactor)}>
           <p className="text-center text-sm text-neutral-600">
             กรอกรหัส 6 หลักจากแอป Authenticator ของคุณ
           </p>
@@ -252,7 +253,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
           </div>
         </form>
       ) : !isLogin && step === "otp" ? (
-        <form className="space-y-3" onSubmit={handleVerifyOtp}>
+        <form className="space-y-3" onSubmit={handleAsync(handleVerifyOtp)}>
           <p className="text-center text-sm text-neutral-600">
             เราส่งรหัสยืนยัน 6 หลักไปที่{" "}
             <span className="font-medium text-neutral-900">{pendingRegisterBody?.email}</span> แล้ว
@@ -289,7 +290,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
             </button>
             <button
               type="button"
-              onClick={handleResendOtp}
+              onClick={handleAsync(handleResendOtp)}
               disabled={cooldown > 0 || resending}
               className="font-medium text-primary-500 hover:text-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
             >
@@ -352,7 +353,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
             <div className="h-px flex-1 bg-neutral-200" />
           </div>
 
-          <form className="space-y-3" onSubmit={handleSubmit}>
+          <form className="space-y-3" onSubmit={handleAsync(handleSubmit)}>
             {!isLogin && (
               <Input name="username" placeholder="Username" autoComplete="username" minLength={3} required />
             )}

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface AccountSettingsFormProps {
   username: string;
@@ -100,7 +101,7 @@ export function AccountSettingsForm({ username: initialUsername, penName: initia
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-card border border-neutral-200 p-5">
+    <form onSubmit={handleAsync(handleSubmit)} className="space-y-5 rounded-card border border-neutral-200 p-5">
       <div>
         <p className="mb-1.5 text-sm font-medium text-neutral-700">รูปโปรไฟล์</p>
         <div className="flex items-center gap-4">
@@ -126,7 +127,7 @@ export function AccountSettingsForm({ username: initialUsername, penName: initia
             file={cropFile}
             title="ปรับรูปโปรไฟล์"
             onCancel={() => setCropFile(null)}
-            onConfirm={handleAvatarUpload}
+            onConfirm={handleAsync(handleAvatarUpload)}
           />
         )}
 

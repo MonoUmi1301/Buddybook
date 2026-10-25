@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface PublishVisibilityChoiceProps {
   novelId: string;
@@ -61,7 +62,7 @@ export function PublishVisibilityChoice({ novelId, initialVisibility }: PublishV
         <button
           type="button"
           disabled={saving}
-          onClick={() => choose("private")}
+          onClick={handleAsync(() => choose("private"))}
           className={cn(
             "flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
             visibility === "private"
@@ -80,7 +81,7 @@ export function PublishVisibilityChoice({ novelId, initialVisibility }: PublishV
         <button
           type="button"
           disabled={saving}
-          onClick={() => choose("published")}
+          onClick={handleAsync(() => choose("published"))}
           className={cn(
             "flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
             visibility === "published"

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 /** ถอนความยินยอม e-KYC (PDPA) — ลบข้อมูลการยืนยันตัวตนที่ BuddyBook เก็บไว้ และยกเลิกอายุที่ได้จากบัตร */
 export function KycWithdrawButton() {
@@ -35,7 +36,7 @@ export function KycWithdrawButton() {
     <div className="mt-4">
       <button
         type="button"
-        onClick={handleWithdraw}
+        onClick={handleAsync(handleWithdraw)}
         disabled={busy}
         className="text-sm text-neutral-500 underline hover:text-red-600 disabled:opacity-50"
       >

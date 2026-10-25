@@ -14,6 +14,7 @@ import {
 } from "@/components/writer/mapAssets";
 import { errorText } from "@/lib/formatApiError";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface AddLocationModalProps {
   onClose: () => void;
@@ -136,7 +137,7 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
             accept="image/png,image/jpeg,image/webp"
             className="hidden"
             onChange={(e) => {
-              handleFile(e.target.files?.[0]);
+              void handleFile(e.target.files?.[0]);
               e.target.value = "";
             }}
           />
@@ -186,7 +187,7 @@ export function AddLocationModal({ onClose, onSubmit }: AddLocationModalProps) {
           <Button type="button" variant="outline" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button type="button" variant="primary" onClick={handleSubmit} loading={submitting} disabled={uploading}>
+          <Button type="button" variant="primary" onClick={handleAsync(handleSubmit)} loading={submitting} disabled={uploading}>
             เพิ่มสถานที่
           </Button>
         </div>

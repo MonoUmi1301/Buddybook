@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { ReportButton } from "@/components/social/ReportButton";
 import { SelectedStickerPreview, StickerImage, StickerPicker } from "@/components/social/StickerPicker";
 import type { StickerId } from "@/lib/stickers";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface CommentNode {
   comment_id: string;
@@ -103,7 +104,7 @@ function CommentComposer({
               ยกเลิก
             </Button>
           )}
-          <Button variant="primary" disabled={!value.trim() && !stickerId} loading={submitting} onClick={handleSubmit}>
+          <Button variant="primary" disabled={!value.trim() && !stickerId} loading={submitting} onClick={handleAsync(handleSubmit)}>
             {submitLabel}
           </Button>
         </div>

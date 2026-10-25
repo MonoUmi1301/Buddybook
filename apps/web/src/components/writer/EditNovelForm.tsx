@@ -12,6 +12,7 @@ import { TagPicker } from "@/components/writer/TagPicker";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel } from "@/components/writer/novelManagementTypes";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface EditNovelFormProps {
   novel: ManagedNovel;
@@ -159,7 +160,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-card border border-neutral-200 p-5">
+    <form onSubmit={handleAsync(handleSubmit)} className="space-y-5 rounded-card border border-neutral-200 p-5">
       <div>
         <p className="mb-1.5 text-sm font-medium text-neutral-700">ปกนิยาย</p>
         <label className="group relative flex h-40 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 transition-colors hover:border-primary-400">
@@ -170,7 +171,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
           ) : (
             <Camera className="h-6 w-6 text-neutral-300" />
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handleCoverChange} disabled={uploading} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleAsync(handleCoverChange)} disabled={uploading} />
         </label>
         {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
       </div>

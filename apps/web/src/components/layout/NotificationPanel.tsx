@@ -97,7 +97,7 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
   // เพิ่มภายหลัง (audit fix) — คลิกแถบแจ้งเตือนแล้วต้องพาไปหน้าที่เกี่ยวข้องเลย (เช่นตอนใหม่ที่อัปเดต)
   // ไม่ใช่แค่ทำเครื่องหมายอ่านแล้วเฉย ๆ เหมือนเดิม
   function handleItemClick(n: NotificationItem) {
-    if (!n.is_read) markRead(n.notification_id);
+    if (!n.is_read) markRead(n.notification_id).catch(console.error);
     setOpen(false);
     if (n.link_url) router.push(n.link_url);
   }

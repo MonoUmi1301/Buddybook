@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { PasswordRequirementsHint } from "@/components/auth/PasswordRequirementsHint";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 // useSearchParams() ต้องอยู่ใต้ <Suspense> ไม่งั้น next build prerender หน้านี้ไม่ผ่าน (missing-suspense-with-csr-bailout)
 export default function ResetPasswordPage() {
@@ -73,7 +74,7 @@ function ResetPasswordForm() {
             ตั้งรหัสผ่านใหม่สำเร็จแล้ว กำลังพาไปหน้าเข้าสู่ระบบ...
           </p>
         ) : (
-          <form className="mt-6 space-y-3" onSubmit={handleSubmit}>
+          <form className="mt-6 space-y-3" onSubmit={handleAsync(handleSubmit)}>
             <div>
               <Input
                 type="password"

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { handleAsync } from "@/lib/handleAsync";
 
 /** เพิ่มภายหลัง (audit fix) — ตอนนี้มี Resend แล้ว ส่งลิงก์ตั้งรหัสผ่านใหม่ไปอีเมลจริง แทนที่การแสดง
  *  reset_link ตรง ๆ บนหน้าจอแบบเดิม (ดู auth.service.ts requestPasswordReset) */
@@ -55,7 +56,7 @@ export default function ForgotPasswordPage() {
             </p>
           </div>
         ) : (
-          <form className="mt-6 space-y-3" onSubmit={handleSubmit}>
+          <form className="mt-6 space-y-3" onSubmit={handleAsync(handleSubmit)}>
             <Input
               type="email"
               placeholder="Email"

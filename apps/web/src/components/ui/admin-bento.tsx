@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { BookPlus, ChevronRight, Coins, Flag, Gift, HandCoins, Loader2, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 // ---------------------------------------------------------------------------
 // Admin Bento — หน้าภาพรวมหลังบ้าน (ดัดแปลงสไตล์จาก Web3Bento: bento grid, การ์ด rounded-[26px],
@@ -870,7 +871,7 @@ function RecommenderTile({
       <div className="mt-auto pt-3">
         <button
           type="button"
-          onClick={run}
+          onClick={handleAsync(run)}
           disabled={!onResync || busy}
           className="inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-primary-50 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none"
           style={{ backgroundColor: INK }}

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { SelectedStickerPreview, StickerPicker } from "@/components/social/StickerPicker";
 import type { StickerId } from "@/lib/stickers";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 /** ฟอร์มเขียนรีวิว — POST /api/v1/novels/:novelId/reviews (409 ถ้ารีวิวซ้ำ) */
 export function ReviewForm({ novelId }: { novelId: string }) {
@@ -105,7 +106,7 @@ export function ReviewForm({ novelId }: { novelId: string }) {
           <EyeOff className="h-3.5 w-3.5" />
           โพสต์แบบไม่ระบุตัวตน
         </label>
-        <Button type="button" variant="primary" onClick={handleSubmit} loading={submitting}>
+        <Button type="button" variant="primary" onClick={handleAsync(handleSubmit)} loading={submitting}>
           ส่งรีวิว
         </Button>
       </div>

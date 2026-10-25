@@ -22,6 +22,7 @@ import {
   type LegalStatus,
   type NovelStatus,
 } from "@/lib/novelLabels";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface NovelDetailData {
   /** published | private | suspended ... — ใช้บอกเจ้าของในโหมดทดลองอ่าน */
@@ -218,7 +219,7 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
           {isLoggedIn ? (
             <button
               type="button"
-              onClick={toggleLibrary}
+              onClick={handleAsync(toggleLibrary)}
               disabled={savingLibrary}
               aria-pressed={saved}
               className={cn(
@@ -258,7 +259,7 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
 
           <button
             type="button"
-            onClick={isLoggedIn ? toggleLike : undefined}
+            onClick={isLoggedIn ? handleAsync(toggleLike) : undefined}
             disabled={likingInFlight || !isLoggedIn}
             aria-pressed={liked}
             aria-label={liked ? "เลิกถูกใจ" : "ถูกใจ"}

@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { toast } from "@/components/ui/Toaster";
 import { formatThaiDate } from "@/lib/format";
+import { handleAsync } from "@/lib/handleAsync";
 
 type ReportStatus = "open" | "dismissed" | "actioned";
 type TargetType = "novel" | "chapter" | "comment" | "review" | "user";
@@ -131,7 +132,7 @@ export function ContentReports({ initial }: { initial: Page }) {
             type="button"
             role="tab"
             aria-selected={status === t.value}
-            onClick={() => switchTab(t.value)}
+            onClick={handleAsync(() => switchTab(t.value))}
             className={cn(
               "rounded-pill px-4 py-1.5 text-sm",
               status === t.value ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
@@ -192,7 +193,7 @@ export function ContentReports({ initial }: { initial: Page }) {
                   <button
                     type="button"
                     disabled={busyId === row.report_id}
-                    onClick={() => resolve(row, "dismiss")}
+                    onClick={handleAsync(() => resolve(row, "dismiss"))}
                     className="min-h-[44px] rounded-pill border border-neutral-300 px-5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                   >
                     ปล่อยผ่าน
@@ -200,7 +201,7 @@ export function ContentReports({ initial }: { initial: Page }) {
                   <button
                     type="button"
                     disabled={busyId === row.report_id || !row.target}
-                    onClick={() => resolve(row, "action")}
+                    onClick={handleAsync(() => resolve(row, "action"))}
                     className="min-h-[44px] rounded-pill bg-red-600 px-5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {ACTION_LABEL[row.target_type]}
@@ -217,7 +218,7 @@ export function ContentReports({ initial }: { initial: Page }) {
           {loading ? (
             <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
           ) : (
-            <button type="button" onClick={loadMore} className="text-sm text-primary-600 hover:underline">
+            <button type="button" onClick={handleAsync(loadMore)} className="text-sm text-primary-600 hover:underline">
               โหลดเพิ่ม
             </button>
           )}

@@ -13,6 +13,7 @@ import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 import { estimatePageCount } from "@/lib/textStats";
 import { THAI_TIME_ZONE } from "@/lib/format";
+import { handleAsync } from "@/lib/handleAsync";
 
 export type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 
@@ -242,7 +243,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
               ) : (
                 <button
                   type="button"
-                  onClick={handleToggleVisibility}
+                  onClick={handleAsync(handleToggleVisibility)}
                   disabled={changingVisibility}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-500 hover:text-primary-600 disabled:opacity-50"
                 >
@@ -320,7 +321,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
                   {(chapter.status === "published" || chapter.status === "hidden") && (
                     <button
                       type="button"
-                      onClick={() => handleToggleHidden(chapter)}
+                      onClick={handleAsync(() => handleToggleHidden(chapter))}
                       disabled={busyChapterId === chapter.chapter_id}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 disabled:opacity-50"
                       aria-label={chapter.status === "hidden" ? "เผยแพร่อีกครั้ง" : "ซ่อนตอนนี้"}
@@ -370,7 +371,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
               <Button
                 variant="primary"
                 className="!bg-red-500 hover:!bg-red-600"
-                onClick={handleDeleteChapter}
+                onClick={handleAsync(handleDeleteChapter)}
                 loading={busyChapterId === pendingDeleteChapter.chapter_id}
               >
                 ยืนยันลบ
@@ -395,7 +396,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
               <Button
                 variant="primary"
                 className="!bg-red-500 hover:!bg-red-600"
-                onClick={handleDeleteNovel}
+                onClick={handleAsync(handleDeleteNovel)}
                 loading={deletingNovel}
               >
                 ย้ายไปถังขยะ

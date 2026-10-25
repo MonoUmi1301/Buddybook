@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { formatThaiDate } from "@/lib/format";
 import { MODERATION_STATUS_LABEL, type ModerationCase } from "@/lib/moderation";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 export type ModerationTab = "unreviewed" | "reported" | "appeals" | "suspended";
 
@@ -277,7 +278,7 @@ export function ModerationQueue({ initial }: { initial: ModerationQueuePage }) {
                   )}
 
                   {!c && tab === "unreviewed" && (
-                    <Button variant="outline" size="sm" loading={busy} onClick={() => markReviewed(n)}>
+                    <Button variant="outline" size="sm" loading={busy} onClick={handleAsync(() => markReviewed(n))}>
                       <CheckCircle2 className="h-4 w-4" /> ตรวจแล้ว ไม่พบปัญหา
                     </Button>
                   )}
@@ -310,7 +311,7 @@ export function ModerationQueue({ initial }: { initial: ModerationQueuePage }) {
 
       {(hasMore || loading) && (
         <div className="mt-4 flex justify-center">
-          <Button variant="outline" size="sm" disabled={loading} onClick={() => load(tab, data.page + 1)}>
+          <Button variant="outline" size="sm" disabled={loading} onClick={handleAsync(() => load(tab, data.page + 1))}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "โหลดเพิ่ม"}
           </Button>
         </div>
@@ -353,7 +354,7 @@ export function ModerationQueue({ initial }: { initial: ModerationQueuePage }) {
                 ยกเลิก
               </Button>
               <Button
-                onClick={submitDialog}
+                onClick={handleAsync(submitDialog)}
                 loading={busyId === dialog.novel.novel_id}
                 disabled={dialog.kind !== "reinstate" && text.trim().length < MIN_REASON}
                 className={dialog.kind === "reinstate" ? undefined : "!bg-red-600 hover:!bg-red-700"}

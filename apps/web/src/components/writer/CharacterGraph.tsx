@@ -31,6 +31,7 @@ import { cn } from "@/lib/cn";
 import { toast } from "@/components/ui/Toaster";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 export const nodeTypes = { characterNode: CharacterNode };
 
@@ -480,7 +481,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
     e.preventDefault();
     const p = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY });
     // ให้กลางรูปตัวละครอยู่ตรงเมาส์
-    placeCharacter(character, {
+    void placeCharacter(character, {
       x: Math.round(p.x - CHARACTER_NODE_WIDTH / 2),
       y: Math.round(p.y - 28),
     });
@@ -516,7 +517,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
                     e.dataTransfer.effectAllowed = "move";
                   }}
                   onDragEnd={() => setDragOver(false)}
-                  onClick={() => placeCharacter(c)}
+                  onClick={handleAsync(() => placeCharacter(c))}
                   title={`กดหรือลาก ${c.name} ไปวางบนแคนวาส`}
                   className="flex w-20 cursor-grab flex-col items-center gap-1 rounded-lg p-1.5 transition-colors hover:bg-white active:cursor-grabbing"
                 >
@@ -525,7 +526,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
                 </button>
                 <button
                   type="button"
-                  onClick={() => deleteCharacter(c.node_id, c.name)}
+                  onClick={handleAsync(() => deleteCharacter(c.node_id, c.name))}
                   title={`ลบ ${c.name}`}
                   aria-label={`ลบ ${c.name}`}
                   className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow transition-opacity hover:bg-red-600 focus:opacity-100 group-hover:opacity-100"
@@ -555,7 +556,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={downloadImage}
+            onClick={handleAsync(downloadImage)}
             disabled={busy !== null}
             className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500 disabled:opacity-50"
           >
@@ -564,7 +565,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
           </button>
           <button
             type="button"
-            onClick={publishMap}
+            onClick={handleAsync(publishMap)}
             disabled={busy !== null}
             className="inline-flex h-8 items-center gap-1.5 rounded-pill bg-primary-500 px-3 text-xs font-medium text-white hover:bg-primary-600 disabled:opacity-50"
           >
@@ -574,7 +575,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
           {publishedAt && (
             <button
               type="button"
-              onClick={unpublishMap}
+              onClick={handleAsync(unpublishMap)}
               disabled={busy !== null}
               className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-red-300 hover:text-red-500 disabled:opacity-50"
             >
@@ -605,7 +606,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStop={onNodeDragStop}
-          onConnect={onConnect}
+          onConnect={handleAsync(onConnect)}
           onReconnect={onReconnect}
           edgesReconnectable
           onEdgeClick={onEdgeClick}
@@ -647,7 +648,9 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
             <input
               value={editingEdge.label}
               onChange={(e) => setEditingEdge({ ...editingEdge, label: e.target.value })}
-              onKeyDown={(e) => e.key === "Enter" && saveEdgeLabel()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void saveEdgeLabel();
+              }}
               placeholder="เช่น พี่น้อง, คู่รัก, ศัตรูคู่แค้น"
               autoFocus
               className="h-11 w-full rounded-lg border border-neutral-300 px-4 text-sm focus:border-primary-400 focus:outline-none"
@@ -722,7 +725,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
                 <Button type="button" variant="outline" onClick={() => setEditingEdge(null)}>
                   ยกเลิก
                 </Button>
-                <Button type="button" variant="primary" onClick={saveEdgeLabel}>
+                <Button type="button" variant="primary" onClick={handleAsync(saveEdgeLabel)}>
                   บันทึก
                 </Button>
               </div>

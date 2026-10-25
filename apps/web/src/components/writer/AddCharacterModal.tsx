@@ -9,6 +9,7 @@ import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { cn } from "@/lib/cn";
 import { errorText } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface AddCharacterModalProps {
   onClose: () => void;
@@ -96,7 +97,7 @@ export function AddCharacterModal({ onClose, onSubmit }: AddCharacterModalProps)
             file={cropFile}
             title="ปรับรูปตัวละคร"
             onCancel={() => setCropFile(null)}
-            onConfirm={handleAvatarChange}
+            onConfirm={handleAsync(handleAvatarChange)}
           />
         )}
 
@@ -136,7 +137,7 @@ export function AddCharacterModal({ onClose, onSubmit }: AddCharacterModalProps)
           <Button type="button" variant="outline" onClick={onClose}>
             ยกเลิก
           </Button>
-          <Button type="button" variant="primary" onClick={handleSubmit} loading={submitting} disabled={uploading}>
+          <Button type="button" variant="primary" onClick={handleAsync(handleSubmit)} loading={submitting} disabled={uploading}>
             เพิ่มตัวละคร
           </Button>
         </div>

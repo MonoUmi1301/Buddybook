@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toaster";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
 import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 export type ReportTargetType = "novel" | "chapter" | "comment" | "review" | "user";
 
@@ -173,7 +174,7 @@ function ReportDialog({
           <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>
             ยกเลิก
           </Button>
-          <Button size="sm" onClick={submit} loading={submitting}>
+          <Button size="sm" onClick={handleAsync(submit)} loading={submitting}>
             ส่งรายงาน
           </Button>
         </div>

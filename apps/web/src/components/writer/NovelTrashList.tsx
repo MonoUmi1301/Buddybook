@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface TrashedNovel {
   novel_id: string;
@@ -93,7 +94,7 @@ export function NovelTrashList({ novels, retentionDays }: { novels: TrashedNovel
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => act(n, "restore")}
+                    onClick={handleAsync(() => act(n, "restore"))}
                     loading={busyId === n.novel_id && !pendingPermanent}
                     className="flex-1 sm:flex-none"
                   >
@@ -129,7 +130,7 @@ export function NovelTrashList({ novels, retentionDays }: { novels: TrashedNovel
               <Button
                 variant="primary"
                 className="!bg-red-500 hover:!bg-red-600"
-                onClick={() => act(pendingPermanent, "permanent")}
+                onClick={handleAsync(() => act(pendingPermanent, "permanent"))}
                 loading={busyId === pendingPermanent.novel_id}
               >
                 ยืนยันลบถาวร

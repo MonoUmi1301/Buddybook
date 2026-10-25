@@ -12,6 +12,7 @@ import { TagInput } from "@/components/writer/TagInput";
 import { TagPicker } from "@/components/writer/TagPicker";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface NovelWizardTag {
   tag_id: number;
@@ -224,7 +225,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleAsync(handleSubmit)} className="space-y-5">
       <div>
         <p className="mb-1.5 text-sm font-medium text-neutral-700">ปกนิยาย</p>
         <label className="group relative flex h-40 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 transition-colors hover:border-primary-400">
@@ -235,7 +236,7 @@ export function CreateNovelForm({ tags }: CreateNovelFormProps) {
           ) : (
             <Camera className="h-6 w-6 text-neutral-300" />
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handleCoverChange} disabled={uploading} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleAsync(handleCoverChange)} disabled={uploading} />
         </label>
         {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
       </div>

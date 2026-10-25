@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Clock3, RotateCcw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface TrashItem {
   trash_id: string;
@@ -179,7 +180,7 @@ export function TrashBinManager({ items: initialItems }: { items: TrashItem[] })
             <Button
               variant="outline"
               size="sm"
-              onClick={() => handleRestore(item)}
+              onClick={handleAsync(() => handleRestore(item))}
               loading={busyId === item.trash_id && !pendingDelete}
             >
               <RotateCcw className="h-3.5 w-3.5" /> กู้คืน
@@ -210,7 +211,7 @@ export function TrashBinManager({ items: initialItems }: { items: TrashItem[] })
               <Button
                 variant="primary"
                 className="!bg-red-500 hover:!bg-red-600"
-                onClick={handlePermanentDelete}
+                onClick={handleAsync(handlePermanentDelete)}
                 loading={busyId === pendingDelete.trash_id}
               >
                 ยืนยันลบถาวร

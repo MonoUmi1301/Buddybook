@@ -5,6 +5,7 @@ import { ShieldBan } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ScrollFade } from "@/components/ui/ScrollFade";
 import { THAI_TIME_ZONE } from "@/lib/format";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface AdminUserRow {
   user_id: string;
@@ -74,7 +75,7 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                 <button
                   type="button"
                   disabled={pendingId === u.user_id}
-                  onClick={() => toggleRole(u.user_id, u.role)}
+                  onClick={handleAsync(() => toggleRole(u.user_id, u.role))}
                   className={cn(
                     "rounded-pill px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50",
                     u.role === "admin"
@@ -89,7 +90,7 @@ export function UsersTable({ initialUsers }: UsersTableProps) {
                 <button
                   type="button"
                   disabled={pendingId === u.user_id}
-                  onClick={() => toggleSuspend(u.user_id, u.is_suspended)}
+                  onClick={handleAsync(() => toggleSuspend(u.user_id, u.is_suspended))}
                   className={cn(
                     "flex items-center gap-1.5 rounded-pill px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50",
                     u.is_suspended

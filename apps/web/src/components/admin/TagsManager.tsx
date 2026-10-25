@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface AdminTagRow {
   tag_id: number;
@@ -54,7 +55,7 @@ export function TagsManager({ initialTags }: TagsManagerProps) {
 
   return (
     <div>
-      <form onSubmit={addTag} className="mb-2 flex items-end gap-3">
+      <form onSubmit={handleAsync(addTag)} className="mb-2 flex items-end gap-3">
         <div className="max-w-xs flex-1">
           <Input
             label="เพิ่มแท็กใหม่"
@@ -83,7 +84,7 @@ export function TagsManager({ initialTags }: TagsManagerProps) {
             </div>
             <button
               type="button"
-              onClick={() => removeTag(t.tag_id)}
+              onClick={handleAsync(() => removeTag(t.tag_id))}
               aria-label="ลบแท็ก"
               className="text-neutral-300 hover:text-red-500"
             >
