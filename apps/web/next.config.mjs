@@ -7,6 +7,8 @@ const nextConfig = {
     staleTimes: { dynamic: 0 },
   },
   images: {
+    // Next 16 รับเฉพาะ quality ที่ประกาศไว้ (ค่าเริ่มต้น [75]) — Avatar และหมุดแผนที่ใช้ 90 ให้ภาพคม
+    qualities: [75, 90],
     remotePatterns: [
       {
         // Cloudinary — cover images / avatars (ตาม Tech Stack ใน spec)
