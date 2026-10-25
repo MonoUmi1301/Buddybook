@@ -25,5 +25,5 @@ export async function GET(request: Request) {
   searchParams.set("page", String(parsed.data.page));
   if (parsed.data.mine) searchParams.set("mine", "true");
 
-  return forwardToApi({ method: "GET", path: "/novels/search", token: getAccessToken(), searchParams });
+  return forwardToApi({ method: "GET", path: "/novels/search", token: await getAccessToken(), searchParams });
 }

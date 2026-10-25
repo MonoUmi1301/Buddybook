@@ -17,14 +17,15 @@ interface PrintPreviewData {
 }
 
 // พรีวิวก่อนพิมพ์ — เจ้าของนิยายเท่านั้น (ตรวจสิทธิ์ที่ backend, ดู novels.service.ts getPrintPreview)
-export default async function PrintPreviewPage({ params }: { params: { novelId: string } }) {
+export default async function PrintPreviewPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const result = await callApi({
     method: "GET",
     path: `/novels/${params.novelId}/print-preview`,
-    token: getAccessToken(),
+    token: await getAccessToken(),
   });
   if ("error" in result || result.status === 404 || result.status === 403) notFound();
   if (result.status !== 200) {

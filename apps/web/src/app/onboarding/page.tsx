@@ -8,7 +8,8 @@ import { getCurrentUser } from "@/lib/api/session";
 /** ด่านแรกของ Onboarding (welcome) — wf_onboarding ตาม roadmap Phase 9
  *  gate: ไม่ล็อกอิน -> /login, เคยเลือกความสนใจแล้ว -> เข้าหน้าแรกได้เลย ไม่ต้องเจอซ้ำ
  *  เพิ่มภายหลัง (Phase Q, MASTER BRIEF) — ตัดปุ่ม "ข้ามขั้นตอนนี้" ออกทั้งหมด บังคับตอบเสมอ */
-export default async function OnboardingWelcomePage({ searchParams }: { searchParams: { next?: string } }) {
+export default async function OnboardingWelcomePage(props: { searchParams: Promise<{ next?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   // ตอบแล้วแต่ไม่มี cookie (เบราว์เซอร์ใหม่) — ไปตั้ง cookie ก่อน กัน redirect loop กับ middleware

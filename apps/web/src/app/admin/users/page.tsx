@@ -7,7 +7,7 @@ export default async function AdminUsersPage() {
   const result = await callApi({
     method: "GET",
     path: "/admin/users",
-    token: getAccessToken(),
+    token: await getAccessToken(),
     searchParams: new URLSearchParams({ page: "1" }),
   });
   const users: AdminUserRow[] =

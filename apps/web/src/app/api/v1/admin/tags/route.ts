@@ -10,7 +10,7 @@ export async function GET() {
 
 // POST /api/v1/admin/tags — Admin เท่านั้น
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, createTagSchema);

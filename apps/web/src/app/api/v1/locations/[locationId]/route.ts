@@ -4,8 +4,9 @@ import { updateLocationSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/locations/:locationId
-export async function PATCH(request: Request, { params }: { params: { locationId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ locationId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.locationId, "location_id");
@@ -23,8 +24,9 @@ export async function PATCH(request: Request, { params }: { params: { locationId
 }
 
 // DELETE /api/v1/locations/:locationId — ย้ายลงถังขยะ
-export async function DELETE(_request: Request, { params }: { params: { locationId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ locationId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.locationId, "location_id");

@@ -3,8 +3,9 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/admin/users/:userId/unsuspend
-export async function PATCH(_request: Request, { params }: { params: { userId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(_request: Request, props: { params: Promise<{ userId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.userId, "user_id");

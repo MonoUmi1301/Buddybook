@@ -68,8 +68,9 @@ function ErrorShell({ user, message }: { user: Awaited<ReturnType<typeof getCurr
 }
 
 // ต่อกับ GET /novels/:id, /reviews, /chapters, /donations, /users/:authorId และ /novels/search จริงทั้งหมด
-export default async function NovelDetailPage({ params }: { params: { novelId: string } }) {
-  const token = getAccessToken();
+export default async function NovelDetailPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const token = await getAccessToken();
   const [result, user] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     getCurrentUser(),

@@ -3,8 +3,12 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // DELETE /api/v1/collections/:collectionId/items/:novelId — เอานิยายออกจากชั้นย่อย
-export async function DELETE(_request: Request, { params }: { params: { collectionId: string; novelId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(
+  _request: Request,
+  props: { params: Promise<{ collectionId: string; novelId: string }> }
+) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const collection = requireUuidParam(params.collectionId, "collection_id");

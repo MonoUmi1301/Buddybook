@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, refreshSchema);
   if ("error" in parsed) return parsed.error;
 
-  const refreshToken = parsed.data.refresh_token ?? getRefreshToken();
+  const refreshToken = parsed.data.refresh_token ?? await getRefreshToken();
   if (!refreshToken) {
     return jsonError("Unauthorized", 401);
   }

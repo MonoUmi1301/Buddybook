@@ -5,12 +5,13 @@ import { ModerationQueue, type ModerationQueuePage, type ModerationTab } from "@
 const TABS: ModerationTab[] = ["unreviewed", "reported", "appeals", "suspended"];
 
 // GET /admin/novels/moderation — post-moderation: นิยายเผยแพร่ทันที แอดมินสุ่มตรวจ/ระงับ/พิจารณาอุทธรณ์ทีหลัง
-export default async function AdminNovelsPage({ searchParams }: { searchParams: { tab?: string } }) {
+export default async function AdminNovelsPage(props: { searchParams: Promise<{ tab?: string }> }) {
+  const searchParams = await props.searchParams;
   const tab = TABS.includes(searchParams.tab as ModerationTab) ? (searchParams.tab as ModerationTab) : "unreviewed";
   const result = await callApi({
     method: "GET",
     path: "/admin/novels/moderation",
-    token: getAccessToken(),
+    token: await getAccessToken(),
     searchParams: new URLSearchParams({ tab }),
   });
   const initial: ModerationQueuePage =

@@ -17,11 +17,12 @@ const DISABLED: KycStatus = {
 };
 
 // e-KYC — ยืนยันอายุด้วยบัตรประชาชน/พาสปอร์ต + สแกนใบหน้า (ต้องล็อกอิน ผลผูกกับบัญชีนี้)
-export default async function VerifyIdentityPage({ searchParams }: { searchParams: { return_to?: string } }) {
+export default async function VerifyIdentityPage(props: { searchParams: Promise<{ return_to?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const result = await callApi({ method: "GET", path: "/kyc/status", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/kyc/status", token: await getAccessToken() });
   const status = !("error" in result) && result.status === 200 ? (result.json as KycStatus) : DISABLED;
 
   return (

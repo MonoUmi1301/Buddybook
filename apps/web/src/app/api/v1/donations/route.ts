@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/donations
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, createDonationSchema);

@@ -40,7 +40,7 @@ export const emptyAdminStats: AdminStats = {
 };
 
 export async function getAdminStats(): Promise<AdminStats> {
-  const result = await callApi({ method: "GET", path: "/admin/reports/stats", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/admin/reports/stats", token: await getAccessToken() });
   return !("error" in result) && result.status === 200
     ? { ...emptyAdminStats, ...(result.json as Partial<AdminStats>) }
     : emptyAdminStats;

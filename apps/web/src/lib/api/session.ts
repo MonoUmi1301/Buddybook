@@ -24,7 +24,7 @@ export interface SessionUser {
  * คืน null เสมอถ้าไม่ได้ล็อกอิน/token หมดอายุ (ไม่ throw — หน้า public ต้อง render ได้ปกติ)
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) return null;
 
   const result = await callApi({ method: "GET", path: "/users/me", token });

@@ -17,11 +17,12 @@ interface NovelSummary {
 
 // หลังสร้างนิยายเสร็จ ขั้นที่ 1/2 — เลือกสถานะการเผยแพร่ แล้วค่อยไปขั้นที่ 2 (/choose) เลือกว่าจะเริ่มยังไง
 // แยกออกจากหน้า /choose เดิมที่เคยรวมสองเรื่องไว้หน้าเดียว (ผู้ใช้ขอ)
-export default async function PublishStepPage({ params }: { params: { novelId: string } }) {
+export default async function PublishStepPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const novelResult = await callApi({ method: "GET", path: `/novels/${params.novelId}`, token });
   if ("error" in novelResult || novelResult.status !== 200) notFound();
   const novel = novelResult.json as NovelSummary;

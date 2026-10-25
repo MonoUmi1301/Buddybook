@@ -10,7 +10,7 @@ const FOCUSABLE =
  * Esc ปิด, ล็อกการเลื่อนหน้าข้างหลัง, คืนโฟกัสให้ปุ่มที่เปิดตอนปิด
  * ส่ง enabled = false ระหว่างที่ไม่ควรปิดได้ (เช่น กำลังส่ง/แอนิเมชันส่งสำเร็จ)
  */
-export function useDialogA11y(ref: RefObject<HTMLElement>, onClose: () => void, enabled = true) {
+export function useDialogA11y(ref: RefObject<HTMLElement | null>, onClose: () => void, enabled = true) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const enabledRef = useRef(enabled);

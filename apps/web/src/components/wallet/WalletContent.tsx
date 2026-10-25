@@ -65,7 +65,6 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     if (result?.kind !== "paid") return;
     const timer = setTimeout(closeResult, 5000);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ตั้งเวลาเฉพาะตอน modal สำเร็จเปิด
   }, [result]);
 
   const creditedCoins = result?.kind === "paid" ? result.coins : null;

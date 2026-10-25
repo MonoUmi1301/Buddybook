@@ -23,17 +23,18 @@ const baseCookieOptions = {
   path: "/",
 };
 
-export function getAccessToken(): string | undefined {
-  return cookies().get(ACCESS_TOKEN_COOKIE)?.value;
+// Next 15+ — cookies() เป็น async จึงต้อง await ทุกที่ที่เรียก
+export async function getAccessToken(): Promise<string | undefined> {
+  return (await cookies()).get(ACCESS_TOKEN_COOKIE)?.value;
 }
 
-export function getRefreshToken(): string | undefined {
-  return cookies().get(REFRESH_TOKEN_COOKIE)?.value;
+export async function getRefreshToken(): Promise<string | undefined> {
+  return (await cookies()).get(REFRESH_TOKEN_COOKIE)?.value;
 }
 
 /** ใช้ในทุก Route Handler ที่ต้อง login ก่อน (ทุก endpoint ที่ไม่ได้ทำเครื่องหมาย Public ใน API_Endpoints.md) */
-export function requireAccessToken(): { token: string } | { error: NextResponse } {
-  const token = getAccessToken();
+export async function requireAccessToken(): Promise<{ token: string } | { error: NextResponse }> {
+  const token = await getAccessToken();
   if (!token) {
     return { error: jsonError("Unauthorized", 401) };
   }

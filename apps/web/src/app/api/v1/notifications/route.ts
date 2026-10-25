@@ -4,7 +4,7 @@ import { pickSearchParams } from "@/lib/api/query";
 
 // GET /api/v1/notifications?page&pageSize&type&unread_only (gap 3.3 — แบ่งหน้า/กรอง)
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   return forwardToApi({

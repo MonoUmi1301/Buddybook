@@ -3,8 +3,9 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/novels/:novelId/map-versions — บันทึกเวอร์ชันแผนที่ปัจจุบัน
-export async function POST(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");
@@ -14,8 +15,9 @@ export async function POST(_request: Request, { params }: { params: { novelId: s
 }
 
 // GET /api/v1/novels/:novelId/map-versions — ดูรายการเวอร์ชันแผนที่ที่บันทึกไว้
-export async function GET(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function GET(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");

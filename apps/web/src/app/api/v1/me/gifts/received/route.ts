@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/me/gifts/received?cursor=&novel_id=&gift_id=&status= — กล่องจดหมายนักเขียน (รวมข้อความ private)
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const query = parseSearchParams(request, receivedGiftsQuerySchema);

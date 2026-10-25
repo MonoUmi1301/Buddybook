@@ -14,11 +14,12 @@ interface WorldBuildingResponse {
 }
 
 // แท็บ Theme — ดู wf_map_dm.png (3 ช่อง textarea) ต่อกับ PATCH /novels/:id/theme-notes จริง
-export default async function ThemePage({ params }: { params: { novelId: string } }) {
+export default async function ThemePage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const result = await callApi({
     method: "GET",
     path: `/novels/${params.novelId}/world-building`,
-    token: getAccessToken(),
+    token: await getAccessToken(),
   });
 
   if ("error" in result || result.status === 403 || result.status === 404) notFound();

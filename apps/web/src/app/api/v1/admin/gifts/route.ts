@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/admin/gifts — แคตตาล็อกทั้งหมดรวมที่ปิดขาย
 export async function GET() {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   return forwardToApi({ method: "GET", path: "/admin/gifts", token: auth.token });
@@ -13,7 +13,7 @@ export async function GET() {
 
 // POST /api/v1/admin/gifts
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, createGiftItemSchema);

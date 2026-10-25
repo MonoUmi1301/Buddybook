@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/uploads/sign — เตรียม signature สำหรับ Cloudinary signed direct upload
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, uploadSignSchema);

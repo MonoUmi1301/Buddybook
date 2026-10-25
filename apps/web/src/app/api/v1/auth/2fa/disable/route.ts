@@ -6,7 +6,7 @@ import { forwardToApi } from "@/lib/api/proxy";
 // POST /api/v1/auth/2fa/disable — Requires auth — เพิ่มภายหลัง (audit fix — 2FA)
 // ต้องกรอกรหัสผ่านซ้ำก่อนปิด 2FA (กันกรณี session ถูกขโมยแล้วสั่งปิด 2FA แทนเจ้าของ)
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, disable2faSchema);

@@ -4,8 +4,9 @@ import { parseJsonBody, requireUuidParam } from "@/lib/api/validate";
 import { supportMessageSchema } from "@/lib/api/schemas";
 
 // POST /api/v1/support/tickets/:ticketId/messages (gap 3.2)
-export async function POST(request: Request, { params }: { params: { ticketId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(request: Request, props: { params: Promise<{ ticketId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const id = requireUuidParam(params.ticketId, "ticket_id");
   if ("error" in id) return id.error;

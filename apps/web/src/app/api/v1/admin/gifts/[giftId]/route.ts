@@ -4,8 +4,9 @@ import { updateGiftItemSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/admin/gifts/:giftId
-export async function PATCH(request: Request, { params }: { params: { giftId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ giftId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.giftId, "gift_id");
@@ -18,8 +19,9 @@ export async function PATCH(request: Request, { params }: { params: { giftId: st
 }
 
 // DELETE /api/v1/admin/gifts/:giftId — ถ้าเคยมีคนส่งชิ้นนี้แล้ว API จะปิดขายแทนการลบ
-export async function DELETE(_request: Request, { params }: { params: { giftId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ giftId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.giftId, "gift_id");

@@ -4,8 +4,9 @@ import { autosaveChapterSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/chapters/:chapterId/autosave — เรียกทุก 30 วินาทีจาก Quill editor
-export async function PATCH(request: Request, { params }: { params: { chapterId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ chapterId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.chapterId, "chapter_id");

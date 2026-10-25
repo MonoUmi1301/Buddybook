@@ -5,7 +5,7 @@ import { verifySlipSchema } from "@/lib/api/schemas";
 
 // POST /api/v1/wallet/topup/verify-slip — ส่วนขยายนอก API_Endpoints.md เดิม (ดู lib/slipok.ts ฝั่ง apps/api)
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, verifySlipSchema);

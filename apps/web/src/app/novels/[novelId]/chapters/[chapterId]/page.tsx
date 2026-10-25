@@ -54,12 +54,13 @@ const ownerChapterNotice: Record<Exclude<ChapterDetail["status"], "published">, 
 };
 
 // หน้าอ่านตอนนิยาย — ต่อกับ GET /chapters/:id + /chapters/:id/comments จริง ดู wf_novel_detail.png (ตอนที่ 1/2)
-export default async function ChapterReaderPage({
-  params,
-}: {
-  params: { novelId: string; chapterId: string };
-}) {
-  const token = getAccessToken();
+export default async function ChapterReaderPage(
+  props: {
+    params: Promise<{ novelId: string; chapterId: string }>;
+  }
+) {
+  const params = await props.params;
+  const token = await getAccessToken();
   const [novelResult, chapterResult, chaptersResult, commentsResult, user] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     callApi({ method: "GET", path: `/chapters/${params.chapterId}`, token }),

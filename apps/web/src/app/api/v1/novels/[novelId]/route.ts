@@ -5,16 +5,18 @@ import { getAccessToken, requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/novels/:novelId — Public (แนบ token ถ้ามีเพื่อ personalize is_liked/is_owner —
 // Express รองรับ optional auth อยู่แล้วผ่าน attachUserIfPresent แต่จุดนี้ไม่เคยส่ง token ไปเลย)
-export async function GET(_request: Request, { params }: { params: { novelId: string } }) {
+export async function GET(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const id = requireUuidParam(params.novelId, "novel_id");
   if ("error" in id) return id.error;
 
-  return forwardToApi({ method: "GET", path: `/novels/${id.value}`, token: getAccessToken() });
+  return forwardToApi({ method: "GET", path: `/novels/${id.value}`, token: await getAccessToken() });
 }
 
 // PATCH /api/v1/novels/:novelId — เจ้าของนิยายเท่านั้น (Express ตรวจสิทธิ์อีกชั้น)
-export async function PATCH(request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");
@@ -32,8 +34,9 @@ export async function PATCH(request: Request, { params }: { params: { novelId: s
 }
 
 // DELETE /api/v1/novels/:novelId
-export async function DELETE(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");

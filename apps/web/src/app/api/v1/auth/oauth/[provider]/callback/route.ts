@@ -36,23 +36,24 @@ function finishAgeVerify(returnTo: string, result: "ok" | "no_birthday" | "faile
 
 // GET /api/v1/auth/oauth/:provider/callback — Google (หรือ provider อื่น) redirect browser
 // มาที่นี่ตรง ๆ พร้อม ?code=...&state=... (ต้องตรงกับ redirect_uri ที่ลงทะเบียนไว้ใน Cloud Console)
-export async function GET(request: Request, { params }: { params: { provider: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
-  const ageVerifyReturnTo = cookies().get(OAUTH_AGE_VERIFY_COOKIE)?.value;
+  const ageVerifyReturnTo = (await cookies()).get(OAUTH_AGE_VERIFY_COOKIE)?.value;
   // ผู้ใช้กดยกเลิกที่หน้า consent ของ Google (?error=access_denied ไม่มี code)
   if (!code || !state) return ageVerifyReturnTo ? finishAgeVerify(ageVerifyReturnTo, "failed") : fail("oauth_missing_code");
 
   // state ต้องตรงกับที่เก็บไว้ตอนเริ่ม flow ในเบราว์เซอร์นี้ — ลายเซ็น/อายุเช็คซ้ำอีกชั้นที่ apps/api
-  if (!stateMatches(cookies().get(OAUTH_STATE_COOKIE)?.value, state)) {
+  if (!stateMatches((await cookies()).get(OAUTH_STATE_COOKIE)?.value, state)) {
     return ageVerifyReturnTo ? finishAgeVerify(ageVerifyReturnTo, "failed") : fail("oauth_state");
   }
 
   // flow "ยืนยันอายุด้วย Google" (เริ่มจาก ./verify-age) — ยืนยันอายุของบัญชีที่ล็อกอินอยู่ ไม่ออก session ใหม่
   if (ageVerifyReturnTo) {
-    const token = getAccessToken();
+    const token = await getAccessToken();
     if (!token) return clearOAuthAgeVerifyCookie(fail("oauth_failed"));
     const verify = await callApi({
       method: "POST",

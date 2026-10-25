@@ -43,6 +43,7 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
         body: "{}",
       });
       if (!res.ok) throw new Error(String(res.status));
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- โหลดใหม่ทั้งหน้าเพื่อล้าง state ของผู้ใช้ที่ออกจากระบบ
       window.location.assign("/");
     } catch {
       setLoggingOut(false);

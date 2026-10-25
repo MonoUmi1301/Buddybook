@@ -48,11 +48,12 @@ interface SearchPageParams {
 // ค้นหาหลัก + เรียงลำดับ) ตัวกรองละเอียดสไตล์ AO3 (นักเขียน/หมวดหมู่/ความสัมพันธ์/fandom/แท็กอื่นๆ)
 // ซ่อนหลังปุ่ม "ค้นหาแบบละเอียด" ตัด SearchFilterTabs (ทั้งหมด/ชื่อเรื่อง/เรื่องย่อ/แท็ก) ออกทั้งหมด
 // ตามที่ระบุ กัน query logic ชนกัน — ช่องค้นหาหลักค้นทุก field พร้อมกันเสมอ (field=all โดย default)
-export default async function SearchPage({ searchParams }: { searchParams: SearchPageParams }) {
+export default async function SearchPage(props: { searchParams: Promise<SearchPageParams> }) {
+  const searchParams = await props.searchParams;
   // เพิ่มภายหลัง (BRIEF: Navbar Global Mode) — ถ้า URL ไม่ได้ระบุ legal_status มาตรง ๆ (เช่น เข้าหน้า
   // ค้นหาผ่านไอคอนแว่นขยายเฉย ๆ ไม่ผ่านลิงก์ที่มี query) ให้ดึงโหมดปัจจุบันจาก cookie ที่ Navbar
   // เขียนไว้มาใช้แทน — URL ที่ระบุ legal_status ตรง ๆ (เช่น bookmark/deep link) ยังชนะเสมอ
-  const effectiveLegalStatus = searchParams.legal_status ?? asWorkType(cookies().get(WORK_TYPE_COOKIE)?.value);
+  const effectiveLegalStatus = searchParams.legal_status ?? asWorkType((await cookies()).get(WORK_TYPE_COOKIE)?.value);
 
   const params = new URLSearchParams();
   if (searchParams.q) params.set("q", searchParams.q);
@@ -69,7 +70,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
   // นิยาย mature ผ่านค้นหาไม่เจอ (buildContentRatingGate ใน novels.service.ts เช็ค requester_id
   // ซึ่งมาจาก token เท่านั้น — เหมือน bug เดิมที่เจอกับ novels/[id] และ chapters/[id] proxy routes)
   const [result, user, tagsResult] = await Promise.all([
-    callApi({ method: "GET", path: "/novels/search", searchParams: params, token: getAccessToken() }),
+    callApi({ method: "GET", path: "/novels/search", searchParams: params, token: await getAccessToken() }),
     getCurrentUser(),
     callApi({ method: "GET", path: "/admin/tags" }),
   ]);

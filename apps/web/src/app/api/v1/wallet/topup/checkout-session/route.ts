@@ -6,7 +6,7 @@ import { createCheckoutSessionSchema } from "@/lib/api/schemas";
 // POST /api/v1/wallet/topup/checkout-session — เพิ่มภายหลัง (audit fix) สร้าง Stripe Checkout
 // Session (ui_mode: embedded) แทนการอัปโหลดสลิปเป็นทางหลัก ดู wallet.service.ts ฝั่ง apps/api
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, createCheckoutSessionSchema);

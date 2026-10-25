@@ -44,7 +44,7 @@ const thaiDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString
 
 /** หลังบ้าน — ความรู้สึกผู้อ่านทั้งแพลตฟอร์ม รวมฝั่งเชิงลบที่ตั้งใจไม่แสดงในหน้าสถิติของนักเขียน */
 export default async function AdminSentimentPage() {
-  const result = await callApi({ method: "GET", path: "/admin/reports/sentiment", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/admin/reports/sentiment", token: await getAccessToken() });
   if ("error" in result || result.status !== 200) {
     return <p className="rounded-card border border-neutral-200 p-5 text-sm text-neutral-500">โหลดข้อมูลไม่สำเร็จ ลองรีเฟรชอีกครั้ง</p>;
   }

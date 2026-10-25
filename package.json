@@ -39,9 +39,18 @@
     "typescript": "^5.5.4"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.12.0"
   },
   "overrides": {
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "next": {
+      "postcss": "^8.5.31"
+    },
+    "tailwindcss": {
+      "postcss-selector-parser": "^7.1.6"
+    },
+    "postcss-nested": {
+      "postcss-selector-parser": "^7.1.6"
+    }
   }
 }

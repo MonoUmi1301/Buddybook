@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/admin/users?page=
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = parseSearchParams(request, paginationQuerySchema);

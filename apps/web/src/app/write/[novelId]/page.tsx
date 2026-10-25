@@ -10,17 +10,18 @@ import { getCurrentUser } from "@/lib/api/session";
 
 // หน้าจัดการนิยาย — จุดที่ขาดหายไปเดิม: กดเลือกนิยายที่มีอยู่แล้วจาก /write แทนที่จะโดดเข้า
 // เครื่องมือ Plot ตรง ๆ ตอนนี้เจอหน้านี้ก่อน เห็นข้อมูลนิยาย + รายการตอนทุกสถานะ + ปุ่มลบ (Phase D)
-export default async function NovelManagePage({
-  params,
-  searchParams,
-}: {
-  params: { novelId: string };
-  searchParams: { appeal?: string };
-}) {
+export default async function NovelManagePage(
+  props: {
+    params: Promise<{ novelId: string }>;
+    searchParams: Promise<{ appeal?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [novelResult, chaptersResult, tagsResult] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     callApi({ method: "GET", path: `/novels/${params.novelId}/chapters`, token }),

@@ -5,7 +5,7 @@ import { requireAccessToken, clearAuthCookies } from "@/lib/api/auth";
 
 // GET /api/v1/users/me
 export async function GET() {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   return forwardToApi({ method: "GET", path: "/users/me", token: auth.token });
@@ -13,7 +13,7 @@ export async function GET() {
 
 // PATCH /api/v1/users/me
 export async function PATCH(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, updateMeSchema);
@@ -31,7 +31,7 @@ export async function PATCH(request: Request) {
 // เคลียร์ auth cookie ทิ้งเสมอถ้า Express ตอบสำเร็จ เพื่อบังคับ log out ทันที ป้องกัน token เก่า
 // ที่ยัง valid อยู่ (15 นาที) มาเรียก endpoint อื่นต่อได้ทั้งที่บัญชีถูกลบไปแล้ว
 export async function DELETE(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, deleteMeSchema);

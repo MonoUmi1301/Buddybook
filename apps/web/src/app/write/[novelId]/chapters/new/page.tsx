@@ -14,11 +14,12 @@ interface ChapterListItem {
   chapter_number: number;
 }
 
-export default async function NewChapterPage({ params }: { params: { novelId: string } }) {
+export default async function NewChapterPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [novelResult, chaptersResult] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     callApi({ method: "GET", path: `/novels/${params.novelId}/chapters`, token }),

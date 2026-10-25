@@ -36,7 +36,7 @@ export default async function WriterDashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [result, giftStats] = await Promise.all([
     callApi({
       method: "GET",

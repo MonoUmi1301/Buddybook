@@ -3,8 +3,9 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/novels/:novelId/like
-export async function POST(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");
@@ -14,8 +15,9 @@ export async function POST(_request: Request, { params }: { params: { novelId: s
 }
 
 // DELETE /api/v1/novels/:novelId/like
-export async function DELETE(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");

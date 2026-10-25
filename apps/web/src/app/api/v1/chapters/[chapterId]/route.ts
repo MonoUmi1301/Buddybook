@@ -5,16 +5,18 @@ import { getAccessToken, requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/chapters/:chapterId — Public (เฉพาะตอนที่ published), แนบ token ถ้ามีเพื่อให้
 // เจ้าของตอนดูตอนร่าง (draft) ของตัวเองได้ด้วย — จุดนี้ไม่เคยส่ง token ไปเลยมาก่อน
-export async function GET(_request: Request, { params }: { params: { chapterId: string } }) {
+export async function GET(_request: Request, props: { params: Promise<{ chapterId: string }> }) {
+  const params = await props.params;
   const id = requireUuidParam(params.chapterId, "chapter_id");
   if ("error" in id) return id.error;
 
-  return forwardToApi({ method: "GET", path: `/chapters/${id.value}`, token: getAccessToken() });
+  return forwardToApi({ method: "GET", path: `/chapters/${id.value}`, token: await getAccessToken() });
 }
 
 // PATCH /api/v1/chapters/:chapterId
-export async function PATCH(request: Request, { params }: { params: { chapterId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ chapterId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.chapterId, "chapter_id");
@@ -32,8 +34,9 @@ export async function PATCH(request: Request, { params }: { params: { chapterId:
 }
 
 // DELETE /api/v1/chapters/:chapterId — ย้ายลงถังขยะ (soft delete 30 วัน)
-export async function DELETE(_request: Request, { params }: { params: { chapterId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ chapterId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.chapterId, "chapter_id");

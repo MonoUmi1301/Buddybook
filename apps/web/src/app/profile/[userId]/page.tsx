@@ -43,11 +43,12 @@ function StatRow({ icon: Icon, label, value }: { icon: typeof Eye; label: string
   );
 }
 
-export default async function ProfilePage({ params }: { params: { userId: string } }) {
+export default async function ProfilePage(props: { params: Promise<{ userId: string }> }) {
+  const params = await props.params;
   const [user, result] = await Promise.all([
     getCurrentUser(),
     // ส่ง token ให้ผู้ที่ยืนยันอายุแล้ว/เจ้าของโปรไฟล์เห็นนิยายเรต 18+ ในรายการผลงาน
-    callApi({ method: "GET", path: `/users/${params.userId}`, token: getAccessToken() }),
+    callApi({ method: "GET", path: `/users/${params.userId}`, token: await getAccessToken() }),
   ]);
 
   if ("error" in result || result.status === 404) notFound();

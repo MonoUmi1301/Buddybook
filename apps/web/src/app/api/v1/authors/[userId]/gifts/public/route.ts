@@ -5,7 +5,8 @@ import { getAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/authors/:userId/gifts/public?novel_id= — Public ("กำลังใจจากนักอ่าน")
 // แนบ token ถ้ามี เพื่อให้เจ้าของเห็นของนิยายที่ยังไม่เผยแพร่ของตัวเองได้
-export async function GET(request: Request, { params }: { params: { userId: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ userId: string }> }) {
+  const params = await props.params;
   const id = requireUuidParam(params.userId, "user_id");
   if ("error" in id) return id.error;
 
@@ -18,7 +19,7 @@ export async function GET(request: Request, { params }: { params: { userId: stri
   return forwardToApi({
     method: "GET",
     path: `/authors/${id.value}/gifts/public`,
-    token: getAccessToken(),
+    token: await getAccessToken(),
     searchParams,
   });
 }

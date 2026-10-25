@@ -7,12 +7,13 @@ import { safeReturnPath, setOAuthAgeVerifyCookie, setOAuthStateCookie, withAgeVe
 // GET /api/v1/auth/oauth/google/verify-age?return_to=/novels/.. — ปุ่ม "ยืนยันอายุด้วย Google" (browser navigate มาตรง ๆ)
 // ต้องล็อกอินอยู่แล้ว: ขอวันเกิดจาก Google มายืนยันอายุของบัญชีนี้ ไม่ได้ล็อกอินด้วย Google
 // callback กลับมาที่ /api/v1/auth/oauth/google/callback ตัวเดิม (แยก flow ด้วย cookie bb_oauth_age_verify)
-export async function GET(request: Request, { params }: { params: { provider: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   const returnTo = safeReturnPath(new URL(request.url).searchParams.get("return_to"));
   if (params.provider !== "google") {
     return NextResponse.redirect(appUrl(withAgeVerifyResult(returnTo, "unavailable")));
   }
-  if (!getAccessToken()) return NextResponse.redirect(appUrl("/login"));
+  if (!await getAccessToken()) return NextResponse.redirect(appUrl("/login"));
 
   const result = await callApi({
     method: "GET",

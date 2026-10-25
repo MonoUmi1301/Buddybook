@@ -4,7 +4,7 @@ import { GiftReports, type GiftReportRow } from "@/components/admin/GiftReports"
 
 // เพิ่มภายหลัง (Gift donations) — GET /admin/gift-reports (การ์ดที่ถูกรายงานและยังไม่ได้ตัดสิน)
 export default async function AdminGiftReportsPage() {
-  const result = await callApi({ method: "GET", path: "/admin/gift-reports", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/admin/gift-reports", token: await getAccessToken() });
   const page =
     !("error" in result) && result.status === 200
       ? (result.json as { items: GiftReportRow[]; next_cursor: string | null })

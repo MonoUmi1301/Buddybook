@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/reports — รายงานเนื้อหาไม่เหมาะสม
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const parsed = await parseJsonBody(request, createReportSchema);
   if ("error" in parsed) return parsed.error;

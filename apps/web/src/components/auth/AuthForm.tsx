@@ -307,6 +307,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               size="lg"
               className="relative"
               onClick={() => {
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
                 window.location.href = "/api/v1/auth/oauth/facebook";
               }}
             >
@@ -320,6 +321,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               size="lg"
               className="relative"
               onClick={() => {
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
                 window.location.href = "/api/v1/auth/oauth/line";
               }}
             >
@@ -333,6 +335,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               size="lg"
               className="relative"
               onClick={() => {
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
                 window.location.href = "/api/v1/auth/oauth/google";
               }}
             >

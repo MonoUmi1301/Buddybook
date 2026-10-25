@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/library/continue-reading?limit= — ประวัติการอ่านล่าสุด ("อ่านต่อ")
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const query = parseSearchParams(request, continueReadingQuerySchema);

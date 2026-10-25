@@ -12,7 +12,7 @@ export default async function NovelTrashPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const result = await callApi({ method: "GET", path: "/novels/trash", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/novels/trash", token: await getAccessToken() });
   const data =
     !("error" in result) && result.status === 200
       ? (result.json as { novels: TrashedNovel[]; retention_days: number })

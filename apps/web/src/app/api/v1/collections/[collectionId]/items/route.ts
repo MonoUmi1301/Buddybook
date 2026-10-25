@@ -4,8 +4,9 @@ import { collectionItemSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/collections/:collectionId/items — ใส่นิยายลงชั้นย่อย (เพิ่มเข้าชั้นหลักให้ด้วยถ้ายังไม่มี)
-export async function POST(request: Request, { params }: { params: { collectionId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(request: Request, props: { params: Promise<{ collectionId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.collectionId, "collection_id");

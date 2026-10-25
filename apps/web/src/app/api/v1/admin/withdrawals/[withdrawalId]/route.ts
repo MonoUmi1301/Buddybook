@@ -4,8 +4,9 @@ import { processWithdrawalSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/admin/withdrawals/:withdrawalId — { action: "paid" | "rejected", note? }
-export async function PATCH(request: Request, { params }: { params: { withdrawalId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ withdrawalId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const id = requireUuidParam(params.withdrawalId, "withdrawal_id");
   if ("error" in id) return id.error;

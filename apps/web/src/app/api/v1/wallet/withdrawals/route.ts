@@ -5,14 +5,14 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/wallet/withdrawals — ประวัติคำขอถอน + ยอดที่ถอนได้
 export async function GET() {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   return forwardToApi({ method: "GET", path: "/wallet/withdrawals", token: auth.token });
 }
 
 // POST /api/v1/wallet/withdrawals — ขอถอนรายได้
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const parsed = await parseJsonBody(request, createWithdrawalSchema);
   if ("error" in parsed) return parsed.error;

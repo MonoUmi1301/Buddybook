@@ -11,11 +11,12 @@ interface WorldBuildingResponse {
 }
 
 // แท็บ Character — ผังความสัมพันธ์ตัวละครแบบลาก-วางจริงด้วย @xyflow/react ดู wf_map_dm.png
-export default async function CharactersPage({ params }: { params: { novelId: string } }) {
+export default async function CharactersPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const result = await callApi({
     method: "GET",
     path: `/novels/${params.novelId}/world-building`,
-    token: getAccessToken(),
+    token: await getAccessToken(),
   });
 
   if ("error" in result || result.status === 403 || result.status === 404) notFound();

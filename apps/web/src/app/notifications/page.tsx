@@ -15,7 +15,7 @@ export default async function NotificationsPage() {
   const result = await callApi({
     method: "GET",
     path: "/notifications",
-    token: getAccessToken(),
+    token: await getAccessToken(),
     searchParams: new URLSearchParams({ page: "1", pageSize: "20" }),
   });
   const initial =

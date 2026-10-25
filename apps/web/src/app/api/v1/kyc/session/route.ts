@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/kyc/session — ยอมรับความยินยอม (PDPA) แล้วรับ access token ของ WebSDK ผู้ให้บริการ e-KYC
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, kycSessionSchema);
