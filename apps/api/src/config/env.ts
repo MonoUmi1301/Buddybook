@@ -48,8 +48,7 @@ const envSchema = z.object({
   // (ดู lib/email.ts) ใช้ส่ง OTP ยืนยันตัวตนตอนสมัคร + ลิงก์ลืมรหัสผ่าน
   RESEND_API_KEY: z.string().default(""),
   RESEND_FROM_EMAIL: z.string().default("BuddyBook <onboarding@resend.dev>"),
-  // Gmail SMTP — ทางเลือกที่ใช้ส่งอีเมลจริงได้ทันทีโดยไม่ต้อง verify โดเมนเหมือน Resend (ดู lib/email.ts
-  // ลองอันนี้ก่อนเสมอถ้าตั้งค่าไว้ ค่อย fallback ไป Resend)
+  // Gmail SMTP — ทางสำรองถ้า Resend ส่งไม่สำเร็จ (ดู lib/email.ts) ปล่อยว่าง = ใช้ Resend อย่างเดียว
   GMAIL_USER: z.string().default(""),
   GMAIL_APP_PASSWORD: z.string().default(""),
   // Stripe (เติม coin — แทนการอัปโหลดสลิปเดิม) — เช่นเดียวกับตัวอื่น ไม่บังคับตอน boot,
