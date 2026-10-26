@@ -752,6 +752,6 @@ export const supportMessageSchema = z.object({
 export const supportStatusSchema = z.object({ status: z.enum(["open", "in_progress", "resolved", "closed"]) });
 
 // gap 3.3 — หน้าแจ้งเตือน
-const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation"]);
+const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation", "review"]);
 export const notificationReadAllSchema = z.object({ type: notificationTypeEnum.optional() });
 export const notificationPreferencesSchema = z.object({ muted_types: z.array(notificationTypeEnum).max(7) });

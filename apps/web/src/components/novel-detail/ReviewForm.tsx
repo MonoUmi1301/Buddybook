@@ -88,7 +88,7 @@ export function ReviewForm({ novelId }: { novelId: string }) {
         onChange={(e) => setCommentText(e.target.value)}
         rows={3}
         placeholder="เล่าความรู้สึกของคุณเกี่ยวกับนิยายเรื่องนี้ (ไม่บังคับ)"
-        className="mt-3 w-full resize-none rounded-lg border border-neutral-200 px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-primary-400 focus:outline-none"
+        className="mt-3 w-full resize-none rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-primary-400 focus:outline-none"
       />
       <div className="mt-2 flex items-start gap-3">
         <StickerPicker value={stickerId} onChange={setStickerId} />

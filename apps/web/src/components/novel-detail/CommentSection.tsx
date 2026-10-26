@@ -94,7 +94,7 @@ function CommentComposer({
         onKeyDown={(e) => {
           if (e.key === "Escape" && onCancel) onCancel();
         }}
-        className="w-full resize-none border-0 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none"
+        className="w-full resize-none border-0 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none"
       />
       <div className="flex items-center justify-between border-t border-neutral-100 pt-3">
         <StickerPicker value={stickerId} onChange={setStickerId} />

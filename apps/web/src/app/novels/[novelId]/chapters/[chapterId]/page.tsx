@@ -5,6 +5,7 @@ import { AgeGateInterstitial, parseAgeGate } from "@/components/novel-detail/Age
 import { CommentSection, type CommentNode } from "@/components/novel-detail/CommentSection";
 import { ReaderContent } from "@/components/reader/ReaderContent";
 import { ReaderPresence } from "@/components/reader/ReaderPresence";
+import { ResumeReadingPrompt, type ResumeFrom } from "@/components/reader/ResumeReadingPrompt";
 import { ReportButton } from "@/components/social/ReportButton";
 import { BackButton } from "@/components/ui/BackButton";
 import { OwnerPreviewBar } from "@/components/novel-detail/OwnerPreviewBar";
@@ -38,6 +39,8 @@ interface ChapterDetail {
   locked: boolean;
   /** ตัวอย่างเนื้อหาแบบ plain text — มีเฉพาะตอนที่ locked */
   teaser: string | null;
+  /** ตอนที่อ่านค้างไว้ ถ้าเปิดตอนอื่น (null = ไม่ต้องถาม) */
+  resume_from?: ResumeFrom | null;
 }
 
 interface ChapterListItem {
@@ -115,6 +118,9 @@ export default async function ChapterReaderPage(
       <Navbar user={user} />
       {/* ผู้อ่านออนไลน์บนหน้าแอดมิน — นับเฉพาะผู้ที่ล็อกอิน ไม่นับเจ้าของที่ทดลองอ่าน */}
       {user && !isOwner && <ReaderPresence />}
+      {chapter.resume_from && (
+        <ResumeReadingPrompt key={chapter.chapter_id} novelId={novel.novel_id} chapterId={chapter.chapter_id} resumeFrom={chapter.resume_from} />
+      )}
       {isOwner && (
         <OwnerPreviewBar
           novelId={novel.novel_id}

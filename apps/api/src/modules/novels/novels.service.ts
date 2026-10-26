@@ -747,7 +747,7 @@ interface CreateReviewInput {
 /** Reference implementation — POST /novels/:novel_id/reviews
  *  sentiment_label เป็น null เสมอตอน insert — Python NLP Worker จะ UPDATE กลับมาแบบ async ทีหลัง */
 export async function createReview(novel_id: string, user_id: string, input: CreateReviewInput) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true } });
+  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true, author_id: true, title: true } });
   if (!novel) throw ApiError.notFound("Novel not found");
 
   try {
@@ -766,6 +766,7 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
     // สร้าง READ edge ทันที (sentiment_score เป็น null ก่อน — Phase NLP Worker จะเรียก
     // syncReadEdge ซ้ำพร้อมคะแนนจริงหลังวิเคราะห์เสร็จ อัปเดต edge เดิมแทนที่จะสร้างใหม่)
     syncReadEdge(user_id, novel_id, null).catch((err) => console.error("Neo4j syncReadEdge failed:", err));
+    await notifyNewReview(novel, user_id, input);
 
     return review;
   } catch (err) {
@@ -773,6 +774,33 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
       throw ApiError.conflict("You have already reviewed this novel");
     }
     throw err;
+  }
+}
+
+/** แจ้งเตือนนักเขียนว่ามีรีวิวใหม่ (รีวิวนิรนามไม่บอกชื่อ) — ไม่แจ้งเตือนตัวเอง
+ *  แจ้งเตือนพังไม่ควรทำให้รีวิวที่บันทึกแล้วล้ม (แบบเดียวกับ notifyCommentRecipients) */
+async function notifyNewReview(
+  novel: { novel_id: string; author_id: string; title: string },
+  reviewer_id: string,
+  input: CreateReviewInput,
+) {
+  if (novel.author_id === reviewer_id) return;
+  try {
+    let name = "ผู้อ่านนิรนาม";
+    if (!input.is_anonymous) {
+      const reviewer = await prisma.user.findUnique({ where: { user_id: reviewer_id }, select: { username: true, pen_name: true } });
+      name = reviewer?.pen_name || reviewer?.username || "มีผู้อ่าน";
+    }
+    await prisma.notification.create({
+      data: {
+        user_id: novel.author_id,
+        type: "review",
+        content: `${name} รีวิว "${novel.title}" ให้ ${input.rating} ดาว`,
+        link_url: `/novels/${novel.novel_id}#reviews`,
+      },
+    });
+  } catch (err) {
+    console.error("[reviews] failed to create notification", err);
   }
 }
 

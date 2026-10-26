@@ -90,7 +90,7 @@ export function SupportCenter({ tickets }: { tickets: SupportTicketSummary[] }) 
             maxLength={5000}
             required
             placeholder="เล่าสิ่งที่เกิดขึ้น ทำอะไรอยู่ตอนเจอปัญหา และเกิดเมื่อไหร่ — ยิ่งละเอียดยิ่งช่วยได้เร็ว"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+            className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
           />
           <p className="mt-1 text-right text-xs text-neutral-400">{body.length}/5000</p>
         </div>

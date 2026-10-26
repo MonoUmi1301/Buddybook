@@ -1,7 +1,8 @@
-import { Bell, BookOpen, Gift, Headset, MessageCircle, ShieldAlert, UserPlus, type LucideIcon } from "lucide-react";
+import { Bell, BookOpen, Gift, Headset, MessageCircle, ShieldAlert, Star, UserPlus, type LucideIcon } from "lucide-react";
 
 export type NotificationType =
   | "comment"
+  | "review"
   | "reply"
   | "donation"
   | "system"
@@ -25,16 +26,18 @@ export interface NotificationItem {
 export const NOTIFICATION_TYPE_LABEL: Record<NotificationType, string> = {
   new_chapter: "ตอนใหม่จากนิยายในชั้น",
   comment: "คอมเมนต์ในนิยายของฉัน",
+  review: "รีวิวนิยายของฉัน",
   reply: "การตอบกลับคอมเมนต์",
   donation: "ของขวัญ / โดเนท",
   new_follower: "ผู้ติดตามใหม่",
   support_reply: "คำตอบจากทีมงาน",
-  moderation: "การตรวจสอบนิยาย",
+  moderation: "ผลตรวจสอบนิยายจากแอดมิน",
   system: "ประกาศจากระบบ",
 };
 
 export const NOTIFICATION_ICON: Record<NotificationType, LucideIcon> = {
   comment: MessageCircle,
+  review: Star,
   reply: MessageCircle,
   donation: Gift,
   system: Bell,

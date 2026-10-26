@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import * as notificationsService from "@/modules/notifications/notifications.service";
 
-const typeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation"]);
+const typeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation", "review"]);
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -38,6 +38,6 @@ export async function getPreferences(req: Request, res: Response) {
 }
 
 export async function setPreferences(req: Request, res: Response) {
-  const { muted_types } = z.object({ muted_types: z.array(typeEnum).max(7) }).parse(req.body);
+  const { muted_types } = z.object({ muted_types: z.array(typeEnum).max(8) }).parse(req.body);
   res.status(200).json(await notificationsService.setPreferences(req.user!.user_id, muted_types));
 }

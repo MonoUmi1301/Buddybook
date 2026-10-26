@@ -18,6 +18,7 @@ import { env } from "@/config/env";
 import type { OAuthProfile } from "@/lib/oauthProfile";
 import { saveVerifiedBirthDate } from "@/lib/contentRating";
 import { normalizeEmail } from "@/lib/normalizeEmail";
+import { EMAIL_DOMAIN_ERROR, isAllowedEmailDomain } from "@/lib/emailDomains";
 
 // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — เดิม 10 rounds ยังปลอดภัยอยู่ (ขั้นต่ำที่ OWASP
 // แนะนำ) แต่ 12 เป็นค่าที่แนะนำกันทั่วไปมากกว่าสำหรับปี 2026 (เผื่อ headroom กับฮาร์ดแวร์ที่เร็วขึ้น)
@@ -46,6 +47,7 @@ function generateOtpCode(): string {
  *  ไปอีเมล รอ verifyRegistrationOtp ยืนยันถูกต้องก่อนถึงจะสร้างบัญชีจริง */
 export async function requestRegistrationOtp({ username, email: rawEmail, password }: RegisterInput) {
   const email = normalizeEmail(rawEmail);
+  if (!isAllowedEmailDomain(email)) throw ApiError.badRequest(EMAIL_DOMAIN_ERROR);
   if (!isEmailConfigured()) {
     throw ApiError.badRequest("ระบบส่งอีเมลยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ");
   }
@@ -421,10 +423,8 @@ export async function requestCompleteProfileOtp(user_id: string, rawEmail: strin
   const taken = await prisma.user.findUnique({ where: { email }, select: { user_id: true } });
   if (taken) throw ApiError.conflict("อีเมลนี้มีบัญชีอยู่แล้ว");
 
-  // โดเมนที่ระบบใช้เป็นอีเมลปลอม (seed / บัญชีที่ถูกลบ) ไม่มีกล่องจดหมายจริง
-  if (email.endsWith(".buddybook.local") || email.endsWith(".invalid")) {
-    throw ApiError.badRequest("กรุณากรอกอีเมลที่ใช้งานได้จริง");
-  }
+  // รวมโดเมนอีเมลปลอมของระบบ (seed / บัญชีที่ถูกลบ) ด้วย — ไม่อยู่ในรายชื่อผู้ให้บริการจริง
+  if (!isAllowedEmailDomain(email)) throw ApiError.badRequest(EMAIL_DOMAIN_ERROR);
   // TODO: ถ้าเครื่องนี้ยังไม่ตั้งค่า Resend/Gmail จะยืนยันอีเมลไม่ได้ — ตั้ง RESEND_API_KEY หรือ GMAIL_* ใน apps/api/.env
   if (!isEmailConfigured()) {
     throw ApiError.serviceUnavailable("ระบบส่งอีเมลยังไม่พร้อมใช้งาน กรุณาติดต่อผู้ดูแลระบบ");

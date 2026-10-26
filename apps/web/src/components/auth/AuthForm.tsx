@@ -10,6 +10,7 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { FacebookIcon, LineIcon, GoogleIcon } from "@/components/ui/SocialIcon";
 import { PasswordRequirementsHint } from "@/components/auth/PasswordRequirementsHint";
 import { formatApiError } from "@/lib/formatApiError";
+import { EMAIL_DOMAIN_ERROR, isAllowedEmailDomain } from "@/lib/emailDomains";
 import { handleAsync } from "@/lib/handleAsync";
 
 interface AuthFormProps {
@@ -84,11 +85,17 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
       return;
     }
 
-    setLoading(true);
-
     const formData = new FormData(e.currentTarget);
     const path = isLogin ? "/api/v1/auth/login" : "/api/v1/auth/register";
     const email = formData.get("email") as string;
+    // เช็คเฉพาะตอนสมัคร — บัญชีเดิมที่ใช้โดเมนอื่นต้องยังล็อกอินได้
+    if (!isLogin && !isAllowedEmailDomain(email)) {
+      setError(EMAIL_DOMAIN_ERROR);
+      return;
+    }
+
+    setLoading(true);
+
     const registerBody = { username: formData.get("username") as string, email, password };
     const body = isLogin ? { email, password } : registerBody;
 

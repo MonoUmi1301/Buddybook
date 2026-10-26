@@ -193,11 +193,15 @@ export async function getChapterById(chapter_id: string, requester_id?: string, 
   // อ่านเนื้อหาได้แม้หน้ารายละเอียดนิยาย (getNovelById) จะบล็อกไปแล้วก็ตาม ต้องเกตซ้ำที่นี่ด้วย
   await assertContentRatingAllowed(chapter.novel, requester_id, isOwner);
 
+  // ต้องอ่านก่อน recordReadingProgress ด้านล่างเขียนทับเป็นตอนนี้
+  const resume_from =
+    requester_id && !isOwner && chapter.status === "published" ? await getResumeFrom(requester_id, chapter) : null;
+
   // เพิ่มภายหลัง (ตอนติดเหรียญ) — ยังไม่ได้ซื้อ: ส่งข้อมูลตอนกลับไปได้ (ชื่อ/ราคา) แต่ไม่ส่งเนื้อหา
   const locked = chapter.price_coins > 0 && !isOwner && !(await hasPurchased(requester_id, chapter_id));
   if (locked) {
     const { novel: _n, content, ...meta } = chapter;
-    return { ...meta, content: null, teaser: buildTeaser(content), locked: true };
+    return { ...meta, content: null, teaser: buildTeaser(content), locked: true, resume_from };
   }
 
   // gap 3.1 — นับยอดวิว (ทั้งผู้อ่านที่ล็อกอินและไม่ล็อกอิน) ไม่นับเจ้าของ/ตอนที่ยังล็อกอยู่
@@ -216,7 +220,20 @@ export async function getChapterById(chapter_id: string, requester_id?: string, 
 
   const { novel: _novel, ...rest } = chapter;
   // กรองตอนส่งออกด้วย — ตอนที่บันทึกไว้ก่อนมีการกรองฝั่งเขียนอาจยังมี HTML อันตรายค้างอยู่
-  return { ...rest, content: toSafeChapterHtml(rest.content), teaser: null, locked: false };
+  return { ...rest, content: toSafeChapterHtml(rest.content), teaser: null, locked: false, resume_from };
+}
+
+/** ตอนที่ผู้อ่านอ่านค้างไว้ ถ้าเปิดตอนอื่นที่ไม่ใช่ตอนนั้น — หน้าอ่านใช้ถามว่าจะกลับไปอ่านต่อไหม
+ *  ไม่นับการอ่านตอนถัดไปตามลำดับ (อ่านต่อปกติ) และตอนที่ค้างไว้ต้องยังเผยแพร่อยู่ */
+async function getResumeFrom(user_id: string, chapter: { chapter_id: string; novel_id: string; chapter_number: number }) {
+  const progress = await prisma.readingProgress.findUnique({
+    where: { user_id_novel_id: { user_id, novel_id: chapter.novel_id } },
+    select: { last_chapter: { select: { chapter_id: true, chapter_number: true, title: true, status: true } } },
+  });
+  const last = progress?.last_chapter;
+  if (!last || last.status !== "published" || last.chapter_id === chapter.chapter_id) return null;
+  if (chapter.chapter_number === last.chapter_number + 1) return null;
+  return { chapter_id: last.chapter_id, chapter_number: last.chapter_number, title: last.title };
 }
 
 async function hasPurchased(user_id: string | undefined, chapter_id: string) {

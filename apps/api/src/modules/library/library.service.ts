@@ -131,13 +131,34 @@ export async function removeFromLibrary(user_id: string, novel_id: string) {
   ]);
 }
 
+/** นิยายที่ผู้ใช้อ่านถึงตอนล่าสุดที่เผยแพร่แล้ว — ไม่มีตอนให้ "อ่านต่อ" (แม้เรื่องยังไม่จบ)
+ *  พอนักเขียนลงตอนใหม่ ตอนล่าสุดเลื่อนไป เรื่องนั้นก็กลับมาอยู่ในรายการเอง */
+async function caughtUpNovelIds(user_id: string): Promise<string[]> {
+  const progress = await prisma.readingProgress.findMany({
+    where: { user_id },
+    select: { novel_id: true, last_chapter_number: true },
+  });
+  if (progress.length === 0) return [];
+  const latest = await prisma.chapter.groupBy({
+    by: ["novel_id"],
+    where: { novel_id: { in: progress.map((p) => p.novel_id) }, status: "published" },
+    _max: { chapter_number: true },
+  });
+  const latestByNovel = new Map(latest.map((r) => [r.novel_id, r._max.chapter_number ?? 0]));
+  return progress
+    .filter((p) => p.last_chapter_number >= (latestByNovel.get(p.novel_id) ?? Infinity))
+    .map((p) => p.novel_id);
+}
+
 /** เพิ่มภายหลัง — GET /library/continue-reading?limit= — ประวัติการอ่านล่าสุด (หน้าแรก "อ่านต่อ" และ
  *  หน้า My Library "กำลังอ่าน") รวมเรื่องที่ไม่ได้เพิ่มเข้าชั้นด้วย ตัดเรื่องที่ถูกซ่อน/ยังไม่เผยแพร่ออก
- *  และตัดเรื่องที่ผู้ใช้ตั้งเป็น "อ่านจบแล้ว" ในชั้นออก (ไม่ต้อง "อ่านต่อ" แล้ว) */
+ *  และตัดเรื่องที่ผู้ใช้ตั้งเป็น "อ่านจบแล้ว" ในชั้นออก รวมถึงเรื่องที่อ่านถึงตอนล่าสุดแล้ว (ไม่ต้อง "อ่านต่อ" แล้ว) */
 export async function listContinueReading(user_id: string, limit: number) {
+  const caughtUp = await caughtUpNovelIds(user_id);
   const rows = await prisma.readingProgress.findMany({
     where: {
       user_id,
+      ...(caughtUp.length ? { novel_id: { notIn: caughtUp } } : {}),
       novel: {
         visibility: "published",
         deleted_at: null,

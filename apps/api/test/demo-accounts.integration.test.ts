@@ -21,7 +21,8 @@ vi.mock("@/lib/email", () => ({
 const h = createHarness("demo");
 const tag = crypto.randomBytes(3).toString("hex");
 const PASSWORD = "Demo#Pass2026";
-const email = (name: string) => `${name}_${tag}@test.buddybook.dev`;
+// สมัครได้เฉพาะโดเมนผู้ให้บริการจริง (lib/emailDomains.ts) — ส่งอีเมลถูก mock ไว้ ไม่มีอะไรออกไปจริง
+const email = (name: string) => `bbtest_${name}_${tag}@gmail.com`;
 
 async function makeUser(name: string, account_type: "DEMO" | "REAL") {
   const user = await prisma.user.create({
@@ -108,6 +109,16 @@ describe("registration", () => {
     expect(res.status).toBeLessThan(300);
     const user = await prisma.user.findUniqueOrThrow({ where: { email: email("sneaky") }, select: { account_type: true } });
     expect(user.account_type).toBe("REAL");
+  });
+
+  it("rejects email domains that are not real mail providers", async () => {
+    const res = await h.api("POST", "/auth/register/request-otp", undefined, {
+      username: `demo_fake_${tag}`,
+      email: `fake_${tag}@hippo.com`,
+      password: PASSWORD,
+    });
+    expect(res.status).toBe(400);
+    expect(sent.otp.has(`fake_${tag}@hippo.com`)).toBe(false);
   });
 });
 

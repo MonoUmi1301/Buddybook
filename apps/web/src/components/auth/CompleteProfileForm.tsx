@@ -6,6 +6,7 @@ import { Logo } from "@/components/ui/Logo";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatApiError } from "@/lib/formatApiError";
+import { EMAIL_DOMAIN_ERROR, isAllowedEmailDomain } from "@/lib/emailDomains";
 import { handleAsync } from "@/lib/handleAsync";
 
 const OTP_RESEND_COOLDOWN_SEC = 60;
@@ -32,6 +33,10 @@ export function CompleteProfileForm() {
 
   async function requestOtp() {
     setError(null);
+    if (!isAllowedEmailDomain(email)) {
+      setError(EMAIL_DOMAIN_ERROR);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch("/api/v1/auth/complete-profile/request-otp", {

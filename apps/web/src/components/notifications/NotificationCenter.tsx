@@ -26,15 +26,16 @@ interface Page {
 }
 
 const PAGE_SIZE = 20;
-const FILTERS: { value: NotificationType | "all"; label: string }[] = [
+const FILTERS: { value: NotificationType | "all"; label: string; hint?: string }[] = [
   { value: "all", label: "ทั้งหมด" },
   { value: "new_chapter", label: "ตอนใหม่" },
   { value: "comment", label: "คอมเมนต์" },
+  { value: "review", label: "รีวิว" },
   { value: "reply", label: "ตอบกลับ" },
   { value: "donation", label: "ของขวัญ" },
   { value: "new_follower", label: "ผู้ติดตาม" },
   { value: "support_reply", label: "ทีมงาน" },
-  { value: "moderation", label: "ตรวจสอบนิยาย" },
+  { value: "moderation", label: "ผลตรวจสอบนิยาย", hint: "แอดมินระงับ/คืนสถานะนิยายของคุณ หรือแจ้งผลอุทธรณ์" },
   { value: "system", label: "ระบบ" },
 ];
 
@@ -130,11 +131,13 @@ export function NotificationCenter({ initial }: { initial: Page }) {
           </div>
         </div>
 
-        <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {/* เดิมเลื่อนแนวนอนแบบซ่อน scrollbar — บนจอแคบ/เมาส์ปุ่มท้าย ๆ ตกขอบและเลื่อนไปดูไม่ได้ จึงให้ขึ้นบรรทัดใหม่แทน */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           {FILTERS.map((f) => (
             <button
               key={f.value}
               type="button"
+              title={f.hint}
               onClick={() => {
                 setFilter(f.value);
                 setPage(1);
@@ -147,7 +150,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
               {f.label}
             </button>
           ))}
-          <label className="ml-1 flex shrink-0 items-center gap-1.5 text-sm text-neutral-600">
+          <label className="ml-1 flex min-h-[36px] shrink-0 items-center gap-1.5 text-sm text-neutral-600">
             <input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setPage(1); }} className="h-4 w-4 rounded border-neutral-300" />
             เฉพาะที่ยังไม่อ่าน
           </label>

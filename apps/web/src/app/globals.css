@@ -54,6 +54,22 @@
   background-color: transparent;
 }
 
+/* ให้ส่วนที่เบราว์เซอร์วาดเอง (พื้น textarea/input ที่ไม่ได้ใส่ bg-*, scrollbar, checkbox) เป็นโทนมืดตามธีมด้วย
+ * — เดิมช่องที่ลืมใส่ bg-white (เช่น "รายละเอียด" หน้าแจ้งปัญหา) ยังเป็นพื้นขาวในโหมดมืด */
+.dark {
+  color-scheme: dark;
+}
+
+/* คำแนะนำในช่องพิมพ์ (placeholder) หายทันทีที่คลิกช่องเพื่อพิมพ์ ไม่ต้องรอพิมพ์ตัวแรก
+ * รวม Quill editor (เนื้อหาตอน/คำโปรย) ที่วาด placeholder เองผ่าน .ql-blank::before */
+input:focus::placeholder,
+textarea:focus::placeholder {
+  color: transparent;
+}
+.ql-editor.ql-blank:focus::before {
+  content: none;
+}
+
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;

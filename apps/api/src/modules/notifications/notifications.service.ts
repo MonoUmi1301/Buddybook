@@ -4,6 +4,7 @@ import { ApiError } from "@/utils/ApiError";
 
 export const NOTIFICATION_TYPES: NotificationType[] = [
   "comment",
+  "review",
   "reply",
   "donation",
   "system",
