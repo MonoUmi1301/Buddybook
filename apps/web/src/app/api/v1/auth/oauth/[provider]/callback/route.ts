@@ -20,6 +20,8 @@ type OAuthLoginResponse =
       access_token: string;
       refresh_token: string;
       user: { user_id: string; username: string; role: string };
+      /** LINE ไม่ส่งอีเมลมา — บัญชียังไม่มีอีเมล ต้องไปกรอกที่ /complete-profile ก่อน */
+      needs_email?: boolean;
     }
   | { requires_2fa: true; challenge_token: string };
 
@@ -86,6 +88,6 @@ export async function GET(request: Request, props: { params: Promise<{ provider:
     return clearOAuthStateCookie(setOAuth2faCookie(response, body.challenge_token));
   }
 
-  const response = clearOAuthStateCookie(NextResponse.redirect(appUrl("/")));
+  const response = clearOAuthStateCookie(NextResponse.redirect(appUrl(body.needs_email ? "/complete-profile" : "/")));
   return setAuthCookies(response, { access_token: body.access_token, refresh_token: body.refresh_token });
 }

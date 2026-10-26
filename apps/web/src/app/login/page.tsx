@@ -10,6 +10,7 @@ const oauthErrorMessages: Record<string, string> = {
   oauth_unavailable: "ยังไม่เปิดใช้การเข้าสู่ระบบด้วยช่องทางนี้",
   oauth_account_conflict: "อีเมลนี้มีบัญชีอยู่แล้ว กรุณาเข้าสู่ระบบด้วยวิธีที่ใช้สมัครไว้",
   oauth_suspended: "บัญชีนี้ถูกระงับการใช้งาน",
+  line_consent_required: "กรุณาติ๊กยอมรับนโยบายความเป็นส่วนตัวก่อนเข้าสู่ระบบด้วย LINE",
 };
 
 export default async function LoginPage(props: { searchParams: Promise<{ error?: string; two_factor?: string }> }) {

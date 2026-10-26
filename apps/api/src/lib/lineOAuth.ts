@@ -15,7 +15,8 @@ export function buildLineAuthUrl(state: string): string {
     client_id: env.LINE_CLIENT_ID,
     redirect_uri: REDIRECT_URI(),
     state,
-    scope: "profile openid email",
+    // email ต้องเปิด "Email address permission" ของ channel ใน LINE Developers Console ด้วย ไม่งั้นไม่มี claim email
+    scope: "openid profile email",
   });
   return `https://access.line.me/oauth2/v2.1/authorize?${params.toString()}`;
 }
@@ -24,7 +25,7 @@ export function buildLineAuthUrl(state: string): string {
  *  handle JWKS/JWT verification เอง — LINE คืนค่า claims ที่ verify แล้วตรง ๆ ง่ายกว่า Google มาก
  *  หมายเหตุ: LINE ให้ email มาก็ต่อเมื่อ channel เปิดสิทธิ์ email scope ไว้ใน LINE Developers Console
  *  (Console home > channel > OpenID Connect > Email address permission) — ถ้ายังไม่เปิดหรือผู้ใช้
- *  ปฏิเสธ email จะไม่มีค่า จึงต้อง fallback เป็น placeholder ที่ unique แทน (ดู oauthProfile.ts) */
+ *  ปฏิเสธ email จะไม่มีค่า — คืน email = null (ไม่สร้างอีเมลปลอม) แล้ว auth.service พาไปกรอกที่ /complete-profile */
 export async function exchangeLineCode(code: string): Promise<OAuthProfile> {
   if (!isLineOAuthConfigured()) {
     throw ApiError.badRequest(
@@ -72,10 +73,11 @@ export async function exchangeLineCode(code: string): Promise<OAuthProfile> {
   return {
     provider: "line",
     sub: claims.sub,
-    email: claims.email ?? `line_${claims.sub}@line.buddybook.local`,
+    email: claims.email?.trim() || null,
     name: claims.name ?? "LINE User",
     picture: claims.picture ?? null,
-    // LINE ไม่มี claim email_verified — ถือว่ายังไม่ยืนยัน (ไม่ใช้ผูกกับบัญชีเดิม)
-    email_verified: false,
+    // LINE ไม่มี claim email_verified แต่ claim email ที่ได้จาก /verify คืออีเมลที่ผู้ใช้ลงทะเบียนและยืนยันกับ
+    // LINE แล้วเท่านั้น (LINE ส่งรหัสยืนยันตอนผูกอีเมล) จึงใช้ผูกเข้ากับบัญชีเดิมที่ใช้อีเมลเดียวกันได้
+    email_verified: Boolean(claims.email),
   };
 }

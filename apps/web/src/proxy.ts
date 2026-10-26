@@ -42,6 +42,7 @@ function needsRefresh(accessToken: string | undefined): boolean {
  *  กลับมาแทน JSON) — หน้ากฎหมาย/ข้อมูลทั่วไปก็ยกเว้นไว้ด้วย ไม่มีเหตุผลผลิตภัณฑ์ที่จะบล็อกได้ */
 const ONBOARDING_EXEMPT_PREFIXES = [
   "/onboarding",
+  "/complete-profile",
   "/login",
   "/register",
   "/forgot-password",
@@ -56,6 +57,22 @@ const ONBOARDING_EXEMPT_PREFIXES = [
 
 function isOnboardingExempt(pathname: string): boolean {
   return ONBOARDING_EXEMPT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/** บัญชีที่ยังไม่มีอีเมล (token มี email_required — LINE ไม่ส่งอีเมลมา) ใช้ได้แค่เส้นทางเหล่านี้จนกว่าจะยืนยันอีเมล
+ *  API ฝั่ง Express บล็อกซ้ำอีกชั้น (requireAuth ตอบ 403 EMAIL_REQUIRED) — ที่นี่แค่พาไปหน้ากรอกอีเมลก่อน */
+const EMAIL_GATE_EXEMPT_PREFIXES = [
+  "/complete-profile",
+  "/privacy",
+  "/api/v1/auth/complete-profile",
+  "/api/v1/auth/logout",
+  "/api/v1/auth/refresh",
+];
+
+function isEmailGateExempt(pathname: string): boolean {
+  if (EMAIL_GATE_EXEMPT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return true;
+  // ไฟล์ static ใน public/ (icon.svg, robots.txt, รูป) — หน้าและ API ไม่มีนามสกุลไฟล์
+  return /\.[a-z0-9]+$/i.test(pathname.slice(pathname.lastIndexOf("/")));
 }
 
 /** Content-Security-Policy แบบ nonce (code audit H2) — Next.js อ่าน nonce จาก header นี้ใน request แล้วใส่ให้
@@ -150,9 +167,24 @@ export async function proxy(request: NextRequest) {
   // เช็ค has_interests จริงจาก DB ซ้ำอีกชั้น ถ้า cookie ยังไม่ sync (เช่น ล็อกอินเครื่องใหม่) ก็แค่
   // เด้งผ่าน /onboarding ไปหน้าแรกทันทีเงียบ ๆ ไม่ใช่ bug
   const pathname = request.nextUrl.pathname;
+  const tokenPayload = decodeJwtPayload(effectiveAccessToken);
+
+  // บังคับกรอกอีเมลก่อน onboarding และก่อนทุกหน้า — หน้าเว็บ redirect, /api/* ตอบ 403 JSON (client fetch อ่าน HTML ไม่ได้)
+  if (effectiveAccessToken && tokenPayload?.email_required && !isEmailGateExempt(pathname)) {
+    const gateResponse = pathname.startsWith("/api/")
+      ? NextResponse.json(
+          { error: "กรุณากรอกและยืนยันอีเมลก่อนใช้งาน", details: { code: "EMAIL_REQUIRED" } },
+          { status: 403 }
+        )
+      : NextResponse.redirect(appUrl("/complete-profile"));
+    // คง Set-Cookie ของ access token ที่เพิ่ง refresh ไว้
+    response?.cookies.getAll().forEach((c) => gateResponse.cookies.set(c));
+    return gateResponse;
+  }
+
   // cookie เก็บ user_id ของคนที่ตอบแล้ว (ไม่ใช่แค่ "1") — ต้องตรงกับเจ้าของ token ปัจจุบัน
   // cookie ของบัญชีอื่นที่เคยล็อกอินบนเครื่องนี้จึงใช้ข้าม onboarding ไม่ได้ (บั๊ก B1)
-  const tokenUserId = decodeJwtPayload(effectiveAccessToken)?.user_id;
+  const tokenUserId = tokenPayload?.user_id;
   if (
     effectiveAccessToken &&
     (!tokenUserId || request.cookies.get(HAS_INTERESTS_COOKIE)?.value !== tokenUserId) &&

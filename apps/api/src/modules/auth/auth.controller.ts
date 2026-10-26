@@ -12,8 +12,10 @@ import {
   loginOrRegisterWithOAuth,
   requestPasswordReset,
   resetPassword,
+  requestCompleteProfileOtp,
+  verifyCompleteProfileOtp,
 } from "@/modules/auth/auth.service";
-import { verifyRefreshToken, signAccessToken } from "@/lib/jwt";
+import { verifyRefreshToken, signAccessToken, tokenPayloadFor } from "@/lib/jwt";
 import { buildGoogleAuthUrl, createOAuthState, verifyOAuthState, exchangeGoogleCode } from "@/lib/googleOAuth";
 import { buildLineAuthUrl, exchangeLineCode } from "@/lib/lineOAuth";
 import { buildFacebookAuthUrl, exchangeFacebookCode } from "@/lib/facebookOAuth";
@@ -113,11 +115,12 @@ export async function refresh(req: Request, res: Response) {
   // เช็คสถานะจริงทุกครั้งที่ต่ออายุ (ทุก ~15 นาทีต่อผู้ใช้ ไม่แพง) และใช้ role ปัจจุบันแทนค่าที่ฝังใน token
   const user = await prisma.user.findUnique({
     where: { user_id: payload.user_id },
-    select: { role: true, is_suspended: true, deleted_at: true, account_type: true },
+    select: { user_id: true, role: true, email: true, is_suspended: true, deleted_at: true, account_type: true },
   });
   if (!user || user.deleted_at || user.account_type === "DEMO") throw ApiError.unauthorized("Invalid or expired refresh token");
   if (user.is_suspended) throw ApiError.forbidden("This account has been suspended");
-  const access_token = signAccessToken({ user_id: payload.user_id, role: user.role });
+  // email_required คิดจาก DB ทุกครั้ง — บัญชีที่อีเมลถูกล้าง (npm run db:line-emails) โดนบังคับกรอกภายใน ~15 นาที
+  const access_token = signAccessToken(tokenPayloadFor(user));
   res.status(200).json({ access_token });
 }
 
@@ -204,5 +207,23 @@ export async function oauthCallback(req: Request, res: Response) {
 
   const profile = await exchangeCode(code);
   const result = await loginOrRegisterWithOAuth(profile);
+  res.status(200).json(result);
+}
+
+const completeProfileEmailSchema = z.object({ email: emailSchema });
+
+/** POST /auth/complete-profile/request-otp — บัญชี LINE ที่ยังไม่มีอีเมล ขอ OTP ไปยังอีเมลที่กรอก */
+export async function completeProfileRequestOtp(req: Request, res: Response) {
+  const { email } = completeProfileEmailSchema.parse(req.body);
+  const result = await requestCompleteProfileOtp(req.user!.user_id, email);
+  res.status(200).json(result);
+}
+
+const completeProfileOtpSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
+
+/** POST /auth/complete-profile/verify-otp — OTP ถูก → บันทึกอีเมล + คืน token ชุดใหม่ (ไม่มี email_required) */
+export async function completeProfileVerifyOtp(req: Request, res: Response) {
+  const { otp } = completeProfileOtpSchema.parse(req.body);
+  const result = await verifyCompleteProfileOtp(req.user!.user_id, otp);
   res.status(200).json(result);
 }

@@ -254,10 +254,15 @@ model User {
   /// เพิ่มภายหลัง (audit fix) — ชื่อที่นักอ่านเห็นบนหน้านิยาย/ตอน (แยกจาก username ซึ่งใช้กับ
   /// คอมเมนต์/รีวิวเท่านั้น) null = ยังไม่ได้ตั้ง ให้ fallback ไปใช้ username แทนตอนแสดงผล
   pen_name                 String?            @db.VarChar(50)
-  email                    String             @unique @db.VarChar(255)
+  /// null = บัญชี LINE ที่ LINE ไม่ส่งอีเมลมา — ถูกบังคับไป /complete-profile (token มี email_required)
+  /// จนกว่าจะกรอกและยืนยันอีเมลด้วย OTP (ดู PendingEmailVerification) ไม่มีอีเมลปลอมแบบ line_<id>@... อีกแล้ว
+  email                    String?            @unique @db.VarChar(255)
   password_hash            String?            @db.VarChar(255)
   oauth_provider           OAuthProvider?
   oauth_id                 String?            @db.VarChar(255)
+  /// LINE user id (sub ของ id_token) — แยกจาก oauth_provider/oauth_id เพื่อผูก LINE เข้ากับบัญชีเดิม
+  /// (อีเมล/รหัสผ่าน หรือ Google) ได้โดยไม่ทับช่องทางล็อกอินเดิม ล็อกอินด้วย LINE หาผู้ใช้จากคอลัมน์นี้
+  line_user_id             String?            @unique @db.VarChar(64)
   role                     UserRole           @default(user)
   /// ดู enum AccountType — ตั้งเป็น DEMO ได้จาก seed / scripts/mark-demo.ts เท่านั้น ไม่รับค่าจาก client
   account_type             AccountType        @default(REAL)
@@ -286,33 +291,34 @@ model User {
   created_at               DateTime           @default(now()) @db.Timestamptz(6)
   updated_at               DateTime?          @db.Timestamptz(6)
 
-  novels                 Novel[]               @relation("NovelAuthor")
-  user_interests         UserInterest[]
-  kyc_verifications      KycVerification[]
-  chapter_versions       ChapterVersion[]      @relation("ChapterVersionEditor")
-  trash_bin_deletions    TrashBin[]            @relation("TrashDeletedBy")
-  comments               Comment[]
-  reviews                Review[]
-  donations_given        Donation[]            @relation("DonationFrom")
-  donations_received     Donation[]            @relation("DonationTo")
-  wallet_transactions    WalletTransaction[]
-  notifications          Notification[]
-  user_library           UserLibrary[]
-  novel_likes            NovelLike[]
-  reading_progress       ReadingProgress[]
-  collections            Collection[]
-  topup_orders           TopupOrder[]
-  following              AuthorFollow[]        @relation("Follower")
-  followers              AuthorFollow[]        @relation("FollowedAuthor")
-  reports_filed          ContentReport[]       @relation("ReportReporter")
-  reports_resolved       ContentReport[]       @relation("ReportResolver")
-  chapter_purchases      ChapterPurchase[]
-  withdrawals            WithdrawalRequest[]   @relation("WithdrawalRequester")
-  withdrawals_handled    WithdrawalRequest[]   @relation("WithdrawalProcessor")
-  support_tickets        SupportTicket[]       @relation("SupportTicketOwner")
-  support_messages       SupportMessage[]      @relation("SupportMessageAuthor")
-  moderation_suspensions NovelModerationCase[] @relation("ModerationSuspendedBy")
-  moderation_resolutions NovelModerationCase[] @relation("ModerationResolvedBy")
+  novels                     Novel[]                   @relation("NovelAuthor")
+  user_interests             UserInterest[]
+  kyc_verifications          KycVerification[]
+  chapter_versions           ChapterVersion[]          @relation("ChapterVersionEditor")
+  trash_bin_deletions        TrashBin[]                @relation("TrashDeletedBy")
+  comments                   Comment[]
+  reviews                    Review[]
+  donations_given            Donation[]                @relation("DonationFrom")
+  donations_received         Donation[]                @relation("DonationTo")
+  wallet_transactions        WalletTransaction[]
+  notifications              Notification[]
+  user_library               UserLibrary[]
+  novel_likes                NovelLike[]
+  reading_progress           ReadingProgress[]
+  collections                Collection[]
+  topup_orders               TopupOrder[]
+  following                  AuthorFollow[]            @relation("Follower")
+  followers                  AuthorFollow[]            @relation("FollowedAuthor")
+  reports_filed              ContentReport[]           @relation("ReportReporter")
+  reports_resolved           ContentReport[]           @relation("ReportResolver")
+  chapter_purchases          ChapterPurchase[]
+  withdrawals                WithdrawalRequest[]       @relation("WithdrawalRequester")
+  withdrawals_handled        WithdrawalRequest[]       @relation("WithdrawalProcessor")
+  pending_email_verification PendingEmailVerification?
+  support_tickets            SupportTicket[]           @relation("SupportTicketOwner")
+  support_messages           SupportMessage[]          @relation("SupportMessageAuthor")
+  moderation_suspensions     NovelModerationCase[]     @relation("ModerationSuspendedBy")
+  moderation_resolutions     NovelModerationCase[]     @relation("ModerationResolvedBy")
 
   @@unique([oauth_provider, oauth_id])
   @@index([account_type])
@@ -336,6 +342,21 @@ model PendingRegistration {
   created_at    DateTime @default(now()) @db.Timestamptz(6)
 
   @@map("pending_registrations")
+}
+
+/// OTP ยืนยันอีเมลของบัญชีที่ยังไม่มีอีเมล (POST /auth/complete-profile/*) — หนึ่งแถวต่อผู้ใช้
+/// อีเมลถูกเขียนลง users ก็ต่อเมื่อกรอก OTP ถูกเท่านั้น
+model PendingEmailVerification {
+  user_id    String   @id @db.Uuid
+  email      String   @db.VarChar(255)
+  otp_hash   String   @db.VarChar(255)
+  attempts   Int      @default(0)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("pending_email_verifications")
 }
 
 /// แท็กความสนใจที่ผู้ใช้เลือกตอน Onboarding

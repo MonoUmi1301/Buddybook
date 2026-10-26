@@ -32,7 +32,7 @@ function accessFromNames(names: string[], inherited: Access): Access {
   for (const n of names) {
     if (n === "requireInternalService") bump("internal");
     else if (n === "requireAdmin") bump("admin");
-    else if (n === "requireAuth") bump("user");
+    else if (n === "requireAuth" || n === "requireAuthAllowMissingEmail") bump("user");
     else if (n === "attachUserIfPresent") bump("optional-auth");
   }
   return access;

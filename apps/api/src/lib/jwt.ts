@@ -6,6 +6,14 @@ import type { UserRole } from "@prisma/client";
 export interface TokenPayload {
   user_id: string;
   role: UserRole;
+  /** บัญชียังไม่มีอีเมล (LINE ไม่ส่งมา) — requireAuth บล็อกทุก endpoint ยกเว้น /auth/complete-profile/*
+   *  และ proxy.ts ฝั่งเว็บพาไป /complete-profile จนกว่าจะยืนยันอีเมล (ได้ token ใหม่ที่ไม่มี claim นี้) */
+  email_required?: true;
+}
+
+/** payload ของ access/refresh token จากแถว users — ใส่ email_required ให้บัญชีที่ยังไม่มีอีเมล */
+export function tokenPayloadFor(user: { user_id: string; role: UserRole; email: string | null }): TokenPayload {
+  return { user_id: user.user_id, role: user.role, ...(user.email ? {} : { email_required: true as const }) };
 }
 
 // env.JWT_EXPIRES_IN / JWT_REFRESH_EXPIRES_IN คือ duration string เช่น "15m"/"30d"

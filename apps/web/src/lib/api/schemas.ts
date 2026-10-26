@@ -41,6 +41,15 @@ export const verifyRegisterOtpSchema = z.object({
   otp: z.string().trim().length(6),
 });
 
+// บัญชี LINE ที่ยังไม่มีอีเมล — กรอกอีเมล (ขอ OTP) แล้วยืนยันรหัส 6 หลักที่หน้า /complete-profile
+export const completeProfileEmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(255),
+});
+
+export const completeProfileOtpSchema = z.object({
+  otp: z.string().trim().regex(/^\d{6}$/),
+});
+
 // เพิ่มภายหลัง (audit fix — 2FA) — ยืนยันขั้นที่สองตอนล็อกอิน (รหัสจากแอป Authenticator)
 export const verifyLogin2faSchema = z.object({
   // ไม่ส่งมา = ล็อกอินผ่าน OAuth (challenge อยู่ใน httpOnly cookie bb_oauth_2fa — ดู lib/api/oauth.ts)

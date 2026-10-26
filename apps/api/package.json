@@ -17,6 +17,7 @@
     "graph:resync": "tsx --env-file=.env scripts/resync-graph.ts",
     "graph:sync-accounts": "tsx --env-file=.env scripts/sync-account-types.ts",
     "db:mark-demo": "tsx scripts/mark-demo.ts",
+    "db:line-emails": "tsx scripts/line-email-backfill.ts",
     "report:sentiment": "tsx scripts/report-sentiment.ts",
     "openapi": "tsx scripts/generate-openapi.ts",
     "prisma:generate": "prisma generate",
