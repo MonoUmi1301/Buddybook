@@ -2,6 +2,7 @@ import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Session } from "neo4j-driver";
+import type { AccountType } from "@prisma/client";
 import { withNeo4jSession } from "@/lib/neo4j";
 
 /**
@@ -9,7 +10,8 @@ import { withNeo4jSession } from "@/lib/neo4j";
  * (Neo4j เป็นแค่ derived store ตาม BuddyBook_System_Architecture.md ส่วนที่ 4.2 — ถ้า sync
  * ล้มเหลว ไม่ควร fail request หลักที่เรียกมา ผู้เรียกควร catch เองแล้ว log ไว้เฉย ๆ)
  * Schema อ้างอิงจาก recommendation_graph_import.cql:
- *   (:User)-[:INTERESTED_IN]->(:Tag)
+ *   (:User {account_type: "DEMO" | "REAL"})-[:INTERESTED_IN]->(:Tag)
+ *   (account_type ใช้แยกข้อมูลตัวอย่างตอนวิเคราะห์ — ระบบแนะนำไม่กรองด้วยค่านี้ ใช้ข้อมูล DEMO ตามปกติ)
  *   (:Novel)-[:HAS_TAG]->(:Tag)
  *   (:User)-[:READ {sentiment_score}]->(:Novel)
  */
@@ -83,9 +85,13 @@ export async function deleteUserGraphNode(user_id: string) {
   );
 }
 
-export async function syncUserNode(user_id: string, username: string) {
+export async function syncUserNode(user_id: string, username: string, account_type: AccountType) {
   await writeGraph((session) =>
-    session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username", { user_id, username })
+    session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username, u.account_type = $account_type", {
+      user_id,
+      username,
+      account_type,
+    })
   );
 }
 
@@ -97,9 +103,13 @@ export async function syncNovelNode(novel_id: string, title: string) {
 
 /** แทนที่ INTERESTED_IN ทั้งหมดของ user คนนี้ด้วยชุด tag ปัจจุบัน — idempotent เรียกซ้ำได้ปลอดภัย
  *  (ตอน onboarding เลือก tag ใหม่ หรือแก้ไขทีหลัง ก็เรียกอันนี้ซ้ำได้เลย) */
-export async function syncInterestedIn(user_id: string, username: string, tagNames: string[]) {
+export async function syncInterestedIn(user_id: string, username: string, account_type: AccountType, tagNames: string[]) {
   await writeGraph(async (session) => {
-    await session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username", { user_id, username });
+    await session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username, u.account_type = $account_type", {
+      user_id,
+      username,
+      account_type,
+    });
     await session.run("MATCH (:User {user_id: $user_id})-[r:INTERESTED_IN]->(:Tag) DELETE r", { user_id });
     for (const name of tagNames) {
       await session.run(
@@ -165,6 +175,115 @@ export async function syncReadEdge(
       }
     )
   );
+}
+
+// ---------------------------------------------------------------------------
+// full resync แบบ batch — เดิม fullResync เรียกฟังก์ชันด้านบนทีละแถว (~5 หมื่น round trip ไป Aura
+// แต่ละครั้งเปิด session ใหม่) ใช้เวลาหลายสิบนาที tsx watch รีสตาร์ทกลางทางแล้วกราฟค้างครึ่ง ๆ
+// ตอนนี้ส่งทีละ BATCH แถวด้วย UNWIND ใน transaction เดียวต่อชุด
+// ---------------------------------------------------------------------------
+const BATCH = 1000;
+
+async function writeBatches<T>(cypher: string, rows: T[]) {
+  if (!rows.length) return;
+  await writeGraph(async (session) => {
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const chunk = rows.slice(i, i + BATCH);
+      await session.executeWrite((tx) => tx.run(cypher, { rows: chunk }));
+    }
+  });
+}
+
+export function syncUserNodesBatch(rows: { user_id: string; username: string; account_type: AccountType }[]) {
+  return writeBatches(
+    "UNWIND $rows AS row MERGE (u:User {user_id: row.user_id}) SET u.username = row.username, u.account_type = row.account_type",
+    rows
+  );
+}
+
+/** แทนที่ INTERESTED_IN ของทุก user ในชุด (tags ว่าง = ลบความสนใจเดิมทิ้ง) */
+export function syncInterestedInBatch(rows: { user_id: string; tags: string[] }[]) {
+  return writeBatches(
+    `UNWIND $rows AS row
+     MATCH (u:User {user_id: row.user_id})
+     OPTIONAL MATCH (u)-[old:INTERESTED_IN]->(:Tag)
+     DELETE old
+     WITH DISTINCT u, row
+     UNWIND row.tags AS name
+     MERGE (t:Tag {name: name})
+     MERGE (u)-[:INTERESTED_IN]->(t)`,
+    rows
+  );
+}
+
+/** upsert node นิยาย + แทนที่ HAS_TAG ทั้งชุด */
+export function syncNovelTagsBatch(rows: { novel_id: string; title: string; tags: string[] }[]) {
+  return writeBatches(
+    `UNWIND $rows AS row
+     MERGE (n:Novel {novel_id: row.novel_id}) SET n.title = row.title
+     WITH n, row
+     OPTIONAL MATCH (n)-[old:HAS_TAG]->(:Tag)
+     DELETE old
+     WITH DISTINCT n, row
+     UNWIND row.tags AS name
+     MERGE (t:Tag {name: name})
+     MERGE (n)-[:HAS_TAG]->(t)`,
+    rows
+  );
+}
+
+/** upsert READ ทั้งชุด — ต่างจาก syncReadEdge: sentiment_score null = ลบค่าเดิม (Postgres คือความจริง) */
+export function syncReadEdgesBatch(
+  rows: { user_id: string; novel_id: string; sentiment_score: number | null; last_chapter_number: number | null; last_read_at: string | null }[]
+) {
+  return writeBatches(
+    `UNWIND $rows AS row
+     MERGE (u:User {user_id: row.user_id})
+     MERGE (n:Novel {novel_id: row.novel_id})
+     MERGE (u)-[r:READ]->(n)
+     SET r.sentiment_score = row.sentiment_score
+     FOREACH (_ IN CASE WHEN row.last_chapter_number IS NOT NULL THEN [1] ELSE [] END |
+       SET r.last_chapter_number = row.last_chapter_number, r.last_read_at = datetime(row.last_read_at)
+     )`,
+    rows
+  );
+}
+
+/**
+ * ลบของที่ไม่มีใน Postgres แล้ว (node ผีจาก user/นิยายที่ถูกลบตอน Neo4j ล่ม, ฐานถูก reset ฯลฯ)
+ * — เดิม full resync มีแต่ MERGE ไม่เคยลบ กราฟจึงสะสม drift ไปเรื่อย ๆ
+ * ผู้เรียกต้องส่ง id/คู่ที่อ่านจาก Postgres "ตอนนี้" (ไม่ใช่ตอนเริ่ม resync) กันลบของที่เพิ่งสร้างระหว่างทาง
+ */
+export async function pruneGraph(keep: { userIds: string[]; novelIds: string[]; readPairs: Set<string> }) {
+  return writeGraph(async (session) => {
+    const count = (res: { records: { get(k: string): unknown }[] }) => Number(res.records[0]?.get("c") ?? 0);
+    const users = count(
+      await session.executeWrite((tx) =>
+        tx.run("MATCH (u:User) WHERE NOT u.user_id IN $ids DETACH DELETE u RETURN count(*) AS c", { ids: keep.userIds })
+      )
+    );
+    const novels = count(
+      await session.executeWrite((tx) =>
+        tx.run("MATCH (n:Novel) WHERE NOT n.novel_id IN $ids DETACH DELETE n RETURN count(*) AS c", { ids: keep.novelIds })
+      )
+    );
+    const edges = await session.executeRead((tx) =>
+      tx.run("MATCH (u:User)-[:READ]->(n:Novel) RETURN u.user_id AS u, n.novel_id AS n")
+    );
+    const stale = edges.records
+      .map((r) => ({ u: String(r.get("u")), n: String(r.get("n")) }))
+      .filter((p) => !keep.readPairs.has(`${p.u}:${p.n}`));
+    for (let i = 0; i < stale.length; i += BATCH) {
+      const chunk = stale.slice(i, i + BATCH);
+      await session.executeWrite((tx) =>
+        tx.run("UNWIND $rows AS row MATCH (:User {user_id: row.u})-[r:READ]->(:Novel {novel_id: row.n}) DELETE r", { rows: chunk })
+      );
+    }
+    const tags = count(
+      await session.executeWrite((tx) => tx.run("MATCH (t:Tag) WHERE NOT (t)--() DELETE t RETURN count(*) AS c"))
+    );
+    return { users, novels, read_edges: stale.length, tags };
+  });
 }
 
 /** gap 2.4 — นิยายถูกย้ายลงถังขยะ/ลบถาวร: เอาออกจากกราฟ (ไม่ให้ถูกแนะนำอีก) */

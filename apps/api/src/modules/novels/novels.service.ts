@@ -4,7 +4,9 @@ import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { deleteNovelGraphNode, syncNovelTags, syncReadEdge } from "@/lib/graphSync";
 import { assertNovelVisible } from "@/lib/novelVisibility";
-import { isViewerAgeVerified } from "@/lib/contentRating";
+import { assertContentRatingAllowed, contentRatingWhere } from "@/lib/contentRating";
+import { toSafeChapterHtml, toSafeRichText } from "@/lib/richText";
+import { getOpenCasesForNovels, type ModerationCaseSummary } from "@/modules/admin/moderation.service";
 import type { ContentRating, LegalStatus, NovelFormat, NovelStatus, TagCategory, Visibility } from "@prisma/client";
 
 interface SearchNovelsInput {
@@ -29,13 +31,6 @@ interface SearchNovelsInput {
    *  จำเป็นสำหรับหน้า Writer Dashboard ที่ต้องเห็นผลงานตัวเองครบ ไม่ใช่แค่ที่เผยแพร่แล้ว) */
   mine?: boolean;
   requester_id?: string;
-}
-
-async function buildContentRatingGate(scopedToOwn: boolean, requester_id?: string) {
-  // เจ้าของดูผลงานตัวเองในหน้า Dashboard ได้ครบทุก rating เสมอ ไม่ต้องเช็ค age_verified
-  if (scopedToOwn) return {};
-  const verified = await isViewerAgeVerified(requester_id);
-  return verified ? {} : { content_rating: { not: "mature" as ContentRating } };
 }
 
 function buildTextSearchClause(q: string, field: SearchNovelsInput["field"]) {
@@ -76,7 +71,8 @@ export async function searchNovels({
   requester_id,
 }: SearchNovelsInput) {
   const scopedToOwn = Boolean(mine && requester_id);
-  const ratingGate = await buildContentRatingGate(scopedToOwn, requester_id);
+  // เจ้าของดูผลงานตัวเองในหน้า Dashboard ได้ครบทุกเรตเสมอ คนอื่นเห็นเฉพาะเรตที่อายุที่ยืนยันแล้วถึงเกณฑ์
+  const ratingGate = await contentRatingWhere(requester_id, scopedToOwn);
 
   const where = {
     // gap 2.4 — นิยายในถังขยะไม่โผล่ใน Dashboard ของเจ้าของ (ดูได้ที่ GET /novels/trash แทน)
@@ -117,7 +113,9 @@ export async function searchNovels({
         primary_tag: { select: { tag_id: true, name: true } },
         secondary_tag: { select: { tag_id: true, name: true } },
         novel_tags: { select: { tag: { select: { tag_id: true, name: true } } } },
-        author: { select: { user_id: true, username: true, pen_name: true } },
+        // ป้าย "ตัวอย่าง" บนการ์ด (DemoBadge ฝั่งเว็บ)
+        is_demo: true,
+        author: { select: { user_id: true, username: true, pen_name: true, account_type: true } },
       },
       orderBy: sort === "views" ? { view_count: "desc" } : { created_at: "desc" },
       skip: (page - 1) * pageSize,
@@ -131,7 +129,7 @@ export async function searchNovels({
   // จำนวนตอน/ถูกใจนับเฉพาะเรื่องในหน้านี้ (ดู lib/novelCounts.ts — _count ใน findMany สแกนทั้งตาราง)
   // ยิงพร้อมกันทั้งสามตัว ไม่ต่อคิวทีละ query
   const ids = novels.map((n) => n.novel_id);
-  const [ratings, likeCountByNovel, chapterCountByNovel] = await Promise.all([
+  const [ratings, likeCountByNovel, chapterCountByNovel, moderationByNovel] = await Promise.all([
     ids.length
       ? prisma.review.groupBy({
           by: ["novel_id"],
@@ -143,6 +141,8 @@ export async function searchNovels({
     countLikesByNovel(ids),
     // เพิ่มภายหลัง (หน้าแรก coverflow "มาแรง") — จำนวนตอนที่เผยแพร่แล้ว
     countChaptersByNovel(ids, { publishedOnly: true }),
+    // post-moderation — หน้า "ผลงานของฉัน" แสดงเหตุผลที่ถูกระงับ/สถานะอุทธรณ์ (เฉพาะเจ้าของเห็น)
+    scopedToOwn ? getOpenCasesForNovels(ids) : Promise.resolve(new Map<string, ModerationCaseSummary>()),
   ]);
   const ratingByNovel = new Map(ratings.map((r) => [r.novel_id, r]));
 
@@ -158,6 +158,7 @@ export async function searchNovels({
         rating: r?._avg.rating ?? 0,
         review_count: r?._count.rating ?? 0,
         like_count: likeCountByNovel.get(n.novel_id) ?? 0,
+        ...(scopedToOwn ? { moderation_case: moderationByNovel.get(n.novel_id) ?? null } : {}),
       };
     }),
     total,
@@ -262,7 +263,7 @@ export async function createNovel(author_id: string, input: CreateNovelInput) {
       author_id,
       title: input.title,
       synopsis: input.synopsis,
-      introduction: input.introduction,
+      introduction: toSafeRichText(input.introduction),
       cover_image_url: input.cover_image_url,
       legal_status: LEGAL_STATUS_MAP[input.legal_status],
       // audit fix — เดิมพึ่ง default ของ schema.prisma (visibility @default(published)) ทำให้นิยาย
@@ -321,14 +322,25 @@ interface UpdateNovelInput {
 
 /** Reference implementation — PATCH /novels/:novel_id (เจ้าของเท่านั้นที่แก้ได้) */
 export async function updateNovel(novel_id: string, user_id: string, input: UpdateNovelInput) {
-  const existing = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true, deleted_at: true } });
+  const existing = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, deleted_at: true, visibility: true },
+  });
   if (!existing) throw ApiError.notFound("Novel not found");
   if (existing.author_id !== user_id) throw ApiError.forbidden("Forbidden");
   // gap 2.4 — แก้ไขนิยายในถังขยะไม่ได้ (เช่นตั้ง visibility=published กลับเอง) ต้องกู้คืนก่อน
   if (existing.deleted_at) throw ApiError.conflict("นิยายเรื่องนี้อยู่ในถังขยะ กู้คืนก่อนจึงจะแก้ไขได้");
+  // post-moderation — นิยายที่แอดมินระงับ นักเขียนยังแก้เนื้อหาได้ (เพื่อแก้ตามเหตุผล) แต่เผยแพร่เองไม่ได้
+  // ต้องยื่นอุทธรณ์ (POST /novels/:id/appeal) ให้แอดมินคืนสถานะ
+  if (existing.visibility === "suspended" && input.visibility !== undefined && input.visibility !== "suspended") {
+    throw ApiError.conflict("นิยายเรื่องนี้ถูกระงับการเผยแพร่ ยื่นอุทธรณ์เพื่อให้ทีมงานตรวจซ้ำก่อน");
+  }
+  if (input.visibility === "suspended") throw ApiError.forbidden("Forbidden");
   await assertValidCategoryHierarchy(input.primary_tag_id, input.secondary_tag_id);
 
   const { tag_ids, tag_names, pairing_tag_ids, pairing_tag_names, fandom_tag_ids, fandom_tag_names, ...rest } = input;
+  // แนะนำเรื่องเป็น HTML จาก Quill — กรองก่อนเก็บเสมอ (null = ล้างค่า, undefined = ไม่แตะ)
+  if (rest.introduction !== undefined) rest.introduction = toSafeRichText(rest.introduction);
   // แตะแท็กกลุ่มไหนกลุ่มหนึ่ง = ถือว่าส่ง "ชุดแท็กที่ต้องการทั้งหมด" มาแทนที่ทั้งก้อน (novel_tags เป็น
   // ตารางเดียวแบนไม่แยกกลุ่มจริง — EditNovelForm ส่งครบทุกกลุ่มทุกครั้งที่บันทึกอยู่แล้ว)
   const touchingTags =
@@ -359,6 +371,14 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    if (rest.visibility !== undefined) {
+      // แอดมินอาจระงับระหว่างที่เช็คด้านบนกับตอนเขียนจริง — ล็อกแถวเดียวกับ suspendNovel แล้วเช็คซ้ำ
+      const [row] = await tx.$queryRaw<{ visibility: Visibility }[]>`
+        SELECT visibility FROM novels WHERE novel_id = ${novel_id}::uuid FOR UPDATE`;
+      if (row?.visibility === "suspended") {
+        throw ApiError.conflict("นิยายเรื่องนี้ถูกระงับการเผยแพร่ ยื่นอุทธรณ์เพื่อให้ทีมงานตรวจซ้ำก่อน");
+      }
+    }
     if (allTagIds !== undefined) {
       await tx.novelTag.deleteMany({ where: { novel_id } });
       if (allTagIds.length) {
@@ -683,14 +703,17 @@ export async function restoreMapVersion(version_id: string, user_id: string) {
 
 /** Reference implementation — GET /novels/:novel_id/reviews (Public, gated by novel visibility) */
 export async function listNovelReviews(novel_id: string, viewer_id?: string) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { visibility: true, author_id: true } });
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { visibility: true, author_id: true, content_rating: true },
+  });
   if (!novel) throw ApiError.notFound("Novel not found");
-  assertNovelVisible(novel, viewer_id);
+  await assertContentRatingAllowed(novel, viewer_id, assertNovelVisible(novel, viewer_id));
 
   const reviews = await prisma.review.findMany({
     where: { novel_id },
     orderBy: { created_at: "desc" },
-    include: { user: { select: { user_id: true, username: true, avatar_url: true } } },
+    include: { user: { select: { user_id: true, username: true, avatar_url: true, account_type: true } } },
   });
 
   return {
@@ -701,9 +724,10 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
       review_id: r.review_id,
       user:
         r.is_anonymous && r.user.user_id !== viewer_id
-          ? { user_id: r.user.user_id, username: null, avatar_url: null }
+          ? { user_id: r.user.user_id, username: null, avatar_url: null, account_type: null }
           : r.user,
       is_anonymous: r.is_anonymous,
+      is_demo: r.is_demo,
       rating: r.rating,
       comment_text: r.comment_text,
       sticker_id: r.sticker_id,
@@ -723,7 +747,7 @@ interface CreateReviewInput {
 /** Reference implementation — POST /novels/:novel_id/reviews
  *  sentiment_label เป็น null เสมอตอน insert — Python NLP Worker จะ UPDATE กลับมาแบบ async ทีหลัง */
 export async function createReview(novel_id: string, user_id: string, input: CreateReviewInput) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true } });
+  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true, author_id: true, title: true } });
   if (!novel) throw ApiError.notFound("Novel not found");
 
   try {
@@ -742,6 +766,7 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
     // สร้าง READ edge ทันที (sentiment_score เป็น null ก่อน — Phase NLP Worker จะเรียก
     // syncReadEdge ซ้ำพร้อมคะแนนจริงหลังวิเคราะห์เสร็จ อัปเดต edge เดิมแทนที่จะสร้างใหม่)
     syncReadEdge(user_id, novel_id, null).catch((err) => console.error("Neo4j syncReadEdge failed:", err));
+    await notifyNewReview(novel, user_id, input);
 
     return review;
   } catch (err) {
@@ -752,12 +777,42 @@ export async function createReview(novel_id: string, user_id: string, input: Cre
   }
 }
 
+/** แจ้งเตือนนักเขียนว่ามีรีวิวใหม่ (รีวิวนิรนามไม่บอกชื่อ) — ไม่แจ้งเตือนตัวเอง
+ *  แจ้งเตือนพังไม่ควรทำให้รีวิวที่บันทึกแล้วล้ม (แบบเดียวกับ notifyCommentRecipients) */
+async function notifyNewReview(
+  novel: { novel_id: string; author_id: string; title: string },
+  reviewer_id: string,
+  input: CreateReviewInput,
+) {
+  if (novel.author_id === reviewer_id) return;
+  try {
+    let name = "ผู้อ่านนิรนาม";
+    if (!input.is_anonymous) {
+      const reviewer = await prisma.user.findUnique({ where: { user_id: reviewer_id }, select: { username: true, pen_name: true } });
+      name = reviewer?.pen_name || reviewer?.username || "มีผู้อ่าน";
+    }
+    await prisma.notification.create({
+      data: {
+        user_id: novel.author_id,
+        type: "review",
+        content: `${name} รีวิว "${novel.title}" ให้ ${input.rating} ดาว`,
+        link_url: `/novels/${novel.novel_id}#reviews`,
+      },
+    });
+  } catch (err) {
+    console.error("[reviews] failed to create notification", err);
+  }
+}
+
 /** Reference implementation — GET /novels/:novel_id/donations (Public, gated by novel visibility —
  *  ส่วนขยายนอก API_Endpoints.md เดิม — จำเป็นเพื่อแสดง "ผู้สนับสนุนสูงสุด" หลังมี POST /donations จริงแล้ว) */
 export async function listNovelDonors(novel_id: string, viewer_id?: string) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { visibility: true, author_id: true } });
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { visibility: true, author_id: true, content_rating: true },
+  });
   if (!novel) throw ApiError.notFound("Novel not found");
-  assertNovelVisible(novel, viewer_id);
+  await assertContentRatingAllowed(novel, viewer_id, assertNovelVisible(novel, viewer_id));
 
   const grouped = await prisma.donation.groupBy({
     by: ["from_user_id"],
@@ -936,7 +991,7 @@ export async function getPrintPreview(novel_id: string, user_id: string) {
       cover_image_url: novel.cover_image_url,
       author: novel.author,
     },
-    chapters,
+    chapters: chapters.map((c) => ({ ...c, content: toSafeChapterHtml(c.content) })),
   };
 }
 
@@ -962,9 +1017,10 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
       allow_screenshots: true,
       allow_comments: true,
       hide_like_count: true,
+      is_demo: true,
       primary_tag: { select: { tag_id: true, name: true } },
       secondary_tag: { select: { tag_id: true, name: true } },
-      author: { select: { user_id: true, username: true, pen_name: true, avatar_url: true } },
+      author: { select: { user_id: true, username: true, pen_name: true, avatar_url: true, account_type: true } },
       novel_tags: { select: { tag: { select: { tag_id: true, name: true, category: true } } } },
       // เฉพาะ field ที่ปลอดภัยให้สาธารณะเห็น (ไม่ใช่ทั้ง world-building canvas ซึ่งเป็นเครื่องมือ
       // ของเจ้าของนิยายเท่านั้น ดู GET /novels/:id/world-building ที่ requireAuth+เช็คความเป็นเจ้าของ) —
@@ -986,19 +1042,21 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
   if (!novel || novel.deleted_at) throw ApiError.notFound("Novel not found");
 
   const isOwner = assertNovelVisible({ visibility: novel.visibility, author_id: novel.author.user_id }, viewer_id);
-  if (novel.content_rating === "mature" && !isOwner && !(await isViewerAgeVerified(viewer_id))) {
-    throw ApiError.forbidden("ต้องยืนยันอายุ 18 ปีขึ้นไปก่อนถึงจะดูนิยายเรื่องนี้ได้", {
-      code: "AGE_VERIFICATION_REQUIRED",
-    });
-  }
+  await assertContentRatingAllowed(novel, viewer_id, isOwner);
 
   const is_liked = viewer_id
     ? Boolean(await prisma.novelLike.findUnique({ where: { user_id_novel_id: { user_id: viewer_id, novel_id } } }))
     : false;
 
+  const moderation_case =
+    isOwner && novel.visibility === "suspended" ? (await getOpenCasesForNovels([novel_id])).get(novel_id) ?? null : null;
+
   const { novel_tags, view_count, _count, deleted_at: _deleted, character_map_public, ...rest } = novel;
   return {
     ...rest,
+    // ข้อมูลเก่าเป็นข้อความธรรมดา → แปลงเป็นย่อหน้า HTML (และกรองซ้ำ) ให้หน้าเว็บ/editor ได้ HTML รูปแบบเดียว
+    introduction: toSafeRichText(rest.introduction),
+    ...(isOwner ? { moderation_case } : {}),
     character_map: character_map_public ?? null,
     view_count: Number(view_count),
     tags: novel_tags.map((nt) => nt.tag),

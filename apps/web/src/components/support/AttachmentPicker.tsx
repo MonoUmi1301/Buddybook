@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { ImagePlus, X } from "lucide-react";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
+import { handleAsync } from "@/lib/handleAsync";
 
 /** แนบรูปหน้าจอ/สลิป 1 รูป (อัปโหลดผ่าน Cloudinary signed upload เหมือนรูปอื่นในระบบ) */
 export function AttachmentPicker({ value, onChange }: { value: string | null; onChange: (url: string | null) => void }) {
@@ -32,13 +33,13 @@ export function AttachmentPicker({ value, onChange }: { value: string | null; on
           accept="image/*"
           className="sr-only"
           disabled={uploading}
-          onChange={async (e) => {
+          onChange={handleAsync(async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
             const url = await upload(file);
             if (url) onChange(url);
             e.target.value = "";
-          }}
+          })}
         />
       </label>
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}

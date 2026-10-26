@@ -94,6 +94,35 @@
         }
       }
     },
+    "/api/v1/admin/dashboard": {
+      "get": {
+        "tags": [
+          "admin/dashboard"
+        ],
+        "summary": "GET /api/v1/admin/dashboard",
+        "description": "แอดมินเท่านั้น",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "admin",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          },
+          "403": {
+            "description": "ไม่ใช่แอดมิน"
+          }
+        }
+      }
+    },
     "/api/v1/admin/gift-reports": {
       "get": {
         "tags": [
@@ -297,12 +326,12 @@
         }
       }
     },
-    "/api/v1/admin/novels/{novel_id}/approve": {
+    "/api/v1/admin/novels/{novel_id}/moderation": {
       "patch": {
         "tags": [
           "admin/novels"
         ],
-        "summary": "PATCH /api/v1/admin/novels/:novel_id/approve",
+        "summary": "PATCH /api/v1/admin/novels/:novel_id/moderation",
         "description": "แอดมินเท่านั้น",
         "parameters": [
           {
@@ -337,12 +366,12 @@
         }
       }
     },
-    "/api/v1/admin/novels/{novel_id}/reject": {
+    "/api/v1/admin/novels/{novel_id}/reviewed": {
       "patch": {
         "tags": [
           "admin/novels"
         ],
-        "summary": "PATCH /api/v1/admin/novels/:novel_id/reject",
+        "summary": "PATCH /api/v1/admin/novels/:novel_id/reviewed",
         "description": "แอดมินเท่านั้น",
         "parameters": [
           {
@@ -377,12 +406,166 @@
         }
       }
     },
-    "/api/v1/admin/novels/pending": {
+    "/api/v1/admin/novels/{novel_id}/suspend": {
+      "patch": {
+        "tags": [
+          "admin/novels"
+        ],
+        "summary": "PATCH /api/v1/admin/novels/:novel_id/suspend",
+        "description": "แอดมินเท่านั้น",
+        "parameters": [
+          {
+            "name": "novel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "admin",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          },
+          "403": {
+            "description": "ไม่ใช่แอดมิน"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/novels/moderation": {
       "get": {
         "tags": [
           "admin/novels"
         ],
-        "summary": "GET /api/v1/admin/novels/pending",
+        "summary": "GET /api/v1/admin/novels/moderation",
+        "description": "แอดมินเท่านั้น",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "admin",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          },
+          "403": {
+            "description": "ไม่ใช่แอดมิน"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/recommendations/resync": {
+      "get": {
+        "tags": [
+          "admin/recommendations"
+        ],
+        "summary": "GET /api/v1/admin/recommendations/resync",
+        "description": "แอดมินเท่านั้น",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "admin",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          },
+          "403": {
+            "description": "ไม่ใช่แอดมิน"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin/recommendations"
+        ],
+        "summary": "POST /api/v1/admin/recommendations/resync",
+        "description": "แอดมินเท่านั้น",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "admin",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          },
+          "403": {
+            "description": "ไม่ใช่แอดมิน"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/reports/activity": {
+      "get": {
+        "tags": [
+          "admin/reports"
+        ],
+        "summary": "GET /api/v1/admin/reports/activity",
+        "description": "แอดมินเท่านั้น",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "admin",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          },
+          "403": {
+            "description": "ไม่ใช่แอดมิน"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/reports/sentiment": {
+      "get": {
+        "tags": [
+          "admin/reports"
+        ],
+        "summary": "GET /api/v1/admin/reports/sentiment",
         "description": "แอดมินเท่านั้น",
         "security": [
           {
@@ -2037,6 +2220,84 @@
         }
       }
     },
+    "/api/v1/kyc": {
+      "delete": {
+        "tags": [
+          "kyc"
+        ],
+        "summary": "DELETE /api/v1/kyc",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/kyc/session": {
+      "post": {
+        "tags": [
+          "kyc"
+        ],
+        "summary": "POST /api/v1/kyc/session",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/kyc/status": {
+      "get": {
+        "tags": [
+          "kyc"
+        ],
+        "summary": "GET /api/v1/kyc/status",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
     "/api/v1/library": {
       "get": {
         "tags": [
@@ -2191,6 +2452,41 @@
           "location-edges"
         ],
         "summary": "DELETE /api/v1/location-edges/:edge_id",
+        "description": "ต้องล็อกอิน",
+        "parameters": [
+          {
+            "name": "edge_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "location-edges"
+        ],
+        "summary": "PATCH /api/v1/location-edges/:edge_id",
         "description": "ต้องล็อกอิน",
         "parameters": [
           {
@@ -2819,6 +3115,43 @@
         }
       }
     },
+    "/api/v1/novels/{novel_id}/appeal": {
+      "post": {
+        "tags": [
+          "novels"
+        ],
+        "summary": "POST /api/v1/novels/:novel_id/appeal",
+        "description": "ต้องล็อกอิน",
+        "parameters": [
+          {
+            "name": "novel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
     "/api/v1/novels/{novel_id}/chapters": {
       "get": {
         "tags": [
@@ -2898,6 +3231,78 @@
           "novels"
         ],
         "summary": "POST /api/v1/novels/:novel_id/character-edges",
+        "description": "ต้องล็อกอิน",
+        "parameters": [
+          {
+            "name": "novel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/novels/{novel_id}/character-map": {
+      "delete": {
+        "tags": [
+          "novels"
+        ],
+        "summary": "DELETE /api/v1/novels/:novel_id/character-map",
+        "description": "ต้องล็อกอิน",
+        "parameters": [
+          {
+            "name": "novel_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "novels"
+        ],
+        "summary": "PUT /api/v1/novels/:novel_id/character-map",
         "description": "ต้องล็อกอิน",
         "parameters": [
           {
@@ -3738,6 +4143,32 @@
         }
       }
     },
+    "/api/v1/presence/heartbeat": {
+      "post": {
+        "tags": [
+          "presence"
+        ],
+        "summary": "POST /api/v1/presence/heartbeat",
+        "description": "ต้องล็อกอิน",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "user",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
     "/api/v1/recommendations": {
       "get": {
         "tags": [
@@ -4129,7 +4560,7 @@
           "users"
         ],
         "summary": "GET /api/v1/users/:user_id",
-        "description": "สาธารณะ",
+        "description": "สาธารณะ (ล็อกอินแล้วได้ข้อมูลเพิ่ม)",
         "parameters": [
           {
             "name": "user_id",
@@ -4141,14 +4572,22 @@
             }
           }
         ],
-        "security": [],
-        "x-access": "public",
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "x-access": "optional-auth",
         "responses": {
           "200": {
             "description": "สำเร็จ"
           },
           "400": {
             "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
+          },
+          "401": {
+            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
           }
         }
       }
@@ -4365,12 +4804,12 @@
         }
       }
     },
-    "/api/v1/users/me/age-verification": {
-      "patch": {
+    "/api/v1/users/me/age-verification/google": {
+      "post": {
         "tags": [
           "users"
         ],
-        "summary": "PATCH /api/v1/users/me/age-verification",
+        "summary": "POST /api/v1/users/me/age-verification/google",
         "description": "ต้องล็อกอิน",
         "security": [
           {
@@ -4506,32 +4945,6 @@
         }
       }
     },
-    "/api/v1/wallet/topup/verify-slip": {
-      "post": {
-        "tags": [
-          "wallet"
-        ],
-        "summary": "POST /api/v1/wallet/topup/verify-slip",
-        "description": "ต้องล็อกอิน",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "x-access": "user",
-        "responses": {
-          "200": {
-            "description": "สำเร็จ"
-          },
-          "400": {
-            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
-          },
-          "401": {
-            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
-          }
-        }
-      }
-    },
     "/api/v1/wallet/transactions": {
       "get": {
         "tags": [
@@ -4604,6 +5017,25 @@
           },
           "401": {
             "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
+          }
+        }
+      }
+    },
+    "/api/v1/webhooks/kyc/didit": {
+      "post": {
+        "tags": [
+          "webhooks"
+        ],
+        "summary": "POST /api/v1/webhooks/kyc/didit",
+        "description": "สาธารณะ",
+        "security": [],
+        "x-access": "public",
+        "responses": {
+          "200": {
+            "description": "สำเร็จ"
+          },
+          "400": {
+            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
           }
         }
       }

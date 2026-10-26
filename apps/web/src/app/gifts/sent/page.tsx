@@ -35,7 +35,7 @@ export default async function SentGiftsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/gifts/sent");
 
-  const result = await callApi({ method: "GET", path: "/me/gifts/sent", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/me/gifts/sent", token: await getAccessToken() });
   const items = !("error" in result) && result.status === 200 ? (result.json as { items: SentItem[] }).items : null;
   const myName = getPenName(user);
 

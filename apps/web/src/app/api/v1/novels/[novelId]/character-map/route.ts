@@ -3,8 +3,9 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PUT /api/v1/novels/:novelId/character-map — เผยแพร่แผนผังตัวละคร (สำเนา ณ ตอนนี้) บนหน้านิยาย
-export async function PUT(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function PUT(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const id = requireUuidParam(params.novelId, "novel_id");
   if ("error" in id) return id.error;
@@ -12,8 +13,9 @@ export async function PUT(_request: Request, { params }: { params: { novelId: st
 }
 
 // DELETE /api/v1/novels/:novelId/character-map — ซ่อนแผนผังตัวละครจากหน้านิยาย
-export async function DELETE(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const id = requireUuidParam(params.novelId, "novel_id");
   if ("error" in id) return id.error;

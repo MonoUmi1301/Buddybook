@@ -45,7 +45,8 @@ export type GenLabel = MapLabel & { gen?: GenKind };
 export type GenElement = GenPiece | GenLabel | GenStamp;
 
 export function randomSeed(): number {
-  return Math.floor(Math.random() * 900000) + 100000;
+  // seed ของแผนที่สุ่ม (ผู้ใช้เห็นและพิมพ์ซ้ำได้) ไม่เกี่ยวกับความปลอดภัย
+  return Math.floor(Math.random() * 900000) + 100000; // NOSONAR
 }
 
 // ---------- ชื่อสุ่มแนวแฟนตาซี ----------

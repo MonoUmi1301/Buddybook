@@ -4,6 +4,7 @@ import { Eye, Heart } from "lucide-react";
 import { RatingStars } from "@/components/ui/RatingStars";
 import { StatPill } from "@/components/ui/StatPill";
 import { Tag } from "@/components/ui/Tag";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 import { cn } from "@/lib/cn";
 import type { NovelSummary } from "@/lib/types";
 
@@ -33,6 +34,7 @@ export function NovelCard({ novel, theme = "dark" }: NovelCardProps) {
           sizes="160px"
           className="object-cover"
         />
+        {novel.isDemo && <DemoBadge className="absolute left-1.5 top-1.5 shadow-sm" />}
       </div>
 
       <h3

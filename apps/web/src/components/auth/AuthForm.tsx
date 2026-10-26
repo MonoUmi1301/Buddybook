@@ -10,6 +10,8 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { FacebookIcon, LineIcon, GoogleIcon } from "@/components/ui/SocialIcon";
 import { PasswordRequirementsHint } from "@/components/auth/PasswordRequirementsHint";
 import { formatApiError } from "@/lib/formatApiError";
+import { EMAIL_DOMAIN_ERROR, isAllowedEmailDomain } from "@/lib/emailDomains";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface AuthFormProps {
   mode: "login" | "register";
@@ -39,6 +41,10 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
+  // กดปุ่ม LINE แล้วค่อยแสดงข้อความขอความยินยอม — ต้องติ๊กยอมรับก่อนถึงจะไปต่อที่ LINE ได้
+  // (route เริ่ม OAuth เช็ค ?consent=1 ซ้ำอีกชั้น)
+  const [showLineConsent, setShowLineConsent] = useState(false);
+  const [lineConsent, setLineConsent] = useState(false);
   // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — ต้อง track เป็น state (ไม่ใช่แค่ FormData ตอน
   // submit เหมือนเดิม) เพื่อโชว์ PasswordRequirementsHint แบบสด ๆ ตอนพิมพ์ (เฉพาะโหมด register)
   const [password, setPassword] = useState("");
@@ -79,11 +85,17 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
       return;
     }
 
-    setLoading(true);
-
     const formData = new FormData(e.currentTarget);
     const path = isLogin ? "/api/v1/auth/login" : "/api/v1/auth/register";
     const email = formData.get("email") as string;
+    // เช็คเฉพาะตอนสมัคร — บัญชีเดิมที่ใช้โดเมนอื่นต้องยังล็อกอินได้
+    if (!isLogin && !isAllowedEmailDomain(email)) {
+      setError(EMAIL_DOMAIN_ERROR);
+      return;
+    }
+
+    setLoading(true);
+
     const registerBody = { username: formData.get("username") as string, email, password };
     const body = isLogin ? { email, password } : registerBody;
 
@@ -207,7 +219,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
       </div>
 
       {isLogin && step === "2fa" ? (
-        <form className="space-y-3" onSubmit={handleVerifyTwoFactor}>
+        <form className="space-y-3" onSubmit={handleAsync(handleVerifyTwoFactor)}>
           <p className="text-center text-sm text-neutral-600">
             กรอกรหัส 6 หลักจากแอป Authenticator ของคุณ
           </p>
@@ -252,7 +264,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
           </div>
         </form>
       ) : !isLogin && step === "otp" ? (
-        <form className="space-y-3" onSubmit={handleVerifyOtp}>
+        <form className="space-y-3" onSubmit={handleAsync(handleVerifyOtp)}>
           <p className="text-center text-sm text-neutral-600">
             เราส่งรหัสยืนยัน 6 หลักไปที่{" "}
             <span className="font-medium text-neutral-900">{pendingRegisterBody?.email}</span> แล้ว
@@ -289,7 +301,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
             </button>
             <button
               type="button"
-              onClick={handleResendOtp}
+              onClick={handleAsync(handleResendOtp)}
               disabled={cooldown > 0 || resending}
               className="font-medium text-primary-500 hover:text-primary-600 disabled:cursor-not-allowed disabled:text-neutral-400"
             >
@@ -307,6 +319,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               size="lg"
               className="relative"
               onClick={() => {
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
                 window.location.href = "/api/v1/auth/oauth/facebook";
               }}
             >
@@ -319,13 +332,46 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               fullWidth
               size="lg"
               className="relative"
-              onClick={() => {
-                window.location.href = "/api/v1/auth/oauth/line";
-              }}
+              aria-expanded={showLineConsent}
+              onClick={() => setShowLineConsent((open) => !open)}
             >
               <LineIcon className="absolute left-5 h-5 w-5" />
               {isLogin ? "เข้าสู่ระบบด้วย Line" : "สมัครสมาชิกด้วย Line"}
             </Button>
+            {showLineConsent && (
+              <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600">
+                <p>
+                  เมื่อเข้าสู่ระบบด้วย LINE BuddyBook จะเก็บชื่อที่แสดง รูปโปรไฟล์ และอีเมลของคุณ เพื่อใช้สร้างบัญชี
+                  ยืนยันตัวตน และติดต่อเรื่องบัญชี/การเติมเหรียญ เราจะไม่เปิดเผยอีเมลต่อบุคคลอื่น{" "}
+                  <Link href="/privacy" target="_blank" className="font-medium text-primary-500 hover:underline">
+                    อ่านนโยบายความเป็นส่วนตัว
+                  </Link>
+                </p>
+                <label className="flex cursor-pointer items-center gap-2 font-medium text-neutral-800">
+                  <input
+                    type="checkbox"
+                    checked={lineConsent}
+                    onChange={(e) => setLineConsent(e.target.checked)}
+                    className="h-4 w-4 accent-primary-500"
+                  />
+                  ฉันยอมรับนโยบายความเป็นส่วนตัว
+                </label>
+                <Button
+                  type="button"
+                  variant="line"
+                  fullWidth
+                  disabled={!lineConsent}
+                  title={lineConsent ? undefined : "กรุณาติ๊กยอมรับนโยบายความเป็นส่วนตัวก่อน"}
+                  onClick={() => {
+                    if (!lineConsent) return;
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
+                    window.location.href = "/api/v1/auth/oauth/line?consent=1";
+                  }}
+                >
+                  ยอมรับและไปต่อที่ LINE
+                </Button>
+              </div>
+            )}
             <Button
               type="button"
               variant="google"
@@ -333,6 +379,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               size="lg"
               className="relative"
               onClick={() => {
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
                 window.location.href = "/api/v1/auth/oauth/google";
               }}
             >
@@ -349,7 +396,7 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
             <div className="h-px flex-1 bg-neutral-200" />
           </div>
 
-          <form className="space-y-3" onSubmit={handleSubmit}>
+          <form className="space-y-3" onSubmit={handleAsync(handleSubmit)}>
             {!isLogin && (
               <Input name="username" placeholder="Username" autoComplete="username" minLength={3} required />
             )}

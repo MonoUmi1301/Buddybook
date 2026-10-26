@@ -9,11 +9,12 @@ import { getCurrentUser } from "@/lib/api/session";
 import type { SupportTicketDetail } from "@/lib/support";
 
 // gap 3.2 — บทสนทนาเรื่องแจ้งปัญหา (เจ้าของเรื่อง + ทีมงาน)
-export default async function SupportTicketPage({ params }: { params: { ticketId: string } }) {
+export default async function SupportTicketPage(props: { params: Promise<{ ticketId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect(`/login?next=/support/${params.ticketId}`);
 
-  const result = await callApi({ method: "GET", path: `/support/tickets/${params.ticketId}`, token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: `/support/tickets/${params.ticketId}`, token: await getAccessToken() });
   if ("error" in result || result.status !== 200) notFound();
   const ticket = result.json as SupportTicketDetail;
   const isStaff = user.role === "admin" && ticket.user.user_id !== user.user_id;

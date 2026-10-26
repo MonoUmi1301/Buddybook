@@ -27,14 +27,7 @@ const envSchema = z.object({
   CLOUDINARY_CLOUD_NAME: z.string().default(""),
   CLOUDINARY_API_KEY: z.string().default(""),
   CLOUDINARY_API_SECRET: z.string().default(""),
-  // เช่นเดียวกับ Cloudinary — ไม่บังคับตอน boot, gate ด้วย isSlipOkConfigured() แทน
-  // (ดู lib/slipok.ts) เพราะผู้ใช้ยังไม่ได้สมัคร SlipOK ตอนที่เขียนโค้ดนี้
-  SLIPOK_API_KEY: z.string().default(""),
-  SLIPOK_BRANCH_ID: z.string().default(""),
-  // เลขบัญชี/PromptPay ปลายทางจริงของระบบ — ใช้ตรวจว่าสลิปโอนเข้าบัญชีนี้จริง (กันสลิปสวมสิทธิ์
-  // จากบัญชีอื่น) ปล่อยว่างได้ถ้ายังไม่มีบัญชีจริง (จะข้ามการเช็คนี้ไปก่อน)
-  PAYMENT_RECEIVING_ACCOUNT: z.string().default(""),
-  // OAuth — เช่นเดียวกับ Cloudinary/SlipOK ไม่บังคับตอน boot, gate ด้วย isXOAuthConfigured()
+  // OAuth — เช่นเดียวกับ Cloudinary ไม่บังคับตอน boot, gate ด้วย isXOAuthConfigured()
   // แทน (ดู lib/googleOAuth.ts, lib/lineOAuth.ts)
   GOOGLE_CLIENT_ID: z.string().default(""),
   GOOGLE_CLIENT_SECRET: z.string().default(""),
@@ -51,20 +44,29 @@ const envSchema = z.object({
   // base URL ของหน้าเว็บ (Next.js) ใช้ประกอบ redirect_uri ตอนขอ token จาก OAuth provider —
   // ต้องตรงกับค่าที่ลงทะเบียนไว้ใน Google Cloud Console เป๊ะ ๆ ตอน deploy จริงเปลี่ยนเป็นโดเมนจริง
   APP_URL: z.string().default("http://localhost:3000"),
-  // เช่นเดียวกับ Cloudinary/SlipOK — ไม่บังคับตอน boot, gate ด้วย isEmailConfigured() แทน
+  // เช่นเดียวกับ Cloudinary — ไม่บังคับตอน boot, gate ด้วย isEmailConfigured() แทน
   // (ดู lib/email.ts) ใช้ส่ง OTP ยืนยันตัวตนตอนสมัคร + ลิงก์ลืมรหัสผ่าน
   RESEND_API_KEY: z.string().default(""),
   RESEND_FROM_EMAIL: z.string().default("BuddyBook <onboarding@resend.dev>"),
-  // Gmail SMTP — ทางเลือกที่ใช้ส่งอีเมลจริงได้ทันทีโดยไม่ต้อง verify โดเมนเหมือน Resend (ดู lib/email.ts
-  // ลองอันนี้ก่อนเสมอถ้าตั้งค่าไว้ ค่อย fallback ไป Resend)
+  // Gmail SMTP — ทางสำรองถ้า Resend ส่งไม่สำเร็จ (ดู lib/email.ts) ปล่อยว่าง = ใช้ Resend อย่างเดียว
   GMAIL_USER: z.string().default(""),
   GMAIL_APP_PASSWORD: z.string().default(""),
-  // Stripe (เติม coin — แทน SlipOK/อัปโหลดสลิปเดิม) — เช่นเดียวกับตัวอื่น ไม่บังคับตอน boot,
+  // Stripe (เติม coin — แทนการอัปโหลดสลิปเดิม) — เช่นเดียวกับตัวอื่น ไม่บังคับตอน boot,
   // gate ด้วย isStripeConfigured() แทน (ดู lib/stripe.ts)
   STRIPE_SECRET_KEY: z.string().default(""),
   // ได้ค่านี้จาก `stripe listen` (dev) หรือ Dashboard > Developers > Webhooks (prod) — ใช้ยืนยันว่า
   // webhook ที่ยิงเข้ามาจริงมาจาก Stripe ไม่ใช่ปลอม (constructEvent ใน lib/stripe.ts)
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  // e-KYC ยืนยันอายุด้วยบัตรประชาชน/พาสปอร์ต + Liveness (ดู lib/kyc/) — "none" = ปิดฟีเจอร์ (ตอบ 503)
+  KYC_PROVIDER: z.enum(["none", "didit"]).default("none"),
+  // Didit Console: API key (สิทธิ์ write:sessions, read:sessions, delete:sessions), workflow แบบ KYC
+  // (ID verification + Liveness + Face match) และ secret ของ webhook destination (ได้ครั้งเดียวตอนสร้าง)
+  DIDIT_BASE_URL: z.string().url().default("https://verification.didit.me"),
+  DIDIT_API_KEY: z.string().default(""),
+  DIDIT_WORKFLOW_ID: z.string().default(""),
+  DIDIT_WEBHOOK_SECRET: z.string().default(""),
+  // secret สำหรับ HMAC เลขเอกสาร (กันบัตรใบเดียวยืนยันหลายบัญชี) — ห้ามเปลี่ยนหลังใช้งานจริง ไม่งั้น hash เดิมเทียบไม่ได้
+  KYC_ID_HASH_SECRET: z.string().default(""),
   // Gift donations — ค่าธรรมเนียมแพลตฟอร์ม (%) หักจากของขวัญก่อนเข้ากระเป๋านักเขียน (ปัดเศษลงให้ฝั่ง
   // นักเขียนได้มากกว่า) ไม่หักจาก "Custom coins" เพื่อให้โดเนท coin แบบเดิมได้เต็มจำนวนเหมือนก่อนมีระบบนี้
   GIFT_PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(10),
@@ -101,7 +103,35 @@ const envSchema = z.object({
   COIN_TO_THB_RATE: z.coerce.number().positive().default(1),
 });
 
-const parsed = envSchema.safeParse(process.env);
+const parsed = envSchema
+  .superRefine((v, ctx) => {
+    // code audit M4 — production ต้องใช้ secret ที่เดาไม่ได้ (JWT_SECRET ใช้เซ็น state ของ OAuth ด้วย)
+    // ตอนพัฒนา/เทสต์ยังใช้ค่าสั้น ๆ ใน .env ได้เหมือนเดิม
+    if (v.NODE_ENV === "production") {
+      for (const key of ["JWT_SECRET", "JWT_REFRESH_SECRET"] as const) {
+        if (v[key].length < 32) ctx.addIssue({ code: "custom", path: [key], message: `${key} must be at least 32 characters in production` });
+      }
+      if (v.JWT_SECRET === v.JWT_REFRESH_SECRET) {
+        ctx.addIssue({ code: "custom", path: ["JWT_REFRESH_SECRET"], message: "JWT_REFRESH_SECRET must differ from JWT_SECRET" });
+      }
+      if (v.INTERNAL_SERVICE_TOKEN && v.INTERNAL_SERVICE_TOKEN.length < 32) {
+        ctx.addIssue({ code: "custom", path: ["INTERNAL_SERVICE_TOKEN"], message: "INTERNAL_SERVICE_TOKEN must be at least 32 characters in production" });
+      }
+    }
+    // เปิด KYC แล้วต้องตั้งค่าครบ — ไม่งั้นจะได้ผู้ใช้ที่สแกนบัตรเสร็จแต่ webhook ยืนยันลายเซ็นไม่ได้
+    if (v.KYC_PROVIDER !== "didit") return;
+    // webhook secret บังคับเฉพาะ production — ตอนพัฒนาบน localhost Didit ยิง webhook เข้ามาไม่ได้อยู่แล้ว
+    // (ผลมาทาง GET /kyc/status ที่ดึงจาก Didit เอง) ไม่มี secret = webhook ถูกปฏิเสธทุกครั้ง
+    const required: Array<"DIDIT_API_KEY" | "DIDIT_WORKFLOW_ID" | "DIDIT_WEBHOOK_SECRET"> = ["DIDIT_API_KEY", "DIDIT_WORKFLOW_ID"];
+    if (v.NODE_ENV === "production") required.push("DIDIT_WEBHOOK_SECRET");
+    for (const key of required) {
+      if (!v[key]) ctx.addIssue({ code: "custom", path: [key], message: `${key} is required when KYC_PROVIDER=didit` });
+    }
+    if (v.KYC_ID_HASH_SECRET.length < 32) {
+      ctx.addIssue({ code: "custom", path: ["KYC_ID_HASH_SECRET"], message: "KYC_ID_HASH_SECRET must be at least 32 characters" });
+    }
+  })
+  .safeParse(process.env);
 
 if (!parsed.success) {
   // eslint-disable-next-line no-console

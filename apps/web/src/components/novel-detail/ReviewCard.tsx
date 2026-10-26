@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { formatThaiDate } from "@/lib/format";
 import { ReportButton } from "@/components/social/ReportButton";
 import { StickerImage } from "@/components/social/StickerPicker";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 
 export interface Review {
   id: string;
@@ -15,6 +16,8 @@ export interface Review {
   stickerId: string | null;
   createdAt: string;
   isAnonymous: boolean;
+  /** รีวิวตัวอย่าง (reviews.is_demo) */
+  isDemo?: boolean;
 }
 
 export function StarRow({ rating, className }: { rating: number; className?: string }) {
@@ -39,9 +42,12 @@ export function ReviewCard({ review, isLoggedIn = false }: { review: Review; isL
         <div className="flex min-w-0 items-center gap-3">
           <Avatar src={review.avatarUrl} alt={review.username} size="md" />
           <div className="min-w-0">
-            <p className={cn("truncate text-sm font-semibold", review.isAnonymous ? "text-neutral-500" : "text-neutral-900")}>
-              {review.username}
-            </p>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <p className={cn("truncate text-sm font-semibold", review.isAnonymous ? "text-neutral-500" : "text-neutral-900")}>
+                {review.username}
+              </p>
+              {review.isDemo && <DemoBadge />}
+            </div>
             <time dateTime={review.createdAt} className="text-xs text-neutral-400">
               {formatThaiDate(review.createdAt)}
             </time>

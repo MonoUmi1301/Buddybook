@@ -4,6 +4,7 @@ import { ApiError } from "@/utils/ApiError";
 
 export const NOTIFICATION_TYPES: NotificationType[] = [
   "comment",
+  "review",
   "reply",
   "donation",
   "system",
@@ -11,6 +12,9 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
   "new_follower",
   "support_reply",
 ];
+
+/** แจ้งเตือนที่ปิดไม่ได้ — การระงับนิยาย/ผลอุทธรณ์ต้องถึงนักเขียนเสมอ (มีกำหนดเวลาต้องตอบสนอง) */
+const UNMUTABLE_TYPES: NotificationType[] = ["moderation"];
 
 interface ListOptions {
   page?: number;
@@ -95,7 +99,7 @@ export async function getPreferences(user_id: string) {
 export async function setPreferences(user_id: string, muted_types: NotificationType[]) {
   const user = await prisma.user.update({
     where: { user_id },
-    data: { muted_notification_types: [...new Set(muted_types)] },
+    data: { muted_notification_types: [...new Set(muted_types)].filter((t) => !UNMUTABLE_TYPES.includes(t)) },
     select: { muted_notification_types: true },
   });
   return { muted_types: user.muted_notification_types, available_types: NOTIFICATION_TYPES };

@@ -566,7 +566,7 @@ const novels: MockNovel[] = [
     ),
     status: "ongoing",
     legal_status: "fan_fiction",
-    visibility: "pending_review",
+    visibility: "published",
     content_rating: "teen",
     allow_donations: false,
     genreMain: "แฟนตาซี",
@@ -866,6 +866,7 @@ async function main() {
         oauth_id: `mock-${u.username}`,
         bio: u.bio ?? null,
         age_verified: u.age_verified ?? false,
+        account_type: "DEMO",
         created_at: daysAgo(420 - i * 10),
       },
     });
@@ -913,6 +914,7 @@ async function main() {
         secondary_tag_id: sub.tag_id,
         plot_notes: n.plot_notes,
         theme_notes: n.theme_notes,
+        is_demo: true,
         created_at: daysAgo(created),
         updated_at: daysAgo(Math.max(0, created - gap * publishedChapters)),
       },
@@ -954,6 +956,7 @@ async function main() {
           word_count: countWords(content),
           published_at: status === "published" ? at : null,
           scheduled_publish_at: status === "scheduled" ? daysFromNow(c.scheduledInDays ?? 1) : null,
+          is_demo: true,
           created_at: at,
         },
       });
@@ -1042,6 +1045,7 @@ async function main() {
         sentiment_label: r.label,
         sentiment_score: r.score,
         is_anonymous: r.anonymous ?? false,
+        is_demo: true,
       },
     });
   }
@@ -1056,6 +1060,7 @@ async function main() {
         content: c.text,
         sentiment_label: c.label,
         sentiment_score: c.score,
+        is_demo: true,
       },
     });
     commentIds.push(created.comment_id);
@@ -1063,7 +1068,7 @@ async function main() {
 
   for (const [novel, users] of Object.entries(likes)) {
     await prisma.novelLike.createMany({
-      data: users.map((u) => ({ novel_id: novelId.get(novel)!, user_id: userId.get(u)! })),
+      data: users.map((u) => ({ novel_id: novelId.get(novel)!, user_id: userId.get(u)!, is_demo: true })),
       skipDuplicates: true,
     });
   }

@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   const parsed = await parseJsonBody(request, logoutSchema);
   if ("error" in parsed) return parsed.error;
 
-  const refreshToken = parsed.data.refresh_token ?? getRefreshToken();
+  const refreshToken = parsed.data.refresh_token ?? await getRefreshToken();
   if (refreshToken) {
     // best-effort — เคลียร์ cookie ฝั่งเราเสมอแม้ Express จะ error/unreachable
     await forwardToApi({ method: "POST", path: "/auth/logout", body: { refresh_token: refreshToken } });

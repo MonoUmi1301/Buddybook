@@ -6,7 +6,7 @@ import { pickGoogleBirthday, type BirthDate } from "@/lib/ageVerification";
 
 const BIRTHDAY_SCOPE = "https://www.googleapis.com/auth/user.birthday.read";
 
-/** เช่นเดียวกับ Cloudinary/SlipOK — ฟีเจอร์ Google login ทั้งหมด gate ตัวเองด้วยอันนี้
+/** เช่นเดียวกับ Cloudinary — ฟีเจอร์ Google login ทั้งหมด gate ตัวเองด้วยอันนี้
  *  ไม่บังคับให้ตั้งค่าตอน boot เพราะยังไม่มีทุกโปรเจกต์ที่ต้องใช้ */
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -47,12 +47,18 @@ export function verifyOAuthState(state: string, now = Date.now()): boolean {
   return issuedAt <= now + CLOCK_SKEW_MS && now - issuedAt <= OAUTH_STATE_TTL_MS;
 }
 
-export function buildGoogleAuthUrl(state: string): string {
+/** requestBirthday — ขอ scope วันเกิดแม้ GOOGLE_OAUTH_REQUEST_BIRTHDAY ปิดอยู่ (ใช้กับปุ่ม "ยืนยันอายุด้วย Google"
+ *  ซึ่งไม่มีประโยชน์ถ้าไม่ได้วันเกิด) — ตอนล็อกอินปกติใช้ค่าจาก env */
+interface GoogleScopeOptions {
+  requestBirthday?: boolean;
+}
+
+export function buildGoogleAuthUrl(state: string, { requestBirthday = env.GOOGLE_OAUTH_REQUEST_BIRTHDAY }: GoogleScopeOptions = {}): string {
   const params = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID,
     redirect_uri: REDIRECT_URI(),
     response_type: "code",
-    scope: env.GOOGLE_OAUTH_REQUEST_BIRTHDAY ? `openid email profile ${BIRTHDAY_SCOPE}` : "openid email profile",
+    scope: requestBirthday ? `openid email profile ${BIRTHDAY_SCOPE}` : "openid email profile",
     state,
     prompt: "select_account",
   });
@@ -69,7 +75,10 @@ interface GoogleUserInfo {
 
 /** แลก authorization code เป็น access_token ของ Google แล้วเรียก userinfo endpoint จริง
  *  (ไม่ decode id_token เองเพื่อเลี่ยงต้องจัดการ JWKS verification เพิ่ม) */
-export async function exchangeGoogleCode(code: string): Promise<OAuthProfile> {
+export async function exchangeGoogleCode(
+  code: string,
+  { requestBirthday = env.GOOGLE_OAUTH_REQUEST_BIRTHDAY }: GoogleScopeOptions = {}
+): Promise<OAuthProfile> {
   if (!isGoogleOAuthConfigured()) {
     throw ApiError.badRequest(
       "Google OAuth is not configured — set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET in apps/api/.env"
@@ -106,7 +115,7 @@ export async function exchangeGoogleCode(code: string): Promise<OAuthProfile> {
     throw ApiError.unauthorized("Could not fetch Google profile");
   }
 
-  const birthdate = env.GOOGLE_OAUTH_REQUEST_BIRTHDAY ? await fetchGoogleBirthday(tokenJson.access_token) : null;
+  const birthdate = requestBirthday ? await fetchGoogleBirthday(tokenJson.access_token) : null;
 
   return {
     provider: "google",

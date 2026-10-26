@@ -3,8 +3,9 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/trash-bin/:trashId/restore — กู้คืนภายใน 30 วัน (410 ถ้าเกินกำหนด — ดู Express)
-export async function POST(_request: Request, { params }: { params: { trashId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(_request: Request, props: { params: Promise<{ trashId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.trashId, "trash_id");

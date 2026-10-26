@@ -1,6 +1,8 @@
 import { Prisma, type LibraryStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { countChaptersByNovel } from "@/lib/novelCounts";
+import { assertContentRatingAllowed, contentRatingWhere } from "@/lib/contentRating";
+import { assertNovelVisible } from "@/lib/novelVisibility";
 import { ApiError } from "@/utils/ApiError";
 
 /** ข้อมูลนิยายที่หน้า My Library / "อ่านต่อ" ใช้ — ใช้ร่วมกันทั้ง library และ collections */
@@ -10,10 +12,20 @@ export const libraryNovelSelect = {
   cover_image_url: true,
   status: true,
   view_count: true,
+  is_demo: true,
   author: { select: { user_id: true, username: true, pen_name: true } },
 } satisfies Prisma.NovelSelect;
 
 type LibraryNovelRow = Prisma.NovelGetPayload<{ select: typeof libraryNovelSelect }>;
+
+/** นิยายที่ยังแสดงในชั้นหนังสือ/collection ได้ (code audit M3) — ไม่ถูกลบ และเผยแพร่อยู่พร้อมเรตที่ผู้ใช้ดูได้
+ *  (ผลงานของตัวเองเห็นทุกสถานะ/ทุกเรต) แถวในชั้นไม่ถูกลบทิ้ง เรื่องที่ถูกซ่อนจะกลับมาเองเมื่อเปิดอีกครั้ง */
+export async function readableNovelWhere(user_id: string): Promise<Prisma.NovelWhereInput> {
+  return {
+    deleted_at: null,
+    OR: [{ author_id: user_id }, { visibility: "published", ...(await contentRatingWhere(user_id)) }],
+  };
+}
 
 /** จำนวนตอนที่เผยแพร่แล้วของชุดนิยายที่จะแสดง — นับแยกครั้งเดียวต่อรายการ ไม่ใช้ _count ใน select
  *  (ดู lib/novelCounts.ts — _count ใน findMany สแกนตอนทั้งตาราง) */
@@ -35,8 +47,9 @@ function toProgress(p: ProgressRow | undefined | null) {
  *  เพิ่มภายหลัง (หน้า My Library) — แนบ status, ความคืบหน้าการอ่าน และ collection ที่นิยายอยู่
  *  รูปร่าง response เดิม (library_id/novel/added_at) ยังอยู่ครบ — หน้ารายละเอียดนิยายยังใช้อยู่ */
 export async function listLibrary(user_id: string, status?: LibraryStatus) {
+  const novel = await readableNovelWhere(user_id);
   const items = await prisma.userLibrary.findMany({
-    where: { user_id, ...(status ? { status } : {}) },
+    where: { user_id, novel, ...(status ? { status } : {}) },
     orderBy: { added_at: "desc" },
     include: { novel: { select: libraryNovelSelect } },
   });
@@ -49,7 +62,7 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
       select: { novel_id: true, collection_id: true },
     }),
     // นับทุกสถานะเสมอ (ไม่ขึ้นกับ ?status) — ให้ปุ่มกรองโชว์ตัวเลขครบแม้กำลังกรองอยู่
-    prisma.userLibrary.groupBy({ by: ["status"], where: { user_id }, _count: { _all: true } }),
+    prisma.userLibrary.groupBy({ by: ["status"], where: { user_id, novel }, _count: { _all: true } }),
     countLibraryChapters(items.map((i) => i.novel)),
   ]);
   const progressByNovel = new Map(progress.map((p) => [p.novel_id, p]));
@@ -76,8 +89,13 @@ export async function listLibrary(user_id: string, status?: LibraryStatus) {
 
 /** Reference implementation — POST /library */
 export async function addToLibrary(user_id: string, novel_id: string, status?: LibraryStatus) {
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true } });
-  if (!novel) throw ApiError.notFound("Novel not found");
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, visibility: true, content_rating: true, deleted_at: true },
+  });
+  if (!novel || novel.deleted_at) throw ApiError.notFound("Novel not found");
+  const isOwner = assertNovelVisible(novel, user_id);
+  await assertContentRatingAllowed(novel, user_id, isOwner);
 
   // ถ้าเคยเปิดอ่านมาก่อนแล้ว ให้เข้าชั้นเป็น "กำลังอ่าน" เลย ไม่ใช่ "อ่านต่อไป"
   const hasProgress = status
@@ -113,14 +131,40 @@ export async function removeFromLibrary(user_id: string, novel_id: string) {
   ]);
 }
 
+/** นิยายที่ผู้ใช้อ่านถึงตอนล่าสุดที่เผยแพร่แล้ว — ไม่มีตอนให้ "อ่านต่อ" (แม้เรื่องยังไม่จบ)
+ *  พอนักเขียนลงตอนใหม่ ตอนล่าสุดเลื่อนไป เรื่องนั้นก็กลับมาอยู่ในรายการเอง */
+async function caughtUpNovelIds(user_id: string): Promise<string[]> {
+  const progress = await prisma.readingProgress.findMany({
+    where: { user_id },
+    select: { novel_id: true, last_chapter_number: true },
+  });
+  if (progress.length === 0) return [];
+  const latest = await prisma.chapter.groupBy({
+    by: ["novel_id"],
+    where: { novel_id: { in: progress.map((p) => p.novel_id) }, status: "published" },
+    _max: { chapter_number: true },
+  });
+  const latestByNovel = new Map(latest.map((r) => [r.novel_id, r._max.chapter_number ?? 0]));
+  return progress
+    .filter((p) => p.last_chapter_number >= (latestByNovel.get(p.novel_id) ?? Infinity))
+    .map((p) => p.novel_id);
+}
+
 /** เพิ่มภายหลัง — GET /library/continue-reading?limit= — ประวัติการอ่านล่าสุด (หน้าแรก "อ่านต่อ" และ
  *  หน้า My Library "กำลังอ่าน") รวมเรื่องที่ไม่ได้เพิ่มเข้าชั้นด้วย ตัดเรื่องที่ถูกซ่อน/ยังไม่เผยแพร่ออก
- *  และตัดเรื่องที่ผู้ใช้ตั้งเป็น "อ่านจบแล้ว" ในชั้นออก (ไม่ต้อง "อ่านต่อ" แล้ว) */
+ *  และตัดเรื่องที่ผู้ใช้ตั้งเป็น "อ่านจบแล้ว" ในชั้นออก รวมถึงเรื่องที่อ่านถึงตอนล่าสุดแล้ว (ไม่ต้อง "อ่านต่อ" แล้ว) */
 export async function listContinueReading(user_id: string, limit: number) {
+  const caughtUp = await caughtUpNovelIds(user_id);
   const rows = await prisma.readingProgress.findMany({
     where: {
       user_id,
-      novel: { visibility: "published", NOT: { user_library: { some: { user_id, status: "completed" } } } },
+      ...(caughtUp.length ? { novel_id: { notIn: caughtUp } } : {}),
+      novel: {
+        visibility: "published",
+        deleted_at: null,
+        ...(await contentRatingWhere(user_id)),
+        NOT: { user_library: { some: { user_id, status: "completed" } } },
+      },
     },
     orderBy: { last_read_at: "desc" },
     take: limit,

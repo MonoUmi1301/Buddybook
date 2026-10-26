@@ -3,11 +3,12 @@ import type { ReportReason, ReportStatus, ReportTargetType } from "@prisma/clien
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import { setUserSuspendedCache } from "@/lib/suspension";
+import { suspendNovel } from "@/modules/admin/moderation.service";
 
 /**
  * เพิ่มภายหลัง (รายงานเนื้อหา) — ผู้ใช้รายงานนิยาย/ตอน/คอมเมนต์/รีวิว/ผู้ใช้ที่ไม่เหมาะสม แอดมินตรวจที่
  * /admin/content-reports แล้วเลือก dismiss (ไม่พบปัญหา) หรือ action (จัดการเนื้อหาตามชนิด):
- *   novel → ตั้ง visibility เป็น private · chapter → ซ่อน (status hidden) · comment/review → ลบ · user → ระงับบัญชี
+ *   novel → ระงับนิยาย (visibility suspended + แจ้งนักเขียนพร้อมเหตุผล/ลิงก์อุทธรณ์ ดู admin/moderation.service.ts) · chapter → ซ่อน (status hidden) · comment/review → ลบ · user → ระงับบัญชี
  * รายงานอื่นที่ยังเปิดอยู่ของเป้าหมายเดียวกันถูกปิดตามไปด้วย และผู้รายงานทุกคนได้แจ้งเตือนผลการตรวจ
  */
 
@@ -143,10 +144,19 @@ export async function listReports(status: ReportStatus = "open", cursor?: string
   return { reports, next_cursor: hasMore ? page[page.length - 1].report_id : null };
 }
 
-async function applyAction(target_type: ReportTargetType, target_id: string) {
+const REPORT_REASON_TEXT: Record<ReportReason, string> = {
+  spam: "สแปมหรือโฆษณา",
+  harassment: "การคุกคามหรือกลั่นแกล้ง",
+  inappropriate: "เนื้อหาไม่เหมาะสม",
+  copyright: "ละเมิดลิขสิทธิ์",
+  other: "ละเมิดแนวทางของแพลตฟอร์ม",
+};
+
+async function applyAction(target_type: ReportTargetType, target_id: string, admin_id: string, reason: string) {
   switch (target_type) {
     case "novel":
-      await prisma.novel.updateMany({ where: { novel_id: target_id }, data: { visibility: "private" } });
+      // post-moderation — เดิมตั้งเป็น private เงียบ ๆ นักเขียนไม่รู้สาเหตุ ตอนนี้เปิดเคสระงับพร้อมเหตุผล + อุทธรณ์ได้
+      await suspendNovel(target_id, admin_id, reason, { skipIfSuspended: true });
       return;
     case "chapter":
       await prisma.chapter.updateMany({ where: { chapter_id: target_id }, data: { status: "hidden" } });
@@ -170,20 +180,19 @@ const RESULT_TEXT: Record<"dismiss" | "action", string> = {
   action: "ตรวจสอบแล้วและได้จัดการเนื้อหานั้นเรียบร้อย ขอบคุณที่ช่วยดูแลชุมชน",
 };
 
-/** PATCH /admin/content-reports/:report_id — ปิดรายงานนี้ + รายงานที่ยังเปิดอยู่ของเป้าหมายเดียวกัน */
-export async function resolveReport(report_id: string, admin_id: string, action: "dismiss" | "action", note?: string) {
-  const report = await prisma.contentReport.findUnique({
-    where: { report_id },
-    select: { report_id: true, status: true, target_type: true, target_id: true },
-  });
-  if (!report) throw ApiError.notFound("Report not found");
-  if (report.status !== "open") throw ApiError.conflict("Report already resolved");
-
-  if (action === "action") await applyAction(report.target_type, report.target_id);
-
+/** ปิดรายงานที่ยังเปิดอยู่ทั้งหมดของเป้าหมายเดียวกัน + แจ้งผลผู้รายงาน — ใช้ทั้งจากหน้ารายงานเนื้อหา
+ *  และตอนแอดมินระงับนิยายจากคิวตรวจโดยตรง (รายงานที่ค้างของนิยายนั้นถือว่าจัดการแล้ว) */
+export async function closeOpenReportsForTarget(
+  target_type: ReportTargetType,
+  target_id: string,
+  admin_id: string,
+  action: "dismiss" | "action",
+  note?: string
+) {
   const status: ReportStatus = action === "action" ? "actioned" : "dismissed";
-  const where = { target_type: report.target_type, target_id: report.target_id, status: "open" as const };
+  const where = { target_type, target_id, status: "open" as const };
   const affected = await prisma.contentReport.findMany({ where, select: { reporter_id: true } });
+  if (!affected.length) return { status, resolved_count: 0 };
 
   await prisma.$transaction([
     prisma.contentReport.updateMany({
@@ -198,6 +207,30 @@ export async function resolveReport(report_id: string, admin_id: string, action:
       })),
     }),
   ]);
+  return { status, resolved_count: affected.length };
+}
 
-  return { report_id, status, resolved_count: affected.length };
+/** PATCH /admin/content-reports/:report_id — ปิดรายงานนี้ + รายงานที่ยังเปิดอยู่ของเป้าหมายเดียวกัน */
+export async function resolveReport(report_id: string, admin_id: string, action: "dismiss" | "action", note?: string) {
+  const report = await prisma.contentReport.findUnique({
+    where: { report_id },
+    select: { report_id: true, status: true, target_type: true, target_id: true, reason: true },
+  });
+  if (!report) throw ApiError.notFound("Report not found");
+  if (report.status !== "open") throw ApiError.conflict("Report already resolved");
+
+  if (action === "action") {
+    // เหตุผลที่นักเขียนเห็น: หมายเหตุของแอดมิน หรือสรุปจากประเภทที่ผู้อ่านรายงานเข้ามา
+    const reason = note || `ผู้อ่านรายงานว่า${REPORT_REASON_TEXT[report.reason]} และทีมงานตรวจสอบแล้วพบว่าละเมิดแนวทางของแพลตฟอร์ม`;
+    await applyAction(report.target_type, report.target_id, admin_id, reason);
+  }
+
+  const { status, resolved_count } = await closeOpenReportsForTarget(
+    report.target_type,
+    report.target_id,
+    admin_id,
+    action,
+    note
+  );
+  return { report_id, status, resolved_count };
 }

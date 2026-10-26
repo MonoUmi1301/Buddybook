@@ -10,6 +10,9 @@ export interface SessionUser {
   avatar_url: string | null;
   bio: string | null;
   age_verified: boolean;
+  /** อายุ ณ วันนี้จากวันเกิดที่ยืนยันแล้ว — null = ยังไม่ยืนยัน (เห็นได้แค่นิยายเรตทุกวัย) */
+  verified_age: number | null;
+  age_verification_source: "kyc" | "google" | null;
   has_interests: boolean;
   has_password: boolean;
   totp_enabled: boolean;
@@ -21,7 +24,7 @@ export interface SessionUser {
  * คืน null เสมอถ้าไม่ได้ล็อกอิน/token หมดอายุ (ไม่ throw — หน้า public ต้อง render ได้ปกติ)
  */
 export async function getCurrentUser(): Promise<SessionUser | null> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) return null;
 
   const result = await callApi({ method: "GET", path: "/users/me", token });

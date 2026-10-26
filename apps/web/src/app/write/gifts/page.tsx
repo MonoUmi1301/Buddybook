@@ -11,11 +11,12 @@ import type { InboxPage, InboxStats } from "@/lib/gifts";
 
 // เพิ่มภายหลัง (Gift donations) — กล่องจดหมายของขวัญในแดชบอร์ดนักเขียน
 // ?open=<donation_id> มาจากลิงก์ในแจ้งเตือน "… ส่งกาแฟ x3 ให้คุณ พร้อมการ์ด"
-export default async function GiftInboxPage({ searchParams }: { searchParams: { open?: string } }) {
+export default async function GiftInboxPage(props: { searchParams: Promise<{ open?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [inboxResult, statsResult] = await Promise.all([
     callApi({ method: "GET", path: "/me/gifts/received", token }),
     callApi({ method: "GET", path: "/me/gifts/stats", token }),

@@ -12,6 +12,7 @@ import { TransactionHistory } from "@/components/wallet/TransactionHistory";
 import { GiftDraftBanner } from "@/components/gifts/GiftDraftBanner";
 import type { SessionUser } from "@/lib/api/session";
 import { usePaymentResult, type PaymentOutcome } from "@/hooks/use-payment-result";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
 
 const packages: CoinPackage[] = [
   { id: "p25", coins: 25, priceLabel: "25 บาท" },
@@ -64,7 +65,6 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
     if (result?.kind !== "paid") return;
     const timer = setTimeout(closeResult, 5000);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ตั้งเวลาเฉพาะตอน modal สำเร็จเปิด
   }, [result]);
 
   const creditedCoins = result?.kind === "paid" ? result.coins : null;
@@ -116,13 +116,9 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
       {selectedPkg && <StripeCheckoutPanel pkg={selectedPkg} onClose={() => setSelectedPkg(null)} />}
 
       {checking && !spinnerDismissed && result === null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={() => setSpinnerDismissed(true)}
-        >
+        <ModalBackdrop className="z-50 items-center bg-black/40 px-4" onDismiss={() => setSpinnerDismissed(true)}>
           <div
             className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
-            onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -136,17 +132,13 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
             <h2 className="mt-4 text-h3 text-neutral-900">กำลังตรวจสอบการชำระเงิน...</h2>
             <p className="mt-2 text-neutral-600">กรุณารอสักครู่ ระบบกำลังยืนยันการชำระเงินของคุณ</p>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {result?.kind === "pending-timeout" && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={closeResult}
-        >
+        <ModalBackdrop className="z-50 items-center bg-black/40 px-4" onDismiss={closeResult}>
           <div
             className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
-            onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -167,17 +159,13 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
               ตกลง
             </button>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {result?.kind === "failed" && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={closeResult}
-        >
+        <ModalBackdrop className="z-50 items-center bg-black/40 px-4" onDismiss={closeResult}>
           <div
             className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
-            onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -200,17 +188,13 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
               ตกลง
             </button>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       {creditedCoins !== null && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={closeResult}
-        >
+        <ModalBackdrop className="z-50 items-center bg-black/40 px-4" onDismiss={closeResult}>
           <div
             className="relative w-full max-w-sm rounded-card bg-white p-8 text-center shadow-xl"
-            onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -233,7 +217,7 @@ export function WalletContent({ user, initialBalance }: WalletContentProps) {
               ตกลง
             </button>
           </div>
-        </div>
+        </ModalBackdrop>
       )}
 
       <Footer />

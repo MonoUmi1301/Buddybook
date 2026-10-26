@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import Script from "next/script";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { AuthFetchInterceptor } from "@/components/auth/AuthFetchInterceptor";
 import { Toaster } from "@/components/ui/Toaster";
@@ -18,11 +20,13 @@ export const metadata: Metadata = {
   description: "แพลตฟอร์มนิยายออนไลน์ BuddyBook",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default async function RootLayout(
+  {
+    children,
+  }: Readonly<{
+    children: React.ReactNode;
+  }>
+) {
   return (
     <html
       lang="th"
@@ -36,13 +40,16 @@ export default function RootLayout({
       <head>
         {/* เพิ่มภายหลัง (audit fix — full-site dark mode) — ต้อง sync คลาส "dark" ก่อน paint แรก
          * ไม่งั้นจะกระพริบเป็น light ก่อนแล้วค่อยสลับเป็น dark ทีหลัง (ThemeProvider's useEffect
-         * ทำงานหลัง hydrate) รันเป็น inline script ธรรมดา ไม่ผ่าน React เพราะต้องเกิดก่อน React
-         * เริ่มทำงานเสียอีก — try/catch กัน localStorage ถูกบล็อก (private mode ฯลฯ) */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem("bb_theme")==="dark"){document.documentElement.classList.add("dark")}}catch(e){}`,
-          }}
-        />
+         * ทำงานหลัง hydrate) ต้องรันก่อน React เริ่มทำงาน — beforeInteractive ให้ Next ฝังไว้ใน <head> เอง
+         * (React 19 เตือนเมื่อ render <script> ตรง ๆ ในคอมโพเนนต์) try/catch กัน localStorage ถูกบล็อก */}
+        <Script
+          id="theme-init"
+          strategy="beforeInteractive"
+          // nonce จาก proxy.ts — CSP ไม่อนุญาต inline script ที่ไม่มี nonce
+          nonce={(await headers()).get("x-nonce") ?? undefined}
+        >
+          {`try{if(localStorage.getItem("bb_theme")==="dark"){document.documentElement.classList.add("dark")}}catch(e){}`}
+        </Script>
       </head>
       <body className="min-h-screen bg-white font-sans text-neutral-900 antialiased">
         <AuthFetchInterceptor />

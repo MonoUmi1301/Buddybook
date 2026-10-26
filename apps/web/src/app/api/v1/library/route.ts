@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/library?status= — ชั้นหนังสือของผู้อ่าน (กรองตามสถานะได้)
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const query = parseSearchParams(request, libraryQuerySchema);
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
 // POST /api/v1/library — บันทึกนิยายเข้าชั้นหนังสือ
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, addToLibrarySchema);

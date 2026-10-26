@@ -95,6 +95,7 @@ import {
 import { LoreModal, type ChapterOption } from "@/components/writer/LoreModal";
 import { THAI_TIME_ZONE } from "@/lib/format";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 const nodeTypes = { locationNode: LocationNode };
 
@@ -235,8 +236,9 @@ function distance(a: { x: number; y: number }, b: { x: number; y: number }): num
 function jitterPoints(points: { x: number; y: number }[], amount: number): { x: number; y: number }[] {
   if (amount <= 0) return points;
   return points.map((p) => ({
-    x: p.x + (Math.random() - 0.5) * amount,
-    y: p.y + (Math.random() - 0.5) * amount,
+    // ความขรุขระของเส้นที่วาด ไม่เกี่ยวกับความปลอดภัย
+    x: p.x + (Math.random() - 0.5) * amount, // NOSONAR
+    y: p.y + (Math.random() - 0.5) * amount, // NOSONAR
   }));
 }
 
@@ -594,6 +596,8 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       }).catch(() => {});
       return nds.map((n) => (n.id === id ? { ...n, zIndex: nextZ } : n));
     });
+    // setNodes ประกาศทีหลัง (useNodesState ใช้ callback นี้ตอนสร้าง node) และเป็น setter ที่คงที่อยู่แล้ว
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [loreLocationId, setLoreLocationId] = useState<string | null>(null);
@@ -984,7 +988,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
   // ---------- ชิ้นส่วนแผนที่ / ชื่อพื้นที่ ----------
 
   function newId(prefix: string) {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    return `${prefix}-${Date.now()}-${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
   }
 
   /** จุดกึ่งกลางของพื้นที่แผนที่ที่มองเห็นอยู่ (พิกัดแผนที่) */
@@ -1287,7 +1291,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
     const bw = Math.max(1, b.x1 - b.x0);
     const bh = Math.max(1, b.y1 - b.y0);
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(width / (bw * (1 + padRatio * 2)), height / (bh * (1 + padRatio * 2)))));
-    setViewport({ x: width / 2 - ((b.x0 + b.x1) / 2) * zoom, y: height / 2 - ((b.y0 + b.y1) / 2) * zoom, zoom });
+    void setViewport({ x: width / 2 - ((b.x0 + b.x1) / 2) * zoom, y: height / 2 - ((b.y0 + b.y1) / 2) * zoom, zoom });
   }
 
   function fitAll() {
@@ -1320,7 +1324,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
     const py = e.clientY - rect.top;
     const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, vp.zoom * Math.exp(-e.deltaY * 0.0015)));
     const k = nextZoom / vp.zoom;
-    setViewport({ x: px - (px - vp.x) * k, y: py - (py - vp.y) * k, zoom: nextZoom });
+    void setViewport({ x: px - (px - vp.x) * k, y: py - (py - vp.y) * k, zoom: nextZoom });
   }
 
   function updateStamp(id: string, patch: { scale?: number; rotation?: number; color?: string | null }) {
@@ -1525,7 +1529,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
   function handlePointerMove(e: React.PointerEvent) {
     if (panRef.current) {
       const pan = panRef.current;
-      setViewport({ x: pan.vx + e.clientX - pan.startX, y: pan.vy + e.clientY - pan.startY, zoom: pan.zoom });
+      void setViewport({ x: pan.vx + e.clientX - pan.startX, y: pan.vy + e.clientY - pan.startY, zoom: pan.zoom });
       return;
     }
     if (mode === "fill" && landShape === "brush") moveBrushCursor(e);
@@ -1536,7 +1540,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       if (!lastStampPosRef.current || distance(lastStampPosRef.current, pos) >= MIN_STAMP_SPACING * stampScale) {
         lastStampPosRef.current = pos;
-        const el: MapElement = { id: `stamp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, kind: "stamp", icon: stampIcon, x: pos.x, y: pos.y, ...newStampStyle() };
+        const el: MapElement = { id: newId("stamp"), kind: "stamp", icon: stampIcon, x: pos.x, y: pos.y, ...newStampStyle() };
         setElements((prev) => {
           const next = [...prev, el];
           saveElements(next);
@@ -1699,7 +1703,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       console.error("ส่งออกรูปภาพไม่สำเร็จ", err);
       toast("ส่งออกรูปภาพไม่สำเร็จ ลองใหม่อีกครั้ง");
     } finally {
-      setViewport(prevViewport);
+      void setViewport(prevViewport);
       setExporting(false);
     }
   }
@@ -1744,7 +1748,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
                 <button
                   key={l.location_id}
                   type="button"
-                  onClick={() => placeLocation(l)}
+                  onClick={handleAsync(() => placeLocation(l))}
                   title={`กดเพื่อวาง ${l.name} บนแผนที่`}
                   className="flex w-20 flex-col items-center gap-1 rounded-lg p-1.5 transition-colors hover:bg-white"
                 >
@@ -1807,10 +1811,10 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
           >
             <Dices className="h-3.5 w-3.5" /> สุ่มแผนที่
           </button>
-          <button type="button" onClick={saveVersion} disabled={savingVersion} className="flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500 disabled:opacity-50">
+          <button type="button" onClick={handleAsync(saveVersion)} disabled={savingVersion} className="flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500 disabled:opacity-50">
             <Save className="h-3.5 w-3.5" /> บันทึกเวอร์ชัน
           </button>
-          <button type="button" onClick={openVersionsPanel} className="flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500">
+          <button type="button" onClick={handleAsync(openVersionsPanel)} className="flex h-8 items-center gap-1.5 rounded-pill border border-neutral-300 px-3 text-xs font-medium text-neutral-600 hover:border-primary-400 hover:text-primary-500">
             <History className="h-3.5 w-3.5" /> ประวัติเวอร์ชัน
           </button>
           <button
@@ -1848,7 +1852,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
       )}
       {showExport && (
         <div className="mb-3">
-          <ExportPanel exporting={exporting} onExport={exportAsImage} onClose={() => setShowExport(false)} />
+          <ExportPanel exporting={exporting} onExport={handleAsync(exportAsImage)} onClose={() => setShowExport(false)} />
         </div>
       )}
 
@@ -2095,7 +2099,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStop={onNodeDragStop}
-          onConnect={onConnect}
+          onConnect={handleAsync(onConnect)}
           onReconnect={onReconnect}
           edgesReconnectable
           onEdgeClick={onEdgeClick}
@@ -2252,7 +2256,7 @@ function WorldMapInner({ novelId, initialLocations, initialEdges, initialDrawing
                 {versions.map((v) => (
                   <li key={v.version_id} className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm">
                     <span className="text-neutral-600">{new Date(v.created_at).toLocaleString("th-TH", { timeZone: THAI_TIME_ZONE })}</span>
-                    <button type="button" onClick={() => restoreVersion(v.version_id)} className="text-xs font-semibold text-primary-500 hover:underline">
+                    <button type="button" onClick={handleAsync(() => restoreVersion(v.version_id))} className="text-xs font-semibold text-primary-500 hover:underline">
                       กู้คืน
                     </button>
                   </li>

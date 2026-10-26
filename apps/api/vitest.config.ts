@@ -18,7 +18,8 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.ts"],
       exclude: ["src/server.ts", "src/types/**"],
-      reporter: ["text-summary", "json-summary", "html"],
+      // lcov ให้ SonarQube อ่าน (sonar.javascript.lcov.reportPaths)
+      reporter: ["text-summary", "json-summary", "html", "lcov"],
       reportsDirectory: "coverage",
     },
     hookTimeout: 60_000,

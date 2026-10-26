@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Check, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface PublishVisibilityChoiceProps {
   novelId: string;
-  initialVisibility: "published" | "private" | "pending_review";
+  initialVisibility: "published" | "private" | "suspended";
 }
 
 /** เพิ่มภายหลัง (audit fix) — นิยายที่เพิ่งสร้างเริ่มที่ visibility=private เสมอ (ดู
@@ -42,6 +43,18 @@ export function PublishVisibilityChoice({ novelId, initialVisibility }: PublishV
     }
   }
 
+  // post-moderation — นิยายที่แอดมินระงับเลือกเผยแพร่เองไม่ได้ ต้องยื่นอุทธรณ์จากหน้าจัดการนิยาย
+  if (initialVisibility === "suspended") {
+    return (
+      <div className="mt-6 w-full rounded-card border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700">
+        นิยายเรื่องนี้ถูกทีมงานระงับการเผยแพร่ ดูเหตุผลและยื่นอุทธรณ์ได้ที่{" "}
+        <a href={`/write/${novelId}?appeal=1`} className="font-semibold underline underline-offset-2">
+          หน้าจัดการนิยาย
+        </a>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-6 w-full rounded-card border border-neutral-200 bg-neutral-50 p-4 text-left">
       <p className="mb-3 text-sm font-semibold text-neutral-800">สถานะการเผยแพร่</p>
@@ -49,7 +62,7 @@ export function PublishVisibilityChoice({ novelId, initialVisibility }: PublishV
         <button
           type="button"
           disabled={saving}
-          onClick={() => choose("private")}
+          onClick={handleAsync(() => choose("private"))}
           className={cn(
             "flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
             visibility === "private"
@@ -68,7 +81,7 @@ export function PublishVisibilityChoice({ novelId, initialVisibility }: PublishV
         <button
           type="button"
           disabled={saving}
-          onClick={() => choose("published")}
+          onClick={handleAsync(() => choose("published"))}
           className={cn(
             "flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
             visibility === "published"

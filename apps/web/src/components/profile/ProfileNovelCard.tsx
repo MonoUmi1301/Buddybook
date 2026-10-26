@@ -4,6 +4,7 @@ import { BookOpen, Eye, Heart, Star } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatCompactNumber } from "@/lib/format";
 import { novelStatusLabel, type NovelStatus } from "@/lib/novelLabels";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 
 export interface ProfileNovel {
   novel_id: string;
@@ -16,6 +17,7 @@ export interface ProfileNovel {
   chapter_count: number;
   rating: number;
   review_count: number;
+  is_demo?: boolean;
 }
 
 const statusBadge: Record<NovelStatus, string> = {
@@ -53,6 +55,7 @@ export function ProfileNovelCard({ novel }: { novel: ProfileNovel }) {
         >
           {novelStatusLabel[novel.status]}
         </span>
+        {novel.is_demo && <DemoBadge className="absolute right-2 top-2 shadow-sm" />}
       </div>
 
       <div className="flex flex-1 flex-col p-3">

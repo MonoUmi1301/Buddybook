@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface WriterFormActionsProps {
   onSave?: () => void | Promise<void>;
@@ -32,7 +33,7 @@ export function WriterFormActions({ onSave, onCancel }: WriterFormActionsProps) 
       <Button type="button" variant="outline" onClick={onCancel}>
         ยกเลิก
       </Button>
-      <Button type="button" variant="primary" loading={saving} onClick={handleSave}>
+      <Button type="button" variant="primary" loading={saving} onClick={handleAsync(handleSave)}>
         {saved ? "บันทึกแล้ว ✓" : "บันทึก"}
       </Button>
     </div>

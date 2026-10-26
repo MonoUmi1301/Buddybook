@@ -3,7 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { BackButton } from "@/components/ui/BackButton";
 import { Tabs } from "@/components/ui/Tabs";
-import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
+import { AgeGateInterstitial, parseAgeGate } from "@/components/novel-detail/AgeGateInterstitial";
 import { NovelHero, type NovelDetailData } from "@/components/novel-detail/NovelHero";
 import { NovelOverview } from "@/components/novel-detail/NovelOverview";
 import { ChapterListCard, type ChapterListItem } from "@/components/novel-detail/ChapterListCard";
@@ -39,6 +39,7 @@ interface ReviewApiItem {
   review_id: string;
   user: { user_id: string; username: string | null; avatar_url: string | null };
   is_anonymous: boolean;
+  is_demo?: boolean;
   rating: number | null;
   comment_text: string | null;
   sticker_id: string | null;
@@ -68,8 +69,9 @@ function ErrorShell({ user, message }: { user: Awaited<ReturnType<typeof getCurr
 }
 
 // ต่อกับ GET /novels/:id, /reviews, /chapters, /donations, /users/:authorId และ /novels/search จริงทั้งหมด
-export default async function NovelDetailPage({ params }: { params: { novelId: string } }) {
-  const token = getAccessToken();
+export default async function NovelDetailPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const token = await getAccessToken();
   const [result, user] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     getCurrentUser(),
@@ -91,12 +93,13 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
     notFound();
   }
 
-  if (result.status === 403 && (result.json as { details?: { code?: string } })?.details?.code === "AGE_VERIFICATION_REQUIRED") {
+  const ageGate = parseAgeGate(result.status, result.json);
+  if (ageGate) {
     return (
       <div className="flex min-h-screen flex-col bg-neutral-50">
         <Navbar user={user} />
         <main className="flex-1">
-          <AgeGateInterstitial />
+          <AgeGateInterstitial gate={ageGate} loggedIn={Boolean(user)} returnTo={`/novels/${params.novelId}`} />
         </main>
         <Footer />
       </div>
@@ -125,7 +128,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
       token,
       searchParams: new URLSearchParams({ novel_id: novel.novel_id }),
     }),
-    callApi({ method: "GET", path: `/users/${novel.author.user_id}` }),
+    callApi({ method: "GET", path: `/users/${novel.author.user_id}`, token }),
     // "นิยายที่คล้ายกัน" = หมวดหมู่หลักเดียวกัน เรียงตามยอดวิว (ส่ง token เพื่อให้ gate เรต 18+ ตรงกับ viewer)
     novel.primary_tag
       ? callApi({
@@ -154,6 +157,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
           stickerId: r.sticker_id ?? null,
           createdAt: r.created_at,
           isAnonymous: r.user.username === null,
+          isDemo: r.is_demo ?? false,
         }))
       : [];
 
@@ -172,7 +176,7 @@ export default async function NovelDetailPage({ params }: { params: { novelId: s
   const lastPublishedAt = publishedChapters
     .map((c) => c.published_at)
     .filter((d): d is string => !!d)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .slice(-1)[0];
 
   const rated = reviews.filter((r) => r.rating > 0);

@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { SupportStatusBadge } from "@/components/support/StatusBadge";
 import { SUPPORT_CATEGORY_LABEL, type SupportStatus, type SupportTicketSummary } from "@/lib/support";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 const TABS: { value: SupportStatus | "active"; label: string }[] = [
   { value: "active", label: "ต้องดำเนินการ" },
@@ -37,7 +38,7 @@ export function SupportQueue({ initial }: { initial: SupportTicketSummary[] }) {
           <button
             key={t.value}
             type="button"
-            onClick={() => load(t.value)}
+            onClick={handleAsync(() => load(t.value))}
             className={cn(
               "min-h-[36px] shrink-0 rounded-pill px-3.5 text-sm",
               tab === t.value ? "bg-neutral-900 text-white" : "border border-neutral-200 text-neutral-600 hover:text-neutral-900"

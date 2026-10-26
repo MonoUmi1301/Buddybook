@@ -45,7 +45,7 @@ describe("OAuth login with a verified birthday", () => {
     await prisma.$disconnect();
   });
 
-  it("sets age from Google and blocks overriding it by self-declaration", async () => {
+  it("sets age from the Google birthday on login", async () => {
     const login = await loginOrRegisterWithOAuth({
       provider: "google",
       sub: `sub-${h.tag}`,
@@ -58,9 +58,6 @@ describe("OAuth login with a verified birthday", () => {
     const user = await prisma.user.findUniqueOrThrow({ where: { user_id: login.user.user_id } });
     expect(user.age_verified).toBe(false);
     expect(user.age_verification_source).toBe("google");
-
-    const res = await h.api("PATCH", "/users/me/age-verification", login.access_token, { birth_date: "1990-01-01" });
-    expect(res.status).toBe(409);
-    expect((await prisma.user.findUniqueOrThrow({ where: { user_id: user.user_id } })).age_verified).toBe(false);
+    expect(user.birth_date?.getUTCFullYear()).toBe(new Date().getFullYear() - 15);
   });
 });

@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { countChaptersByNovel, countLikesByNovel } from "@/lib/novelCounts";
 import { ApiError } from "@/utils/ApiError";
 import { syncInterestedIn, deleteUserGraphNode, deleteNovelGraphNode } from "@/lib/graphSync";
-import { ADULT_AGE, ageOn } from "@/lib/ageVerification";
+import { contentRatingWhere, getViewerAge, saveVerifiedBirthDate } from "@/lib/contentRating";
+import { exchangeGoogleCode, verifyOAuthState } from "@/lib/googleOAuth";
+import { deleteProviderSessions } from "@/modules/kyc/kyc.service";
 
 /** Reference implementation ที่สอง — แสดง pattern การใช้ req.user จาก requireAuth */
 export async function getMe(req: Request, res: Response) {
@@ -18,9 +20,11 @@ export async function getMe(req: Request, res: Response) {
       pen_name: true,
       email: true,
       role: true,
+      account_type: true,
       avatar_url: true,
       bio: true,
       age_verified: true,
+      age_verification_source: true,
       totp_enabled: true,
       created_at: true,
       password_hash: true,
@@ -31,9 +35,16 @@ export async function getMe(req: Request, res: Response) {
   if (!user) throw ApiError.notFound("User not found");
 
   const { _count, password_hash, ...rest } = user;
+  // หน้าตั้งค่าแสดงสถานะยืนยันอายุ — อายุ ณ วันนี้จากวันเกิดที่ยืนยันแล้ว (null = ยังไม่ยืนยัน)
+  const verified_age = await getViewerAge(user.user_id);
   // audit fix — หน้า "ลบบัญชี" ต้องรู้ว่าบัญชีนี้ตั้งรหัสผ่านไว้หรือเป็น OAuth-only ล้วน ๆ ถึงจะ
   // โชว์ช่องกรอกรหัสผ่านยืนยันถูก — ส่งแค่ boolean ไปเท่านั้น ไม่เคยส่ง hash จริงออกไปฝั่ง client
-  res.status(200).json({ ...rest, has_interests: _count.user_interests > 0, has_password: Boolean(password_hash) });
+  res.status(200).json({
+    ...rest,
+    verified_age,
+    has_interests: _count.user_interests > 0,
+    has_password: Boolean(password_hash),
+  });
 }
 
 const updateMeBodySchema = z
@@ -111,6 +122,8 @@ export async function deleteMe(req: Request, res: Response) {
   // นิยายของบัญชีที่ลบต้องหายจากเว็บด้วย (เดิมยังเผยแพร่อยู่ในชื่อ "ผู้ใช้ที่ถูกลบ_xxx" ไม่มีเจ้าของดูแล)
   // ใช้ soft delete แบบเดียวกับนิยายที่นักเขียนลบเอง: ซ่อนทันที (private) แล้ว purge ลบถาวรตอนครบ 30 วัน
   // (เรื่องที่มีคนซื้อตอนไว้จะถูกซ่อนแต่ไม่ถูก purge — ดู purgeExpiredNovels) ทำใน transaction เดียวกับ anonymize
+  // session e-KYC ฝั่งผู้ให้บริการ (ภาพบัตร/ใบหน้า) ต้องตามลบด้วย — เก็บ id ไว้ก่อนแถวถูกลบในธุรกรรม
+  const kycSessions = await prisma.kycVerification.findMany({ where: { user_id }, select: { provider_session_id: true } });
   const trashedNovels = await prisma.$transaction(async (tx) => {
     const novels = await tx.$queryRaw<{ novel_id: string }[]>`
       UPDATE novels
@@ -127,13 +140,19 @@ export async function deleteMe(req: Request, res: Response) {
       oauth_id: null,
       avatar_url: null,
         bio: null,
+        // PDPA — บัญชีที่ลบแล้วไม่ต้องเก็บข้อมูลยืนยันอายุอีก (ลบแถว e-KYC ด้านล่างด้วย)
+        birth_date: null,
+        age_verified: false,
+        age_verification_source: null,
         deleted_at: new Date(),
         updated_at: new Date(),
       },
     });
+    await tx.kycVerification.deleteMany({ where: { user_id } });
     return novels;
   });
 
+  void deleteProviderSessions(kycSessions.map((k) => k.provider_session_id));
   deleteUserGraphNode(user_id).catch((err) => console.error("Neo4j deleteUserGraphNode failed:", err));
   for (const { novel_id } of trashedNovels) {
     deleteNovelGraphNode(novel_id).catch((err) => console.error("Neo4j deleteNovelGraphNode failed:", err));
@@ -142,35 +161,32 @@ export async function deleteMe(req: Request, res: Response) {
   res.status(204).send();
 }
 
-const ageVerificationBodySchema = z.object({
-  birth_date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), {
-    message: "birth_date must be a valid date",
-  }),
+const googleAgeVerificationBodySchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1),
 });
 
-/** age_verified ใช้เปิด/ปิดการเข้าถึงเนื้อหา 18+ — ต้องคำนวณอายุจริงจาก birth_date
- *  ไม่ใช่ตั้งเป็น true ทันทีที่กรอกวันเกิดมา (ผู้ใช้อายุต่ำกว่า 18 จะได้ age_verified=false) */
-export async function setAgeVerification(req: Request, res: Response) {
-  const { birth_date } = ageVerificationBodySchema.parse(req.body);
-  // gap 3.4 — อายุที่ยืนยันจากบัญชี Google แล้วแก้ด้วยการกรอกเองไม่ได้ (กันเด็กกรอกวันเกิดปลอมเพื่อปลดล็อก 18+)
+/** POST /users/me/age-verification/google — ยืนยันอายุของบัญชีที่ล็อกอินอยู่ด้วยวันเกิดในบัญชี Google
+ *  (ไม่ล็อกอิน/ไม่ผูกบัญชี Google เข้ากับ BuddyBook — อีเมล Google ไม่ต้องตรงกับบัญชีนี้)
+ *  ไม่ทับผล e-KYC (น่าเชื่อถือกว่า); บัญชี Google ไม่มีปีเกิด/ไม่ให้สิทธิ์ → 422 */
+export async function verifyAgeWithGoogle(req: Request, res: Response) {
+  const { code, state } = googleAgeVerificationBodySchema.parse(req.body);
+  if (!verifyOAuthState(state)) {
+    throw ApiError.unauthorized("Invalid OAuth state — possible CSRF attempt");
+  }
+  // ยืนยันด้วยบัตร (e-KYC) แล้ว — วันเกิดจาก Google น่าเชื่อถือน้อยกว่า ห้ามทับ
   const current = await prisma.user.findUnique({
     where: { user_id: req.user!.user_id },
     select: { age_verification_source: true },
   });
-  if (current?.age_verification_source && current.age_verification_source !== "self_declared") {
-    throw ApiError.conflict("อายุของบัญชีนี้ยืนยันจากบัญชี Google แล้ว ไม่สามารถแก้ไขเองได้");
+  if (current?.age_verification_source === "kyc") {
+    throw ApiError.conflict("อายุของบัญชีนี้ยืนยันด้วยบัตรประชาชน/พาสปอร์ตแล้ว");
   }
-
-  const d = new Date(birth_date);
-  const age = ageOn({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
-  const age_verified = age >= ADULT_AGE;
-
-  await prisma.user.update({
-    where: { user_id: req.user!.user_id },
-    data: { age_verified, age_verification_source: "self_declared", updated_at: new Date() },
-  });
-
-  res.status(200).json({ age_verified, source: "self_declared" });
+  const profile = await exchangeGoogleCode(code, { requestBirthday: true });
+  if (!profile.birthdate) {
+    throw ApiError.unprocessable("ไม่พบวันเกิดพร้อมปีเกิดในบัญชี Google นี้ หรือไม่ได้อนุญาตให้เข้าถึงวันเกิด");
+  }
+  res.status(200).json(await saveVerifiedBirthDate(req.user!.user_id, profile.birthdate, "google"));
 }
 
 const interestsBodySchema = z.object({
@@ -186,12 +202,18 @@ export async function getPublicProfile(req: Request, res: Response) {
 
   const user = await prisma.user.findUnique({
     where: { user_id },
-    select: { user_id: true, username: true, pen_name: true, avatar_url: true, bio: true, created_at: true },
+    select: { user_id: true, username: true, pen_name: true, avatar_url: true, bio: true, account_type: true, created_at: true },
   });
   if (!user) throw ApiError.notFound("User not found");
 
+  // ซ่อนนิยายที่เรตเกินอายุที่ผู้ชมยืนยันไว้ (เดิมชื่อ/ปกโชว์ให้ทุกคน แม้หน้านิยายจะบล็อกแล้ว)
+  const viewer_id = req.user?.user_id;
   const novels = await prisma.novel.findMany({
-    where: { author_id: user_id, visibility: "published" },
+    where: {
+      author_id: user_id,
+      visibility: "published",
+      ...(await contentRatingWhere(viewer_id, viewer_id === user_id)),
+    },
     orderBy: { created_at: "desc" },
     select: {
       novel_id: true,
@@ -200,6 +222,7 @@ export async function getPublicProfile(req: Request, res: Response) {
       view_count: true,
       status: true,
       hide_like_count: true,
+      is_demo: true,
     },
   });
 
@@ -253,7 +276,7 @@ export async function setInterests(req: Request, res: Response) {
       where: { user_id },
       select: { tag: { select: { tag_id: true, name: true } } },
     }),
-    prisma.user.findUnique({ where: { user_id }, select: { username: true } }),
+    prisma.user.findUnique({ where: { user_id }, select: { username: true, account_type: true } }),
   ]);
 
   // sync ไป Neo4j (INTERESTED_IN) หลัง Postgres commit สำเร็จแล้ว — แก้ cold-start ของ
@@ -262,6 +285,7 @@ export async function setInterests(req: Request, res: Response) {
     syncInterestedIn(
       user_id,
       user.username,
+      user.account_type,
       user_interests.map((ui) => ui.tag.name)
     ).catch((err) => console.error("Neo4j syncInterestedIn failed:", err));
   }

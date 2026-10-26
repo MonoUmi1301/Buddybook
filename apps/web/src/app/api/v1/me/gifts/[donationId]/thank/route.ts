@@ -4,8 +4,9 @@ import { thankGiftSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/me/gifts/:donationId/thank — นักเขียนตอบขอบคุณ (ครั้งเดียว) แจ้งเตือนกลับไปหาผู้ส่ง
-export async function POST(request: Request, { params }: { params: { donationId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(request: Request, props: { params: Promise<{ donationId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.donationId, "donation_id");

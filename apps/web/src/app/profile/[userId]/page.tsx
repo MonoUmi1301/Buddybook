@@ -14,9 +14,11 @@ import { SupporterBadges } from "@/components/gifts/SupporterBadges";
 import type { PublicGifts, SupporterBadge } from "@/lib/gifts";
 import { callApi } from "@/lib/api/proxy";
 import { getCurrentUser } from "@/lib/api/session";
+import { getAccessToken } from "@/lib/api/auth";
 import { FollowButton } from "@/components/social/FollowButton";
 import { ReportButton } from "@/components/social/ReportButton";
 import { getPenName } from "@/lib/displayName";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 import { formatCompactNumber, formatThaiMonthYear } from "@/lib/format";
 
 interface PublicProfile {
@@ -25,6 +27,7 @@ interface PublicProfile {
   pen_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  account_type?: "DEMO" | "REAL";
   created_at: string;
   novel_count: number;
   novels: ProfileNovel[];
@@ -42,10 +45,12 @@ function StatRow({ icon: Icon, label, value }: { icon: typeof Eye; label: string
   );
 }
 
-export default async function ProfilePage({ params }: { params: { userId: string } }) {
+export default async function ProfilePage(props: { params: Promise<{ userId: string }> }) {
+  const params = await props.params;
   const [user, result] = await Promise.all([
     getCurrentUser(),
-    callApi({ method: "GET", path: `/users/${params.userId}` }),
+    // ส่ง token ให้ผู้ที่ยืนยันอายุแล้ว/เจ้าของโปรไฟล์เห็นนิยายเรต 18+ ในรายการผลงาน
+    callApi({ method: "GET", path: `/users/${params.userId}`, token: await getAccessToken() }),
   ]);
 
   if ("error" in result || result.status === 404) notFound();
@@ -176,6 +181,7 @@ export default async function ProfilePage({ params }: { params: { userId: string
                       {isWriter ? <PenLine className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
                       {isWriter ? "นักเขียน" : "นักอ่าน"}
                     </span>
+                    {profile.account_type === "DEMO" && <DemoBadge className="px-2.5 text-xs" />}
                   </div>
                   <p className="mt-0.5 text-sm text-neutral-500">@{profile.username}</p>
                 </div>

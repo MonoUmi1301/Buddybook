@@ -5,12 +5,15 @@ import Image from "next/image";
 import { Camera, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
+import { IntroductionEditor } from "@/components/writer/IntroductionEditor";
 import { Button } from "@/components/ui/Button";
 import { TagInput } from "@/components/writer/TagInput";
 import { TagPicker } from "@/components/writer/TagPicker";
 import { useCloudinaryUpload } from "@/lib/useCloudinaryUpload";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel } from "@/components/writer/novelManagementTypes";
+import { handleAsync } from "@/lib/handleAsync";
+import { ImageCropDialog } from "@/components/ui/image-crop-dialog";
 
 interface EditNovelFormProps {
   novel: ManagedNovel;
@@ -67,6 +70,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { upload, uploading, error: uploadError } = useCloudinaryUpload("covers");
+  const [cropFile, setCropFile] = useState<File | null>(null);
 
   const mainGenreTags = tags.filter((t) => t.category === "genre" && !t.parent_tag_id);
   const subGenreTags = tags.filter((t) => t.category === "genre" && t.parent_tag_id === primaryTagId);
@@ -79,9 +83,15 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
     if (!stillValid) setSecondaryTagId(null);
   }
 
-  async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // เลือกไฟล์แล้วเปิดป๊อปอัปครอป (3:4 เท่ากับการ์ดนิยาย/หน้านิยาย) ก่อน แล้วค่อยอัปโหลดรูปที่ครอปแล้ว
+  function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = "";
+    if (file?.type.startsWith("image/")) setCropFile(file);
+  }
+
+  async function handleCoverChange(file: File) {
+    setCropFile(null);
     const url = await upload(file);
     if (url) setCoverImageUrl(url);
   }
@@ -158,7 +168,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 rounded-card border border-neutral-200 p-5">
+    <form onSubmit={handleAsync(handleSubmit)} className="space-y-5 rounded-card border border-neutral-200 p-5">
       <div>
         <p className="mb-1.5 text-sm font-medium text-neutral-700">ปกนิยาย</p>
         <label className="group relative flex h-40 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 transition-colors hover:border-primary-400">
@@ -169,29 +179,34 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
           ) : (
             <Camera className="h-6 w-6 text-neutral-300" />
           )}
-          <input type="file" accept="image/*" className="hidden" onChange={handleCoverChange} disabled={uploading} />
+          <input type="file" accept="image/*" className="hidden" onChange={handleCoverPick} disabled={uploading} />
         </label>
         {uploadError && <p className="mt-1 text-xs text-red-500">{uploadError}</p>}
+        {cropFile && (
+          <ImageCropDialog
+            file={cropFile}
+            title="ปรับปกนิยาย"
+            aspect={3 / 4}
+            shape="rect"
+            outputWidth={900}
+            onCancel={() => setCropFile(null)}
+            onConfirm={handleAsync(handleCoverChange)}
+          />
+        )}
       </div>
 
       <Input label="ชื่อเรื่อง" value={title} onChange={(e) => setTitle(e.target.value)} required />
 
       <Textarea label="เรื่องย่อ" value={synopsis} onChange={(e) => setSynopsis(e.target.value)} rows={5} />
 
-      <Textarea
-        label="แนะนำนิยาย (คำเกริ่นนำยาว)"
-        hint="รายละเอียดเพิ่มเติม/คำโปรโมตฉบับยาว แสดงต่อท้ายเรื่องย่อในหน้านิยาย (ไม่บังคับ)"
-        value={introduction}
-        onChange={(e) => setIntroduction(e.target.value)}
-        rows={8}
-        maxLength={20000}
-      />
+      <IntroductionEditor defaultValue={novel.introduction ?? ""} onChange={setIntroduction} />
 
       {mainGenreTags.length > 0 && (
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่หลัก</label>
+            <label htmlFor="edit-novel-primary-genre" className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่หลัก</label>
             <select
+            id="edit-novel-primary-genre"
               value={primaryTagId ?? ""}
               onChange={(e) => handlePrimaryTagChange(e.target.value ? Number(e.target.value) : null)}
               className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 focus:border-primary-400 focus:outline-none"
@@ -205,8 +220,9 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่รอง</label>
+            <label htmlFor="edit-novel-secondary-genre" className="mb-1.5 block text-sm font-medium text-neutral-700">หมวดหมู่รอง</label>
             <select
+            id="edit-novel-secondary-genre"
               value={secondaryTagId ?? ""}
               onChange={(e) => setSecondaryTagId(e.target.value ? Number(e.target.value) : null)}
               disabled={!primaryTagId}

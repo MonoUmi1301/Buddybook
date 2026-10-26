@@ -1,4 +1,34 @@
-# BuddyBook บน Docker (dev)
+# BuddyBook บน Docker
+
+## Production (VPS — https://buddybook.tech)
+
+Nginx + certbot ติดตั้งบนเครื่อง VPS (ไม่ใช่ container) · Neo4j ใช้ Aura · build image บน VPS เอง (ไม่มี registry)
+
+| service | port บนเครื่อง | หมายเหตุ |
+|---|---|---|
+| web | `127.0.0.1:3000` | Nginx ส่งทุก path มาที่นี่ (รวม `/api/v1/*`) |
+| api | `127.0.0.1:4000` | Nginx ส่งเฉพาะ `/api/v1/webhooks/*` (Stripe/Didit) |
+| postgres (18-alpine) | ไม่เปิด | volume `pgdata` |
+| migrate | – | `prisma migrate deploy` อย่างเดียว ไม่ seed แล้วจบ |
+| nlp-worker | – | `--profile nlp` ต้อง copy โฟลเดอร์ model (~400MB ไม่อยู่ใน git) ขึ้น VPS แล้วตั้ง `NLP_MODEL_DIR` |
+
+1. `cp .env.production.example .env.production` แล้วกรอก (`NEO4J_*` ของ Aura, Stripe, OAuth ฯลฯ)
+   `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` ถูกฝังตอน build — เปลี่ยนแล้วต้อง `--build` web ใหม่
+2. Nginx/certbot ตามหัวไฟล์ `docker/nginx/buddybook.tech.conf`
+3. ย้ายข้อมูลจาก Postgres ในเครื่อง (ถ้ามี) — **ก่อน** เปิดทั้งระบบ:
+   ```
+   pg_dump -Fc -h localhost -p 5525 -U postgres -d buddybook -f buddybook.dump     # บนเครื่อง dev (pg_dump 18)
+   docker compose -f docker-compose.prod.yml --env-file .env.production up -d postgres
+   docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres      pg_restore --no-owner --no-acl -U buddybook -d buddybook < buddybook.dump
+   ```
+   dump มีตาราง `_prisma_migrations` ติดไปด้วย migrate จะเห็นว่าไม่มีอะไรค้าง · ถ้าตารางถูกสร้างไปแล้ว
+   ใส่ `--clean --if-exists` เพิ่ม
+4. `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build`
+5. กราฟ Neo4j: scheduler resync เองทุก 6 ชม. — อยากได้ทันทีกด resync ในหน้าแอดมิน
+
+> ⚠️ **ห้ามรัน `scripts/db-setup.mjs` / `npm run docker:setup` บน production** — ขั้น seed-mock ลบแล้วสร้างนิยาย mock ใหม่
+
+## Dev
 
 มี 2 โหมด — เลือกตามแรงเครื่อง
 
@@ -7,19 +37,20 @@
 | **ทั้งหมด** | postgres, neo4j, api, web | ใน container (hot reload) |
 | **DB อย่างเดียว** | postgres, neo4j | Node บนเครื่องเหมือนเดิม |
 
-วิธีรันด้วย Node แบบเดิม (PostgreSQL บน Windows พอร์ต 5432 + Neo4j Aura ตาม `apps/api/.env`) ยังใช้ได้ทุกอย่าง
+วิธีรันด้วย Node แบบเดิม (PostgreSQL 18 บน Windows พอร์ต 5525 + Neo4j Aura ตาม `apps/api/.env`) ยังใช้ได้ทุกอย่าง
+— container postgres ก็ใช้ host port 5525 เหมือนกัน อย่าเปิดพร้อมกัน
 ไฟล์ `.env` เดิมไม่ถูกแก้ — ค่าเฉพาะ Docker อยู่ใน `docker/api.docker.env` / `docker/host.docker.env`
 
 ## ใช้ PostgreSQL บน Windows แทน container postgres
 
-ถ้ามีบัญชี/ข้อมูลจริงอยู่ใน PostgreSQL บนเครื่อง (5432) อยู่แล้ว ให้ api ใน Docker ใช้ DB นั้นได้ โดยสร้างไฟล์ `.env`
+ถ้ามีบัญชี/ข้อมูลจริงอยู่ใน PostgreSQL บนเครื่อง (5525) อยู่แล้ว ให้ api ใน Docker ใช้ DB นั้นได้ โดยสร้างไฟล์ `.env`
 ที่ root (gitignored — compose อ่านเอง):
 
 ```
-DOCKER_DATABASE_URL=postgresql://postgres:<รหัสผ่าน>@host.docker.internal:5432/buddybook?schema=public
+DOCKER_DATABASE_URL=postgresql://postgres:<รหัสผ่าน>@host.docker.internal:5525/buddybook?schema=public
 ```
 
-แล้ว `docker compose --profile app up -d api` ใหม่ — ลบบรรทัดนี้เพื่อกลับไปใช้ container postgres (5525)
+แล้ว `docker compose --profile app up -d api` ใหม่ — ลบบรรทัดนี้เพื่อกลับไปใช้ container postgres
 
 > ⚠️ โหมดนี้ **อย่ารัน `npm run docker:setup` แบบเต็ม** — ขั้น seed-mock-novels ลบแล้วสร้างนิยาย mock ใหม่
 > (uuid เปลี่ยน) ของในชั้นหนังสือ/ถูกใจของบัญชีจริงที่ชี้ไปนิยาย mock จะหายตาม ใช้ `-- --skip-mock` แทน
@@ -104,4 +135,4 @@ swap=2GB
   web: watchpack) ถ้าอยากให้เร็ว/เบากว่านี้ ย้าย repo ไปไว้ในไฟล์ระบบของ WSL (`\\wsl$\...`)
 - **`.next` ของ web ใน Docker แยก volume** จาก `apps/web/.next` บนเครื่อง — รัน `next dev` ทั้งบนเครื่องและใน
   Docker พร้อมกันไม่ได้อยู่ดี เพราะชนพอร์ต 3000
-- `apps/nlp-worker` (Python) ยังไม่อยู่ใน compose
+- `apps/nlp-worker` (Python) อยู่ใน profile `nlp` (`docker compose --profile app --profile nlp up -d`) ต้องมีโฟลเดอร์โมเดลที่ `NLP_MODEL_DIR`

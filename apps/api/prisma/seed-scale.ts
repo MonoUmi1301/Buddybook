@@ -20,9 +20,9 @@
  * - id ทุกตัวสร้างฝั่งสคริปต์ด้วย UUID เพื่อใช้ createMany แบบ batch ได้
  * - ข้อมูลใน Neo4j ไม่ถูกสร้างที่นี่ ต้องรัน sync ของระบบหลังจากนี้
  *
- * เพิ่มภายหลัง (ข้อมูลสำหรับทดสอบมือ) — ทุกบัญชีล็อกอินด้วยอีเมล + รหัสผ่าน buddy1234 ได้, เนื้อหาตอนยาวจริง,
+ * เพิ่มภายหลัง (ข้อมูลสำหรับทดสอบมือ) — ทุกบัญชีเป็น DEMO (account_type) ล็อกอินไม่ได้, เนื้อหาตอนยาวจริง,
  * ตอนติดเหรียญ + การซื้อ + ledger กระเป๋าเงินที่ยอดถูกต้อง, ติดตามนักเขียน, คอมเมนต์หลายแบบ + นักเขียนตอบกลับ,
- * sentiment (label/score/polarity) ครบ, ยอดวิวรายวัน (กราฟสถิตินักเขียน) — จบแล้วพิมพ์บัญชีแนะนำให้ลองล็อกอิน
+ * sentiment (label/score/polarity) ครบ, ยอดวิวรายวัน (กราฟสถิตินักเขียน) — จบแล้วพิมพ์บัญชีที่น่าเปิดดูโปรไฟล์
  *   --no-sentiment   เว้น sentiment ว่าง ให้ NLP worker วิเคราะห์เอง (ทดสอบ worker กับข้อมูลจำนวนมาก)
  */
 import { randomUUID } from "node:crypto";
@@ -153,7 +153,7 @@ const charName = () => pick(NAME_A) + pick(NAME_B);
 // ---------------------------------------------------------------------------
 type UserRow = {
   user_id: string; username: string; pen_name: string | null; email: string; password_hash: string;
-  bio: string | null; age_verified: boolean; age_verification_source: "self_declared"; created_at: Date;
+  bio: string | null; age_verified: boolean; age_verification_source: "google" | null; created_at: Date;
 };
 type NovelRow = {
   novel_id: string; author_id: string; title: string; synopsis: string; introduction: string; cover_image_url: string;
@@ -199,8 +199,11 @@ function generate() {
     return {
       user_id: randomUUID(), username, email: `${username}@${DOMAIN}`, password_hash: "",
       pen_name: role === "author" || rand() < 0.15 ? `${charName()}${pick(["", "ฟิค", "หมึก", "ราตรี", "นิยาย"])}` : null,
-      bio: role === "author" ? `เขียนแนว${pick(GENRES).main}เป็นหลัก` : null, age_verified: rand() < 0.85,
-      age_verification_source: "self_declared", created_at: at(day),
+      bio: role === "author" ? `เขียนแนว${pick(GENRES).main}เป็นหลัก` : null, created_at: at(day),
+      // ข้อมูลจำลอง: ผู้ใหญ่ที่ยืนยันอายุด้วย Google (ไม่มีวันเกิด → นับเป็น 18) — ไม่มีการกรอกวันเกิดเองแล้ว
+      ...(rand() < 0.85
+        ? { age_verified: true, age_verification_source: "google" as const }
+        : { age_verified: false, age_verification_source: null }),
     };
   };
 
@@ -433,7 +436,7 @@ function sentimentFor(mood: Mood, target: Target = [], rating: number | null = n
   return { sentiment_label: mood, sentiment_score: score, sentiment_polarity: raw, sentiment_targets: target, ...blended };
 }
 
-/** บัญชีแนะนำสำหรับลองล็อกอิน — เลือกจากข้อมูลจริงที่เพิ่งสร้าง */
+/** บัญชีตัวอย่างที่น่าเปิดดูโปรไฟล์/สถิติ (DEMO ล็อกอินไม่ได้) — เลือกจากข้อมูลที่เพิ่งสร้าง */
 function printAccounts(d: ReturnType<typeof generate>, tx: { user_id: string; type: string; amount: number }[]) {
   const readersOf = new Map<string, number>();
   for (const x of d.interactions) readersOf.set(d.novels[x.novel].author_id, (readersOf.get(d.novels[x.novel].author_id) ?? 0) + 1);
@@ -454,7 +457,7 @@ function printAccounts(d: ReturnType<typeof generate>, tx: { user_id: string; ty
     ...(typical ? [["นักอ่านทั่วไป", `${d.users[typical[0]].email} (${typical[1]} เรื่อง${buyer.has(typical[0]) ? ", เคยซื้อตอน" : ""})`] as [string, string]] : []),
     ...(minor >= 0 ? [["ยังไม่ยืนยันอายุ 18+", d.users[minor].email] as [string, string]] : []),
   ];
-  console.log(`\nบัญชีแนะนำสำหรับลองล็อกอิน (รหัสผ่านทุกบัญชี: ${CFG.password})`);
+  console.log(`\nบัญชีตัวอย่างที่น่าเปิดดู (DEMO — ล็อกอินไม่ได้)`);
   for (const [label, v] of rows) console.log(`  ${label.padEnd(36)} ${v}`);
 }
 
@@ -491,9 +494,9 @@ async function insert(d: ReturnType<typeof generate>) {
       return id;
     };
 
-    // ทุกบัญชีจำลองใช้รหัสผ่านเดียวกัน (bcrypt ครั้งเดียว) — ล็อกอินทดสอบด้วยอีเมล sim_xxx@scale.buddybook.local ได้
+    // ทุกบัญชีจำลองเป็น DEMO (ล็อกอินไม่ได้ — auth.service ปฏิเสธเหมือนรหัสผิด) รหัสผ่านคงไว้เพื่อผ่าน chk_users_has_login_method
     const password_hash = await bcrypt.hash(CFG.password, 10);
-    await chunk([...d.authors, ...d.users].map((u) => ({ ...u, password_hash })), (b) => prisma.user.createMany({ data: b }));
+    await chunk([...d.authors, ...d.users].map((u) => ({ ...u, password_hash, account_type: "DEMO" as const })), (b) => prisma.user.createMany({ data: b }));
     await chunk(d.users.flatMap((u, i) => {
       const top = d.pref[i].map((p, g) => [p, g] as const).sort((a, b) => b[0] - a[0]).slice(0, 2);
       return top.map(([, g]) => ({ user_id: u.user_id, tag_id: tagId(GENRES[g].main) }));
@@ -502,11 +505,11 @@ async function insert(d: ReturnType<typeof generate>) {
     await chunk(d.authors.map((a, i) => ({ user_id: a.user_id, tag_id: tagId(GENRES[d.authorGenre[i]].main) })),
       (b) => prisma.userInterest.createMany({ data: b, skipDuplicates: true }));
 
-    await chunk(d.novels.map(({ genreMain, genreSub, ...n }) => ({ ...n, primary_tag_id: tagId(genreMain), secondary_tag_id: tagId(genreSub) })),
+    await chunk(d.novels.map(({ genreMain, genreSub, ...n }) => ({ ...n, primary_tag_id: tagId(genreMain), secondary_tag_id: tagId(genreSub), is_demo: true })),
       (b) => prisma.novel.createMany({ data: b }), 500);
     await chunk(d.novels.flatMap((n, i) => Array.from(new Set(d.novelTags[i])).map((t) => ({ novel_id: n.novel_id, tag_id: tagId(t) }))),
       (b) => prisma.novelTag.createMany({ data: b, skipDuplicates: true }));
-    await chunk(d.chapters, (b) => prisma.chapter.createMany({ data: b }), 1000);
+    await chunk(d.chapters.map((c) => ({ ...c, is_demo: true })), (b) => prisma.chapter.createMany({ data: b }), 1000);
     await chunk(d.nodes, (b) => prisma.characterNode.createMany({ data: b }));
     await chunk(d.edges, (b) => prisma.characterEdge.createMany({ data: b }));
 
@@ -524,14 +527,14 @@ async function insert(d: ReturnType<typeof generate>) {
         last_read_at: at(Math.min(CFG.days - 0.01, x.t + rand() * 20)) };
     }), (b) => prisma.readingProgress.createMany({ data: b, skipDuplicates: true }));
     // ตรวจชื่อฟิลด์ created_at ของ review / like / comment ใน schema.prisma ก่อนรัน ถ้าไม่มีให้ลบออก
-    await chunk(it.filter((x) => x.liked).map((x) => ({ user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, created_at: at(x.t + 0.2) })),
+    await chunk(it.filter((x) => x.liked).map((x) => ({ user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, is_demo: true, created_at: at(x.t + 0.2) })),
       (b) => prisma.novelLike.createMany({ data: b, skipDuplicates: true }));
     await chunk(it.filter((x) => x.rating !== null).map((x) => {
       const r = x.rating as number;
       const text = pick(REVIEW_TEXT[r]);
       return { user_id: U[x.user].user_id, novel_id: N[x.novel].novel_id, rating: r, comment_text: text,
         ...sentimentFor(r >= 4 ? "pos" : r === 3 ? "neutral" : "neg", targetOf(text, []), r),
-        is_anonymous: rand() < 0.05, created_at: at(Math.min(CFG.days - 0.01, x.t + 1 + rand() * 10)) };
+        is_anonymous: rand() < 0.05, is_demo: true, created_at: at(Math.min(CFG.days - 0.01, x.t + 1 + rand() * 10)) };
     }), (b) => prisma.review.createMany({ data: b, skipDuplicates: true }));
     // คอมเมนต์ 1-3 ตอนต่อคน อารมณ์ตามความชอบเรื่อง (มีสุ่มสลับบ้าง) + นักเขียนตอบกลับบางส่วน
     const comments: { comment_id: string; chapter_id: string; user_id: string; parent_comment_id: string | null; content: string; created_at: Date }[] = [];
@@ -565,7 +568,7 @@ async function insert(d: ReturnType<typeof generate>) {
       }
     }
     // พ่อก่อนลูก (reply อ้าง parent ที่ต้องมีอยู่แล้ว) — createMany ทีละ batch ตามลำดับใน array จึงปลอดภัย
-    await chunk(comments.map((c, i) => ({ ...c, ...sentimentFor(commentMood[i], commentTarget[i]) })), (b) => prisma.comment.createMany({ data: b }));
+    await chunk(comments.map((c, i) => ({ ...c, ...sentimentFor(commentMood[i], commentTarget[i]), is_demo: true })), (b) => prisma.comment.createMany({ data: b }));
 
     // ติดตามนักเขียนของเรื่องที่ชอบมาก
     const follows = new Map<string, { follower_id: string; author_id: string; created_at: Date }>();
@@ -596,7 +599,7 @@ async function insert(d: ReturnType<typeof generate>) {
       add(U[u].user_id, { type: "topup", amount: topup, reference_id: null, created_at: new Date(s.first - (1 + rand() * 24) * 3_600_000) });
     }
     await chunk(d.purchases.map((p) => ({ purchase_id: p.purchase_id, user_id: U[p.user].user_id, chapter_id: d.chapterIdOf[p.novel][p.chapter],
-      price_coins: p.price, fee_coins: Math.floor((p.price * CFG.chapterFeePercent) / 100), created_at: p.at })),
+      price_coins: p.price, fee_coins: Math.floor((p.price * CFG.chapterFeePercent) / 100), is_demo: true, created_at: p.at })),
       (b) => prisma.chapterPurchase.createMany({ data: b, skipDuplicates: true }));
     for (const p of d.purchases) {
       const fee = Math.floor((p.price * CFG.chapterFeePercent) / 100);

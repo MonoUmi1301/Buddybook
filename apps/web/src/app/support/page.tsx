@@ -21,7 +21,7 @@ export default async function SupportPage() {
 
   let tickets: SupportTicketSummary[] = [];
   if (user) {
-    const result = await callApi({ method: "GET", path: "/support/tickets", token: getAccessToken() });
+    const result = await callApi({ method: "GET", path: "/support/tickets", token: await getAccessToken() });
     tickets =
       !("error" in result) && result.status === 200 ? (result.json as { tickets: SupportTicketSummary[] }).tickets : [];
   }

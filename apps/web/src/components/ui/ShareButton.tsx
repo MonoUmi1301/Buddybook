@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Share2 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface ShareButtonProps {
   title: string;
@@ -39,7 +40,7 @@ export function ShareButton({ title, className, label }: ShareButtonProps) {
   return (
     <button
       type="button"
-      onClick={share}
+      onClick={handleAsync(share)}
       aria-label={copied ? "คัดลอกลิงก์แล้ว" : "แชร์"}
       title={copied ? "คัดลอกลิงก์แล้ว" : "แชร์"}
       className={cn(

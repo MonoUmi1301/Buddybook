@@ -377,8 +377,10 @@ export function CoverflowCarousel<T extends CoverflowSlide = CoverflowSlide>({
           className="cursor-grab overflow-hidden rounded-card py-10 outline-none ring-primary-400 focus-visible:ring-2 active:cursor-grabbing"
           style={{ perspective: `calc(var(--cf-card) * ${perspective})`, touchAction: "pan-y" }}
         >
+          {/* pointer-events-none: การ์ดข้างถูกดันไปหลังระนาบของกล่องนี้ (translateZ ติดลบ) — ถ้ากล่องรับ hit-test
+              elementFromPoint ตอนแตะจะได้กล่องนี้แทนการ์ด แตะปกข้าง ๆ แล้วไม่เลื่อนมาตรงกลาง (การ์ดตั้ง auto เองใน paint) */}
           <div
-            className="relative select-none"
+            className="pointer-events-none relative select-none"
             style={{ height: `calc(var(--cf-card) / ${aspectRatio})`, transformStyle: "preserve-3d" }}
           >
             {slides.map((slide, index) => (

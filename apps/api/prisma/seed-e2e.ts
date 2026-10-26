@@ -6,6 +6,8 @@
  *
  *   npx tsx prisma/seed-e2e.ts
  *   ล็อกอิน: e2e_writer@e2e.buddybook.local / e2e12345
+ * account_type = REAL (ค่า default) โดยตั้งใจ — เป็นบัญชีทดสอบอัตโนมัติที่ต้องล็อกอินได้ ไม่ใช่ข้อมูลตัวอย่างบนเว็บ
+ *   ห้ามรันบน production (บัญชีที่สร้างหลัง migration demo_real_accounts ไม่ถูก scripts/mark-demo.ts แตะ)
  *
  * พิมพ์ JSON { novel_id, chapter_id } ออกทาง stdout บรรทัดสุดท้าย ให้สคริปต์อื่นอ่านต่อได้
  */

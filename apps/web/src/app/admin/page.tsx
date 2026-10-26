@@ -1,51 +1,116 @@
-import { BookOpen, Coins, FileText, ShieldAlert, Users } from "lucide-react";
-import { callApi } from "@/lib/api/proxy";
-import { getAccessToken } from "@/lib/api/auth";
+import Link from "next/link";
+import {
+  Banknote,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Coins,
+  FileText,
+  Flag,
+  Headset,
+  ScrollText,
+  ShieldAlert,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { redirect } from "next/navigation";
+import { AdminHero } from "@/components/ui/admin-hero";
+import { getAdminStats, type DemoSplitKey } from "@/lib/adminStats";
+import { getCurrentUser } from "@/lib/api/session";
+import { getPenName } from "@/lib/displayName";
+import { cn } from "@/lib/cn";
+import { AdminDashboard } from "@/components/admin/AdminDashboard";
 
-interface AdminStats {
-  total_users: number;
-  total_novels: number;
-  total_chapters: number;
-  pending_review_count: number;
-  /** เพิ่มภายหลัง (Gift donations) — SUM(donations.fee_amount) สะสม / เดือนนี้ (ปฏิทินไทย) */
-  platform_fee_total: number;
-  platform_fee_this_month: number;
-  platform_fee_percent: number;
-}
-
-const emptyStats: AdminStats = {
-  total_users: 0,
-  total_novels: 0,
-  total_chapters: 0,
-  pending_review_count: 0,
-  platform_fee_total: 0,
-  platform_fee_this_month: 0,
-  platform_fee_percent: 10,
-};
-
-// GET /admin/reports/stats — ดู API_Endpoints.md ส่วนที่ 5
+// GET /admin/reports/stats — ดู API_Endpoints.md ส่วนที่ 5 ; bento ด้านบนดึง GET /admin/dashboard ฝั่ง client
 export default async function AdminDashboardPage() {
-  const result = await callApi({ method: "GET", path: "/admin/reports/stats", token: getAccessToken() });
-  const stats: AdminStats =
-    !("error" in result) && result.status === 200 ? { ...emptyStats, ...(result.json as Partial<AdminStats>) } : emptyStats;
+  // layout.tsx กันไว้แล้ว เช็กซ้ำที่หน้านี้ด้วยเผื่อ layout ถูกเปลี่ยน — ไม่ใช่แอดมินกลับหน้าแรก
+  const [user, stats] = await Promise.all([getCurrentUser(), getAdminStats()]);
+  if (!user || user.role !== "admin") redirect("/");
 
   const cards = [
     { label: "ผู้ใช้งานทั้งหมด", value: stats.total_users, icon: Users, color: "text-sky-500 bg-sky-50" },
     { label: "นิยายทั้งหมด", value: stats.total_novels, icon: BookOpen, color: "text-violet-500 bg-violet-50" },
     { label: "ตอนทั้งหมด", value: stats.total_chapters, icon: FileText, color: "text-emerald-500 bg-emerald-50" },
-    {
-      label: "รอตรวจสอบ",
-      value: stats.pending_review_count,
-      icon: ShieldAlert,
-      color: "text-amber-500 bg-amber-50",
-    },
+    { label: "สมาชิกใหม่ 7 วัน", value: stats.new_users_7d, icon: UserPlus, color: "text-primary-500 bg-primary-50" },
+  ];
+
+  // งานที่รอแอดมิน — เรียงตามความเร่งด่วน (เงิน/รายงาน ก่อน)
+  const tasks = [
+    { href: "/admin/withdrawals", label: "คำขอถอนเงินรอโอน", count: stats.pending_withdrawals, icon: Banknote },
+    { href: "/admin/content-reports", label: "รายงานเนื้อหารอตรวจ", count: stats.open_content_reports, icon: ShieldAlert },
+    { href: "/admin/novels?tab=appeals", label: "คำอุทธรณ์นิยายรอพิจารณา", count: stats.pending_appeal_count, icon: ScrollText },
+    { href: "/admin/support", label: "เรื่องแจ้งปัญหาที่ยังเปิดอยู่", count: stats.open_support_tickets, icon: Headset },
+    { href: "/admin/gift-reports", label: "การ์ดของขวัญถูกรายงาน", count: stats.open_gift_reports, icon: Flag },
+  ];
+  const totalPending = tasks.reduce((s, t) => s + t.count, 0);
+
+  const splitRows: { key: DemoSplitKey; label: string }[] = [
+    { key: "users", label: "บัญชีผู้ใช้" },
+    { key: "novels", label: "นิยาย" },
+    { key: "chapters", label: "ตอน" },
+    { key: "reviews", label: "รีวิว" },
+    { key: "comments", label: "คอมเมนต์" },
+    { key: "donations", label: "โดเนท/ของขวัญ" },
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <AdminHero />
+
+      {/* ---- ภาพรวม (bento) — GET /admin/dashboard ---- */}
+      <AdminDashboard adminName={getPenName(user)} />
+
+      {/* ---- งานที่รอคุณ ---- */}
+      <section className="rounded-card border border-neutral-200 bg-white p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-neutral-900">งานที่รอคุณ</h3>
+            <p className="text-xs text-neutral-500">
+              {totalPending > 0 ? `มีงานค้างทั้งหมด ${totalPending.toLocaleString()} รายการ` : "ไม่มีงานค้าง เยี่ยมมาก!"}
+            </p>
+          </div>
+          {totalPending === 0 && <CheckCircle2 className="h-7 w-7 text-emerald-500" />}
+        </div>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {tasks.map((t) => {
+            const pending = t.count > 0;
+            return (
+              <li key={t.href}>
+                <Link
+                  href={t.href}
+                  className={cn(
+                    "group flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
+                    pending
+                      ? "border-primary-200 bg-primary-50/60 hover:border-primary-400 dark:border-primary-500/40 dark:bg-primary-500/10"
+                      : "border-neutral-200 hover:bg-neutral-50"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                      pending ? "bg-primary-500 text-white" : "bg-neutral-100 text-neutral-400"
+                    )}
+                  >
+                    <t.icon className="h-4 w-4" />
+                  </span>
+                  <span className={cn("flex-1 text-sm", pending ? "font-medium text-neutral-900" : "text-neutral-500")}>
+                    {t.label}
+                  </span>
+                  <span className={cn("text-lg font-bold", pending ? "text-primary-600" : "text-neutral-300")}>
+                    {t.count.toLocaleString()}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-neutral-300 group-hover:text-neutral-500" />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      {/* ---- ภาพรวมแพลตฟอร์ม ---- */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c) => (
-          <div key={c.label} className="rounded-card border border-neutral-200 p-5">
+          <div key={c.label} className="rounded-card border border-neutral-200 bg-white p-5">
             <span className={`inline-flex h-10 w-10 items-center justify-center rounded-full ${c.color}`}>
               <c.icon className="h-5 w-5" />
             </span>
@@ -55,8 +120,43 @@ export default async function AdminDashboardPage() {
         ))}
       </div>
 
+      {/* ข้อมูลจริง vs ตัวอย่าง — REAL = ผู้ใช้จริง, DEMO = จาก seed/mock (ดู scripts/mark-demo.ts) */}
+      <section className="rounded-card border border-neutral-200 bg-white p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-neutral-900">ข้อมูลจริง / ข้อมูลตัวอย่าง</h3>
+          <div className="flex gap-2 text-xs">
+            <Link href="/admin/users?type=real" className="rounded-pill border border-neutral-300 px-3 py-1 text-neutral-600 hover:bg-neutral-50">
+              ดูผู้ใช้จริง
+            </Link>
+            <Link href="/admin/users?type=demo" className="rounded-pill border border-neutral-300 px-3 py-1 text-neutral-600 hover:bg-neutral-50">
+              ดูบัญชีตัวอย่าง
+            </Link>
+          </div>
+        </div>
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {splitRows.map(({ key, label }) => {
+            const s = stats.demo_split[key];
+            const total = s.real + s.demo;
+            return (
+              <li key={key} className="rounded-xl border border-neutral-200 px-3 py-2.5">
+                <p className="text-xs text-neutral-500">{label}</p>
+                <p className="mt-1 text-lg font-bold text-emerald-700">
+                  {s.real.toLocaleString()} <span className="text-xs font-medium">จริง</span>
+                </p>
+                <p className="text-sm font-semibold text-amber-700">
+                  {s.demo.toLocaleString()} <span className="text-xs font-medium">ตัวอย่าง</span>
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-amber-200" aria-hidden>
+                  <div className="h-full bg-emerald-500" style={{ width: `${total ? (s.real / total) * 100 : 0}%` }} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
       {/* เพิ่มภายหลัง (Gift donations) — ค่าธรรมเนียมแพลตฟอร์มจากของขวัญ */}
-      <div className="rounded-card border border-neutral-200 p-5">
+      <div className="rounded-card border border-neutral-200 bg-white p-5">
         <div className="flex flex-wrap items-start gap-4">
           <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-orange-50 text-orange-500">
             <Coins className="h-5 w-5" />

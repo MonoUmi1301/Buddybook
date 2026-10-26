@@ -28,7 +28,7 @@ const DOMAIN_RE = new RegExp(`(${DOMAIN_TERMS.join("|")})`, "g");
 const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter("th", { granularity: "word" }) : null;
 
 export function stripHtml(text: string): string {
-  return text.replace(/<[^>]*>/g, " ").replace(/&[a-z#0-9]+;/gi, " ");
+  return text.replace(/<[^<>]*>/g, " ").replace(/&[a-z#0-9]+;/gi, " ");
 }
 
 /** แยกคำ (ตัว ๆ ซ้ำและเครื่องหมายทิ้ง, ตัวพิมพ์เล็ก, ยาว ≥ 2 ตัวอักษร, ไม่ใช่ stopword/ตัวเลข) */

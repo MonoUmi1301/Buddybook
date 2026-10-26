@@ -34,6 +34,12 @@ enum OAuthProvider {
   line
 }
 
+/// แยกจาก role — DEMO = บัญชีจาก seed/mock (ล็อกอิน/รีเซ็ตรหัสผ่านไม่ได้) REAL = ผู้ใช้จริง (สมัครใหม่เป็น REAL เสมอ)
+enum AccountType {
+  DEMO
+  REAL
+}
+
 enum UserRole {
   user
   admin
@@ -51,10 +57,22 @@ enum LegalStatus {
   translation
 }
 
+/// published = ผู้อ่านเห็นทันที (post-moderation — ไม่มีคิวอนุมัติก่อนเผยแพร่แล้ว), private = เจ้าของเห็นคนเดียว,
+/// suspended = แอดมินระงับหลังตรวจพบว่าผิดแนวทาง (ซ่อนจากสาธารณะ นักเขียนเปลี่ยนเองไม่ได้ ต้องยื่นอุทธรณ์)
+/// ดู NovelModerationCase — เดิมมี pending_review (pre-moderation) ถูกยกเลิกใน migration post_moderation
 enum Visibility {
   published
   private
-  pending_review
+  suspended
+}
+
+/// สถานะเคสระงับนิยาย: suspended = ระงับอยู่ ยังไม่อุทธรณ์ · appeal_pending = นักเขียนยื่นอุทธรณ์ รอแอดมินตรวจซ้ำ
+/// reinstated = แอดมินคืนสถานะ (ปิดเคส) · upheld = แอดมินยืนยันการระงับ (ยังระงับอยู่ แก้เนื้อหาแล้วอุทธรณ์ใหม่ได้)
+enum ModerationCaseStatus {
+  suspended
+  appeal_pending
+  reinstated
+  upheld
 }
 
 enum ChapterStatus {
@@ -188,6 +206,10 @@ enum NotificationType {
   new_follower
   /// gap 3.2 — ทีมงานตอบ/เปลี่ยนสถานะเรื่องที่แจ้งปัญหา
   support_reply
+  /// แอดมินระงับ/คืนสถานะนิยาย หรือตัดสินคำอุทธรณ์ — ปิดการแจ้งเตือนประเภทนี้ไม่ได้
+  moderation
+  /// มีผู้อ่านรีวิวนิยายของฉัน
+  review
 }
 
 /// เพิ่มภายหลัง (รายงานเนื้อหา) — สิ่งที่ผู้ใช้รายงานได้
@@ -229,64 +251,79 @@ enum WithdrawalStatus {
 /// รองรับ OAuth, Age Verification, Role — ไม่มีการแยก reader/writer
 /// (การเป็น "นักเขียน" ดูจาก novels.author_id ที่ชี้มาที่ user คนนั้น ไม่ใช่จาก role)
 model User {
-  user_id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  username       String         @unique @db.VarChar(50)
+  user_id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                 String             @unique @db.VarChar(50)
   /// เพิ่มภายหลัง (audit fix) — ชื่อที่นักอ่านเห็นบนหน้านิยาย/ตอน (แยกจาก username ซึ่งใช้กับ
   /// คอมเมนต์/รีวิวเท่านั้น) null = ยังไม่ได้ตั้ง ให้ fallback ไปใช้ username แทนตอนแสดงผล
-  pen_name       String?        @db.VarChar(50)
-  email          String         @unique @db.VarChar(255)
-  password_hash  String?        @db.VarChar(255)
-  oauth_provider OAuthProvider?
-  oauth_id       String?        @db.VarChar(255)
-  role           UserRole       @default(user)
-  avatar_url     String?        @db.Text
-  bio            String?        @db.Text
-  age_verified   Boolean        @default(false)
-  /// gap 3.4 — แหล่งที่ยืนยันอายุ: "google" (People API ตอนล็อกอิน) หรือ "self_declared" (กรอกวันเกิดเอง)
-  /// ยืนยันจาก provider แล้วกรอกเองทับไม่ได้ (ดู users.controller setAgeVerification)
-  age_verification_source String? @db.VarChar(20)
+  pen_name                 String?            @db.VarChar(50)
+  /// null = บัญชี LINE ที่ LINE ไม่ส่งอีเมลมา — ถูกบังคับไป /complete-profile (token มี email_required)
+  /// จนกว่าจะกรอกและยืนยันอีเมลด้วย OTP (ดู PendingEmailVerification) ไม่มีอีเมลปลอมแบบ line_<id>@... อีกแล้ว
+  email                    String?            @unique @db.VarChar(255)
+  password_hash            String?            @db.VarChar(255)
+  oauth_provider           OAuthProvider?
+  oauth_id                 String?            @db.VarChar(255)
+  /// LINE user id (sub ของ id_token) — แยกจาก oauth_provider/oauth_id เพื่อผูก LINE เข้ากับบัญชีเดิม
+  /// (อีเมล/รหัสผ่าน หรือ Google) ได้โดยไม่ทับช่องทางล็อกอินเดิม ล็อกอินด้วย LINE หาผู้ใช้จากคอลัมน์นี้
+  line_user_id             String?            @unique @db.VarChar(64)
+  role                     UserRole           @default(user)
+  /// ดู enum AccountType — ตั้งเป็น DEMO ได้จาก seed / scripts/mark-demo.ts เท่านั้น ไม่รับค่าจาก client
+  account_type             AccountType        @default(REAL)
+  avatar_url               String?            @db.Text
+  bio                      String?            @db.Text
+  age_verified             Boolean            @default(false)
+  /// gap 3.4 — แหล่งที่ยืนยันอายุ: "kyc" (บัตร + สแกนใบหน้า ดู KycVerification) หรือ "google" (People API)
+  /// เท่านั้น (ไม่มีการกรอกวันเกิดเอง — CHECK chk_users_age_verification_source) kyc ทับ google ได้ แต่ไม่ย้อนกลับ
+  age_verification_source  String?            @db.VarChar(20)
+  /// วันเกิดที่ยืนยันแล้ว (Google หรือกรอกเอง) — เกตเรตเนื้อหาคำนวณอายุจากค่านี้ทุกครั้ง (teen 13+, mature 18+)
+  /// อายุเพิ่มตามเวลาเองโดยไม่ต้องยืนยันใหม่; null + age_verified=true = บัญชีเก่าที่ยืนยันก่อนมีคอลัมน์นี้ (ถือว่า 18+)
+  birth_date               DateTime?          @db.Date
   /// เพิ่มภายหลัง (Phase 8) — PATCH /admin/users/:id/suspend มีอยู่ใน API_Endpoints.md แต่
   /// data dictionary เดิมไม่มีคอลัมน์นี้เลย บล็อกตอน login เท่านั้น (ไม่เช็คทุก request เพื่อไม่ให้
   /// เพิ่ม query ในทุก endpoint ที่ผ่าน requireAuth — access token อายุสั้น 15 นาทีอยู่แล้ว)
-  is_suspended   Boolean        @default(false)
+  is_suspended             Boolean            @default(false)
   /// เพิ่มภายหลัง — ผู้ใช้ลบบัญชีเอง (DELETE /users/me): ข้อมูลระบุตัวตนถูกล้าง นิยายถูกย้ายลงถังขยะ token ใช้ต่อไม่ได้
-  deleted_at     DateTime?      @db.Timestamptz(6)
+  deleted_at               DateTime?          @db.Timestamptz(6)
   /// เพิ่มภายหลัง (audit fix) — 2FA ผ่านแอป Authenticator (Google Authenticator/Authy ฯลฯ) แบบ
   /// TOTP (RFC 6238) เหมือน GitHub — เป็นฟีเจอร์ที่ผู้ใช้เปิดเองใน settings (ไม่บังคับทุกบัญชี)
   /// totp_secret เป็น null จนกว่าจะเปิดใช้งานสำเร็จ (ยืนยันรหัสจากแอปถูกต้องรอบแรกก่อน)
-  totp_secret    String?        @db.VarChar(255)
-  totp_enabled   Boolean        @default(false)
+  totp_secret              String?            @db.VarChar(255)
+  totp_enabled             Boolean            @default(false)
   /// gap 3.3 — ประเภทแจ้งเตือนที่ผู้ใช้ปิดไว้ (ไม่แสดงในรายการ/ไม่นับใน unread) ตั้งได้ที่หน้าแจ้งเตือน
   muted_notification_types NotificationType[] @default([])
-  created_at     DateTime       @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime?      @db.Timestamptz(6)
+  created_at               DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime?          @db.Timestamptz(6)
 
-  novels              Novel[]             @relation("NovelAuthor")
-  user_interests      UserInterest[]
-  chapter_versions    ChapterVersion[]    @relation("ChapterVersionEditor")
-  trash_bin_deletions TrashBin[]          @relation("TrashDeletedBy")
-  comments            Comment[]
-  reviews             Review[]
-  donations_given     Donation[]          @relation("DonationFrom")
-  donations_received  Donation[]          @relation("DonationTo")
-  wallet_transactions WalletTransaction[]
-  notifications       Notification[]
-  user_library        UserLibrary[]
-  novel_likes         NovelLike[]
-  reading_progress    ReadingProgress[]
-  collections         Collection[]
-  topup_orders        TopupOrder[]
-  following           AuthorFollow[]      @relation("Follower")
-  followers           AuthorFollow[]      @relation("FollowedAuthor")
-  reports_filed       ContentReport[]     @relation("ReportReporter")
-  reports_resolved    ContentReport[]     @relation("ReportResolver")
-  chapter_purchases   ChapterPurchase[]
-  withdrawals         WithdrawalRequest[] @relation("WithdrawalRequester")
-  withdrawals_handled WithdrawalRequest[] @relation("WithdrawalProcessor")
-  support_tickets     SupportTicket[]     @relation("SupportTicketOwner")
-  support_messages    SupportMessage[]    @relation("SupportMessageAuthor")
+  novels                     Novel[]                   @relation("NovelAuthor")
+  user_interests             UserInterest[]
+  kyc_verifications          KycVerification[]
+  chapter_versions           ChapterVersion[]          @relation("ChapterVersionEditor")
+  trash_bin_deletions        TrashBin[]                @relation("TrashDeletedBy")
+  comments                   Comment[]
+  reviews                    Review[]
+  donations_given            Donation[]                @relation("DonationFrom")
+  donations_received         Donation[]                @relation("DonationTo")
+  wallet_transactions        WalletTransaction[]
+  notifications              Notification[]
+  user_library               UserLibrary[]
+  novel_likes                NovelLike[]
+  reading_progress           ReadingProgress[]
+  collections                Collection[]
+  topup_orders               TopupOrder[]
+  following                  AuthorFollow[]            @relation("Follower")
+  followers                  AuthorFollow[]            @relation("FollowedAuthor")
+  reports_filed              ContentReport[]           @relation("ReportReporter")
+  reports_resolved           ContentReport[]           @relation("ReportResolver")
+  chapter_purchases          ChapterPurchase[]
+  withdrawals                WithdrawalRequest[]       @relation("WithdrawalRequester")
+  withdrawals_handled        WithdrawalRequest[]       @relation("WithdrawalProcessor")
+  pending_email_verification PendingEmailVerification?
+  support_tickets            SupportTicket[]           @relation("SupportTicketOwner")
+  support_messages           SupportMessage[]          @relation("SupportMessageAuthor")
+  moderation_suspensions     NovelModerationCase[]     @relation("ModerationSuspendedBy")
+  moderation_resolutions     NovelModerationCase[]     @relation("ModerationResolvedBy")
 
   @@unique([oauth_provider, oauth_id])
+  @@index([account_type])
   @@map("users")
 }
 
@@ -307,6 +344,21 @@ model PendingRegistration {
   created_at    DateTime @default(now()) @db.Timestamptz(6)
 
   @@map("pending_registrations")
+}
+
+/// OTP ยืนยันอีเมลของบัญชีที่ยังไม่มีอีเมล (POST /auth/complete-profile/*) — หนึ่งแถวต่อผู้ใช้
+/// อีเมลถูกเขียนลง users ก็ต่อเมื่อกรอก OTP ถูกเท่านั้น
+model PendingEmailVerification {
+  user_id    String   @id @db.Uuid
+  email      String   @db.VarChar(255)
+  otp_hash   String   @db.VarChar(255)
+  attempts   Int      @default(0)
+  expires_at DateTime @db.Timestamptz(6)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@map("pending_email_verifications")
 }
 
 /// แท็กความสนใจที่ผู้ใช้เลือกตอน Onboarding
@@ -383,9 +435,16 @@ model Novel {
   deleted_at               DateTime?   @db.Timestamptz(6)
   visibility_before_delete Visibility?
 
-  author           User              @relation("NovelAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
-  primary_tag      Tag?              @relation("NovelPrimaryTag", fields: [primary_tag_id], references: [tag_id])
-  secondary_tag    Tag?              @relation("NovelSecondaryTag", fields: [secondary_tag_id], references: [tag_id])
+  /// post-moderation — แอดมินสุ่มตรวจนิยายที่เผยแพร่แล้วกด "ตรวจแล้ว" ครั้งล่าสุดเมื่อไหร่ (null = ยังไม่เคยตรวจ)
+  /// นิยายที่แก้ไขหลังเวลานี้ (updated_at > moderation_reviewed_at) กลับเข้าคิวตรวจอีกครั้ง
+  moderation_reviewed_at DateTime? @db.Timestamptz(6)
+
+  /// ข้อมูลตัวอย่าง (seed/mock หรือสร้างโดยบัญชี DEMO) — หน้าเว็บติดป้าย "ตัวอย่าง" ดู scripts/mark-demo.ts
+  is_demo Boolean @default(false)
+
+  author           User                  @relation("NovelAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
+  primary_tag      Tag?                  @relation("NovelPrimaryTag", fields: [primary_tag_id], references: [tag_id])
+  secondary_tag    Tag?                  @relation("NovelSecondaryTag", fields: [secondary_tag_id], references: [tag_id])
   chapters         Chapter[]
   trash_bin        TrashBin[]
   novel_tags       NovelTag[]
@@ -401,10 +460,12 @@ model Novel {
   novel_likes      NovelLike[]
   reading_progress ReadingProgress[]
   collection_items CollectionItem[]
+  moderation_cases NovelModerationCase[]
 
   @@index([author_id])
   @@index([status, visibility])
   @@index([deleted_at])
+  @@index([is_demo])
   @@map("novels")
 }
 
@@ -424,15 +485,16 @@ model Chapter {
   /// เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = อ่านฟรี, > 0 = ต้องจ่าย coin ปลดล็อกก่อนอ่าน (ดู chapter-purchases)
   /// CHECK (price_coins BETWEEN 0 AND 1000) — ดู migration paid_chapters_follows_reports_withdrawals
   price_coins          Int           @default(0)
+  is_demo              Boolean       @default(false)
   created_at           DateTime      @default(now()) @db.Timestamptz(6)
   updated_at           DateTime?     @db.Timestamptz(6)
 
-  novel               Novel             @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  novel               Novel              @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   purchases           ChapterPurchase[]
   chapter_versions    ChapterVersion[]
   comments            Comment[]
   /// เพิ่มภายหลัง (audit fix) — back-relation ของ Location.linked_chapter_id (หมุดผูกฐานข้อมูล)
-  linked_by_locations Location[]        @relation("LocationLinkedChapter")
+  linked_by_locations Location[]         @relation("LocationLinkedChapter")
   reading_progress    ReadingProgress[]
   donations           Donation[]
   view_days           ChapterViewDaily[]
@@ -660,21 +722,23 @@ model TimelineEvent {
 /// คอมเมนต์ พร้อม Sentiment Analysis (sentiment_label/score เป็น NULL ตอน insert แรก
 /// แล้ว Python NLP Worker UPDATE กลับมาแบบ async — eventual consistency)
 model Comment {
-  comment_id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  chapter_id        String          @db.Uuid
-  user_id           String          @db.Uuid
-  parent_comment_id String?         @db.Uuid
-  content           String          @db.Text
+  comment_id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  chapter_id         String            @db.Uuid
+  user_id            String            @db.Uuid
+  parent_comment_id  String?           @db.Uuid
+  content            String            @db.Text
   /// เพิ่มภายหลัง — สติกเกอร์ (id ตาม STICKER_IDS ใน src/lib/stickers.ts) คอมเมนต์ที่มีสติกเกอร์ content ว่างได้
-  sticker_id        String?         @db.VarChar(32)
-  sentiment_label   SentimentLabel?
-  sentiment_score   Float?
+  sticker_id         String?           @db.VarChar(32)
+  sentiment_label    SentimentLabel?
+  sentiment_score    Float?
   /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 (บวก = ชอบ, ลบ = ไม่ชอบ) ที่ระบบแนะนำใช้จริง
   /// sentiment_score ข้างบนเป็นแค่ "ความมั่นใจ" ของ label ที่โมเดลทาย (0..1) ไม่ใช่ขั้ว — ดู lib/sentiment.ts
   sentiment_polarity Float?
   /// ความรู้สึกพุ่งไปที่อะไร (ได้หลายป้าย) — NLP worker target.py ติดให้ ว่าง = ระบุไม่ได้
-  sentiment_targets SentimentTarget[] @default([])
-  created_at        DateTime        @default(now()) @db.Timestamptz(6)
+  sentiment_targets  SentimentTarget[] @default([])
+  /// ตามผู้เขียนคอมเมนต์ ไม่ใช่ตามนิยาย — คนจริงคอมเมนต์ในนิยาย DEMO ก็ยังเป็น false
+  is_demo            Boolean           @default(false)
+  created_at         DateTime          @default(now()) @db.Timestamptz(6)
 
   chapter        Chapter   @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
   user           User      @relation(fields: [user_id], references: [user_id])
@@ -689,32 +753,35 @@ model Comment {
 
 /// รีวิว พร้อม Sentiment Analysis
 model Review {
-  review_id       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  novel_id        String          @db.Uuid
-  user_id         String          @db.Uuid
-  rating          Int?            @db.SmallInt
-  comment_text    String?         @db.Text
+  review_id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id           String            @db.Uuid
+  user_id            String            @db.Uuid
+  rating             Int?              @db.SmallInt
+  comment_text       String?           @db.Text
   /// เพิ่มภายหลัง — สติกเกอร์ (id ตาม STICKER_IDS ใน src/lib/stickers.ts)
-  sticker_id      String?         @db.VarChar(32)
-  sentiment_label SentimentLabel?
-  sentiment_score Float?
+  sticker_id         String?           @db.VarChar(32)
+  sentiment_label    SentimentLabel?
+  sentiment_score    Float?
   /// เพิ่มภายหลัง (gap 2.1) — ขั้วความรู้สึก −1..1 ดูคำอธิบายที่ Comment.sentiment_polarity
   sentiment_polarity Float?
   /// ขั้วหลังผสมดาว: 0.5 × sentiment_polarity (ค่าดิบจากโมเดล) + 0.5 × (rating − 3)/2 — ระบบแนะนำใช้ค่านี้
   /// ไม่มีดาว = ค่าดิบ ดู blendReviewPolarity ใน lib/sentiment.ts
-  blended_polarity  Float?
-  sentiment_targets SentimentTarget[] @default([])
+  blended_polarity   Float?
+  sentiment_targets  SentimentTarget[] @default([])
   /// เพิ่มภายหลัง (audit fix) — ผู้เขียนรีวิวเลือกไม่เปิดเผยตัวตนได้ (username/avatar จะไม่ถูกส่ง
   /// ออกไปให้คนอื่นเห็นตอนอ่านรีวิว) ยังต้องเก็บ user_id จริงไว้เสมอ เพื่อคุม @@unique ด้านล่าง
   /// (รีวิวได้เรื่องละ 1 ครั้ง) และให้เจ้าของรีวิวแก้ไข/ลบของตัวเองได้ตามปกติ
-  is_anonymous    Boolean         @default(false)
-  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  is_anonymous       Boolean           @default(false)
+  /// ตามผู้เขียนรีวิว ไม่ใช่ตามนิยาย
+  is_demo            Boolean           @default(false)
+  created_at         DateTime          @default(now()) @db.Timestamptz(6)
 
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
   user  User  @relation(fields: [user_id], references: [user_id])
 
   // CHECK (rating BETWEEN 1 AND 5), CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migration 20260930100000_manual_check_constraints
   @@unique([novel_id, user_id])
+  @@index([is_demo])
   @@map("reviews")
 }
 
@@ -754,6 +821,8 @@ model Donation {
   report_resolved_at DateTime?         @db.Timestamptz(6)
   thank_message      String?           @db.VarChar(200)
   thanked_at         DateTime?         @db.Timestamptz(6)
+  /// ตามผู้ให้ (from_user) — โดเนทให้นักเขียน DEMO ได้ตามปกติ
+  is_demo            Boolean           @default(false)
 
   novel     Novel?    @relation(fields: [novel_id], references: [novel_id], onDelete: SetNull)
   chapter   Chapter?  @relation(fields: [chapter_id], references: [chapter_id], onDelete: SetNull)
@@ -939,6 +1008,7 @@ model NovelLike {
   like_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
   novel_id   String   @db.Uuid
+  is_demo    Boolean  @default(false)
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
   user  User  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
@@ -999,6 +1069,7 @@ model ChapterPurchase {
   chapter_id  String   @db.Uuid
   price_coins Int
   fee_coins   Int      @default(0)
+  is_demo     Boolean  @default(false)
   created_at  DateTime @default(now()) @db.Timestamptz(6)
 
   user    User    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
@@ -1102,4 +1173,108 @@ model SupportMessage {
 
   @@index([ticket_id, created_at])
   @@map("support_messages")
+}
+
+/// post-moderation — เคสระงับนิยาย 1 แถวต่อการระงับ 1 ครั้ง (เก็บประวัติไว้ ไม่ลบ) แอดมินกด "ระงับ" พร้อมเหตุผล
+/// → novels.visibility = suspended และจำค่าเดิมไว้ใน visibility_before_suspend เพื่อคืนสถานะ
+/// นักเขียนยื่นอุทธรณ์ได้ (appeal_message) → appeal_pending → แอดมินคืนสถานะ (reinstated) หรือยืนยัน (upheld)
+model NovelModerationCase {
+  case_id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  novel_id                  String               @db.Uuid
+  status                    ModerationCaseStatus @default(suspended)
+  reason                    String               @db.Text
+  visibility_before_suspend Visibility
+  suspended_by              String?              @db.Uuid
+  created_at                DateTime             @default(now()) @db.Timestamptz(6)
+  appeal_message            String?              @db.Text
+  appealed_at               DateTime?            @db.Timestamptz(6)
+  appeal_count              Int                  @default(0)
+  resolved_by               String?              @db.Uuid
+  resolution_note           String?              @db.Text
+  resolved_at               DateTime?            @db.Timestamptz(6)
+
+  novel     Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
+  suspender User? @relation("ModerationSuspendedBy", fields: [suspended_by], references: [user_id], onDelete: SetNull)
+  resolver  User? @relation("ModerationResolvedBy", fields: [resolved_by], references: [user_id], onDelete: SetNull)
+
+  @@index([novel_id, created_at(sort: Desc)])
+  @@index([status, appealed_at])
+  @@map("novel_moderation_cases")
+}
+
+/// ผลประเมินระบบแนะนำจากข้อมูลจริง — 1 แถวต่อการรัน `npm run eval:recs:live` (scripts/eval-recommender.ts --save)
+/// เก็บ threshold ที่ถูกเลือก (NDCG@K สูงสุดบน val) และตัวชี้วัดของมันบน test ให้หน้าภาพรวมแอดมินแสดงแทนค่าคงที่
+model RecommenderEvalRun {
+  run_id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  method        String   @db.VarChar(40)
+  threshold     Float
+  k             Int
+  precision     Float
+  recall        Float
+  f1            Float
+  ndcg          Float
+  hit_rate      Float
+  user_coverage Float
+  /// NDCG@K ของ popularity baseline บน test ชุดเดียวกัน
+  baseline_ndcg Float
+  eval_users    Int
+  /// จำนวน Postgres vs Neo4j ตรงทุกรายการตอนรัน (ข้อ 1.1 ของรายงาน)
+  graph_in_sync Boolean
+  /// ผู้ใช้ที่มีรีวิว >= 5 น้อยกว่า 30 คน — ผลไม่มีนัยสำคัญทางสถิติ
+  low_data      Boolean
+
+  @@index([created_at(sort: Desc)])
+  @@map("recommender_eval_runs")
+}
+
+enum KycStatus {
+  pending
+  approved
+  rejected
+}
+
+/// e-KYC (บัตรประชาชน/พาสปอร์ต + Liveness) ผ่านผู้ให้บริการภายนอก — Data minimization ตาม PDPA:
+/// ไม่เก็บรูปบัตร/รูปใบหน้า/ชื่อ/เลขบัตร (ภาพวิ่งตรงจากเบราว์เซอร์ไปผู้ให้บริการ ไม่ผ่านเซิร์ฟเวอร์เรา)
+/// ผลอายุเก็บที่ User.birth_date + age_verification_source="kyc"; ตารางนี้เก็บแค่สถานะ หลักฐานความยินยอม
+/// และ hash เลขเอกสาร (HMAC มี secret — ย้อนกลับไม่ได้) ไว้กันเอกสารใบเดียวยืนยันหลายบัญชี
+model KycVerification {
+  verification_id     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String    @db.Uuid
+  /// ส่งให้ผู้ให้บริการเป็น vendor_data แทน user_id (ผู้ให้บริการไม่รู้ตัวตนบัญชีในระบบเรา)
+  external_ref        String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// session_id ของผู้ให้บริการ (Didit) — ใช้ดึงผลตรวจและสั่งลบภาพ/ข้อมูลชีวภาพฝั่งผู้ให้บริการ
+  provider_session_id String?   @unique @db.VarChar(64)
+  provider            String    @db.VarChar(20)
+  status              KycStatus @default(pending)
+  /// ฉบับข้อความขอความยินยอม (PDPA ม.26 ข้อมูลชีวภาพ) ที่ผู้ใช้กดยอมรับ และเวลาที่ยอมรับ
+  consent_version     String    @db.VarChar(20)
+  consented_at        DateTime  @db.Timestamptz(6)
+  /// ID_CARD / PASSPORT และประเทศผู้ออก (ISO alpha-3) — ไม่เก็บเลขเอกสาร
+  document_type       String?   @db.VarChar(20)
+  document_country    String?   @db.Char(3)
+  /// HMAC-SHA256(KYC_ID_HASH_SECRET, ประเทศ:ประเภท:เลขเอกสาร) — ต้องมี secret เพราะเลขบัตร 13 หลักเดาครบได้
+  id_number_hash      String?   @db.Char(64)
+  /// รหัสเหตุผลของเราเอง (เช่น PROVIDER_REJECTED, DUPLICATE_IDENTITY) ไม่เก็บข้อความอิสระจากผู้ให้บริการ
+  reject_reason       String?   @db.VarChar(40)
+  retry_allowed       Boolean   @default(true)
+  completed_at        DateTime? @db.Timestamptz(6)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([id_number_hash])
+  @@map("kyc_verifications")
+}
+
+/// ตัวนับ rate limit (middleware/rateLimit.middleware.ts) — fixed window ต่อ key, แถวเก่าถูกล้างโดย scheduler
+model RateLimit {
+  key          String   @id @db.VarChar(200)
+  window_start DateTime @db.Timestamptz(6)
+  count        Int
+
+  @@index([window_start])
+  @@map("rate_limits")
 }

@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { AgeGateInterstitial } from "@/components/novel-detail/AgeGateInterstitial";
+import { AgeGateInterstitial, parseAgeGate } from "@/components/novel-detail/AgeGateInterstitial";
 import { CommentSection, type CommentNode } from "@/components/novel-detail/CommentSection";
 import { ReaderContent } from "@/components/reader/ReaderContent";
+import { ReaderPresence } from "@/components/reader/ReaderPresence";
+import { ResumeReadingPrompt, type ResumeFrom } from "@/components/reader/ResumeReadingPrompt";
 import { ReportButton } from "@/components/social/ReportButton";
 import { BackButton } from "@/components/ui/BackButton";
 import { OwnerPreviewBar } from "@/components/novel-detail/OwnerPreviewBar";
@@ -12,12 +14,9 @@ import { getAccessToken } from "@/lib/api/auth";
 import { getCurrentUser } from "@/lib/api/session";
 import { getPenName } from "@/lib/displayName";
 
-function isAgeGateError(result: ApiResult): boolean {
-  if ("error" in result) return false;
-  return (
-    result.status === 403 &&
-    (result.json as { details?: { code?: string } } | null)?.details?.code === "AGE_VERIFICATION_REQUIRED"
-  );
+function ageGateOf(result: ApiResult) {
+  if ("error" in result) return null;
+  return parseAgeGate(result.status, result.json);
 }
 
 interface NovelSummary {
@@ -40,6 +39,8 @@ interface ChapterDetail {
   locked: boolean;
   /** ตัวอย่างเนื้อหาแบบ plain text — มีเฉพาะตอนที่ locked */
   teaser: string | null;
+  /** ตอนที่อ่านค้างไว้ ถ้าเปิดตอนอื่น (null = ไม่ต้องถาม) */
+  resume_from?: ResumeFrom | null;
 }
 
 interface ChapterListItem {
@@ -56,26 +57,32 @@ const ownerChapterNotice: Record<Exclude<ChapterDetail["status"], "published">, 
 };
 
 // หน้าอ่านตอนนิยาย — ต่อกับ GET /chapters/:id + /chapters/:id/comments จริง ดู wf_novel_detail.png (ตอนที่ 1/2)
-export default async function ChapterReaderPage({
-  params,
-}: {
-  params: { novelId: string; chapterId: string };
-}) {
-  const token = getAccessToken();
+export default async function ChapterReaderPage(
+  props: {
+    params: Promise<{ novelId: string; chapterId: string }>;
+  }
+) {
+  const params = await props.params;
+  const token = await getAccessToken();
   const [novelResult, chapterResult, chaptersResult, commentsResult, user] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     callApi({ method: "GET", path: `/chapters/${params.chapterId}`, token }),
     callApi({ method: "GET", path: `/novels/${params.novelId}/chapters`, token }),
-    callApi({ method: "GET", path: `/chapters/${params.chapterId}/comments` }),
+    callApi({ method: "GET", path: `/chapters/${params.chapterId}/comments`, token }),
     getCurrentUser(),
   ]);
 
-  if (isAgeGateError(novelResult) || isAgeGateError(chapterResult)) {
+  const ageGate = ageGateOf(novelResult) ?? ageGateOf(chapterResult);
+  if (ageGate) {
     return (
       <div className="flex min-h-screen flex-col bg-white">
         <Navbar user={user} />
         <main className="flex-1">
-          <AgeGateInterstitial />
+          <AgeGateInterstitial
+            gate={ageGate}
+            loggedIn={Boolean(user)}
+            returnTo={`/novels/${params.novelId}/chapters/${params.chapterId}`}
+          />
         </main>
         <Footer />
       </div>
@@ -109,6 +116,11 @@ export default async function ChapterReaderPage({
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Navbar user={user} />
+      {/* ผู้อ่านออนไลน์บนหน้าแอดมิน — นับเฉพาะผู้ที่ล็อกอิน ไม่นับเจ้าของที่ทดลองอ่าน */}
+      {user && !isOwner && <ReaderPresence />}
+      {chapter.resume_from && (
+        <ResumeReadingPrompt key={chapter.chapter_id} novelId={novel.novel_id} chapterId={chapter.chapter_id} resumeFrom={chapter.resume_from} />
+      )}
       {isOwner && (
         <OwnerPreviewBar
           novelId={novel.novel_id}

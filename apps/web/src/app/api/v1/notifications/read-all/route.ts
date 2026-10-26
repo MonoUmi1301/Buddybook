@@ -5,7 +5,7 @@ import { notificationReadAllSchema } from "@/lib/api/schemas";
 
 // PATCH /api/v1/notifications/read-all (gap 3.3)
 export async function PATCH(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const parsed = await parseJsonBody(request, notificationReadAllSchema);
   if ("error" in parsed) return parsed.error;

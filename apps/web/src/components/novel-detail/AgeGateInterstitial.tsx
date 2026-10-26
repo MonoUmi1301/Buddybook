@@ -1,84 +1,62 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/Button";
+import { AgeVerificationOptions } from "@/components/age/AgeVerificationOptions";
 
-/** เพิ่มภายหลัง (Phase J) — หน้าจอเต็มหน้าแทน error box ธรรมดา ตอนเจอ 403 age-gate จาก
- *  GET /novels/:id หรือ GET /chapters/:id (backend ปฏิเสธเนื้อหาไปแล้วทั้งหมด ไม่มีอะไรให้โชว์
- *  บางส่วน จึงทำเป็นการ์ดกลางจอแทน modal ทับเนื้อหา) ต่อกับ PATCH /users/me/age-verification
- *  ที่มีอยู่แล้วแต่ไม่เคยมี UI เรียกใช้จริงมาก่อนเลย */
-export function AgeGateInterstitial() {
-  const router = useRouter();
-  const [birthDate, setBirthDate] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [underage, setUnderage] = useState(false);
+/** รหัส 403 ของเกตเรตเนื้อหาจาก apps/api (lib/contentRating.ts assertContentRatingAllowed) */
+export interface AgeGateInfo {
+  code: "AGE_VERIFICATION_REQUIRED" | "AGE_RESTRICTED";
+  required_age: number;
+}
 
-  async function handleVerify(e: React.FormEvent) {
-    e.preventDefault();
-    if (!birthDate) {
-      setError("กรุณาเลือกวันเกิด");
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    setUnderage(false);
+/** อ่าน details ของ 403 จาก GET /novels/:id, /chapters/:id — null = ไม่ใช่ error ของเกตเรต */
+export function parseAgeGate(status: number, json: unknown): AgeGateInfo | null {
+  if (status !== 403) return null;
+  const details = (json as { details?: { code?: string; required_age?: number } } | null)?.details;
+  const codes: string[] = ["AGE_VERIFICATION_REQUIRED", "AGE_RESTRICTED"];
+  if (!details?.code || !codes.includes(details.code)) return null;
+  return { code: details.code as AgeGateInfo["code"], required_age: details.required_age ?? 18 };
+}
 
-    try {
-      const res = await fetch("/api/v1/users/me/age-verification", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ birth_date: birthDate }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? "ยืนยันอายุไม่สำเร็จ ลองใหม่อีกครั้ง");
-        setSubmitting(false);
-        return;
-      }
-      if (!json.age_verified) {
-        setUnderage(true);
-        setSubmitting(false);
-        return;
-      }
-      router.refresh();
-    } catch {
-      setError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ลองใหม่อีกครั้ง");
-      setSubmitting(false);
-    }
-  }
+/** หน้าจอเต็มหน้าแทนเนื้อหา ตอนเจอ 403 เกตเรต (backend ไม่ส่งเนื้อหามาเลย ไม่มีอะไรให้โชว์บางส่วน)
+ *  - ยังไม่ล็อกอิน → ให้เข้าสู่ระบบก่อน (ยืนยันอายุผูกกับบัญชี)
+ *  - ยังไม่ยืนยันอายุ → ยืนยันด้วย Google หรือบัตรประชาชน/พาสปอร์ต (ไม่มีการกรอกวันเกิดเอง)
+ *  - ยืนยันแล้วแต่อายุไม่ถึงเกณฑ์ (AGE_RESTRICTED) → แจ้งอย่างเดียว ยืนยันใหม่เองไม่ได้ */
+export function AgeGateInterstitial({
+  gate,
+  loggedIn,
+  returnTo,
+}: {
+  gate: AgeGateInfo;
+  loggedIn: boolean;
+  returnTo: string;
+}) {
+  const restricted = gate.code === "AGE_RESTRICTED";
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm rounded-card border border-neutral-200 bg-white p-6 text-center shadow-sm">
         <ShieldAlert className="mx-auto h-10 w-10 text-amber-500" />
-        <h1 className="mt-3 text-h3 text-neutral-900">เนื้อหาสำหรับผู้ใหญ่</h1>
-        <p className="mt-2 text-sm text-neutral-500">
-          เนื้อหานี้เหมาะสำหรับผู้มีอายุ 18 ปีขึ้นไป กรุณายืนยันวันเกิดของคุณก่อนเข้าชม
-        </p>
+        <h1 className="mt-3 text-h3 text-neutral-900">เนื้อหาสำหรับอายุ {gate.required_age} ปีขึ้นไป</h1>
 
-        {underage ? (
+        {restricted ? (
           <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-            บัญชีนี้ยังไม่ผ่านการยืนยันอายุ 18 ปีขึ้นไป จึงไม่สามารถเข้าชมเนื้อหานี้ได้
+            อายุที่ยืนยันไว้ในบัญชีนี้ยังไม่ถึง {gate.required_age} ปี จึงไม่สามารถเข้าชมเนื้อหานี้ได้
           </p>
+        ) : loggedIn ? (
+          <>
+            <p className="mb-5 mt-2 text-sm text-neutral-500">
+              กรุณายืนยันอายุก่อนเข้าชม — ระบบจะเปิดให้อ่านเฉพาะนิยายที่เรตเหมาะกับอายุของคุณ
+            </p>
+            <AgeVerificationOptions returnTo={returnTo} />
+          </>
         ) : (
-          <form onSubmit={handleVerify} className="mt-4 text-left">
-            <label className="mb-1.5 block text-sm font-medium text-neutral-700">วันเกิดของคุณ</label>
-            <input
-              type="date"
-              value={birthDate}
-              onChange={(e) => setBirthDate(e.target.value)}
-              max={new Date().toISOString().slice(0, 10)}
-              className="h-11 w-full rounded-lg border border-neutral-300 px-4 text-sm focus:border-primary-400 focus:outline-none"
-            />
-            {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-            <Button type="submit" variant="primary" fullWidth className="mt-4" loading={submitting}>
-              ยืนยันอายุ
-            </Button>
-          </form>
+          <>
+            <p className="mt-2 text-sm text-neutral-500">เข้าสู่ระบบแล้วยืนยันอายุก่อนถึงจะเข้าชมเนื้อหานี้ได้</p>
+            <Link href="/login" className={buttonClasses({ variant: "primary", fullWidth: true, className: "mt-4" })}>
+              เข้าสู่ระบบ
+            </Link>
+          </>
         )}
 
         <Link href="/" className="mt-4 inline-block text-sm text-neutral-400 hover:text-neutral-600">

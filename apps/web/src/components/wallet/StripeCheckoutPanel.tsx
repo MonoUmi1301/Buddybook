@@ -40,7 +40,8 @@ export function StripeCheckoutPanel({ pkg, onClose }: StripeCheckoutPanelProps) 
 
   useEffect(() => {
     let cancelled = false;
-    stripe.then((s) => {
+    // getStripe() จับ error เองแล้ว (คืน null) — promise นี้ไม่ reject
+    void stripe.then((s) => {
       if (!s && !cancelled) setError(STRIPE_LOAD_ERROR);
     });
     return () => {

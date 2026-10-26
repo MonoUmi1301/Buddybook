@@ -3,13 +3,8 @@
 import type { CSSProperties } from "react";
 import Image, { getImageProps } from "next/image";
 import {
-  Trees,
   TreePine,
-  Skull,
   Waves,
-  Flame,
-  Store,
-  Landmark,
   MapPinned,
   Mountain,
   type LucideIcon,
@@ -34,19 +29,39 @@ export const LOCATION_ICONS = {
   condo: { label: "คอนโด", src: "/locations/condo_Rough.png" },
   lake: { label: "ทะเลสาบ", src: "/locations/lake_sketch.png" },
   sea: { label: "ทะเล", src: "/locations/water_sketch.png" },
-  // ยังไม่มีภาพวาด — ใช้ไอคอนเดิม
-  forest: { label: "ป่า", Icon: Trees },
-  dungeon: { label: "คุกใต้ดิน", Icon: Skull },
-  volcano: { label: "ภูเขาไฟ", Icon: Flame },
-  market: { label: "ตลาด", Icon: Store },
-  shrine: { label: "วิหาร", Icon: Landmark },
+  // ภาพวาดลายเส้นชุดที่ 2 (แทนไอคอน lucide เดิม — key เดิมยังใช้ได้ สถานที่ที่สร้างไว้แล้วเปลี่ยนเป็นภาพวาดเอง)
+  forest: { label: "ป่า", src: "/locations/forest_sketch.png" },
+  dungeon: { label: "คุกใต้ดิน", src: "/locations/dungeon_sketch.png" },
+  volcano: { label: "ภูเขาไฟ", src: "/locations/volcano_sketch.png" },
+  market: { label: "ตลาด", src: "/locations/market_sketch.png" },
+  shrine: { label: "วิหาร", src: "/locations/shrine_sketch.png" },
+  // สถานที่เพิ่มใหม่
+  temple: { label: "วัด", src: "/locations/temple_sketch.png" },
+  hospital: { label: "โรงพยาบาล", src: "/locations/hospital_sketch.png" },
+  cafe: { label: "ร้านกาแฟ", src: "/locations/cafe_sketch.png" },
+  station: { label: "สถานีรถไฟ", src: "/locations/station_sketch.png" },
+  park: { label: "สวนสาธารณะ", src: "/locations/park_sketch.png" },
+  cabin: { label: "กระท่อม", src: "/locations/cabin_sketch.png" },
+  tower: { label: "หอคอยเวทมนตร์", src: "/locations/tower_sketch.png" },
+  lighthouse: { label: "ประภาคาร", src: "/locations/lighthouse_sketch.png" },
+  harbor: { label: "ท่าเรือ", src: "/locations/harbor_sketch.png" },
+  bridge: { label: "สะพาน", src: "/locations/bridge_sketch.png" },
+  cave: { label: "ถ้ำ", src: "/locations/cave_sketch.png" },
 } satisfies Record<string, MapAsset>;
 
-export type LocationIconKey = keyof typeof LOCATION_ICONS;
-export const LOCATION_ICON_KEYS = Object.keys(LOCATION_ICONS) as LocationIconKey[];
+export type BuiltInLocationKey = keyof typeof LOCATION_ICONS;
+/** key ของภาพในระบบ หรือ URL รูปที่นักเขียนอัปโหลดเอง (เก็บใน map_icon_url ช่องเดียวกัน) */
+export type LocationIconKey = BuiltInLocationKey | (string & {});
+export const LOCATION_ICON_KEYS = Object.keys(LOCATION_ICONS) as BuiltInLocationKey[];
+
+export function isCustomLocationImage(key: string | null | undefined): key is string {
+  return !!key && /^https?:\/\//.test(key);
+}
 
 export function getLocationAsset(key: string | null | undefined): MapAsset | undefined {
-  return key ? (LOCATION_ICONS as Record<string, MapAsset>)[key] : undefined;
+  if (!key) return undefined;
+  if (isCustomLocationImage(key)) return { label: "รูปที่อัปโหลด", src: key };
+  return (LOCATION_ICONS as Record<string, MapAsset>)[key];
 }
 
 /** ไอคอนปั๊ม (stamp) ตกแต่งพื้นแผนที่ — วางซ้ำ ๆ ตอนลากเมาส์ */

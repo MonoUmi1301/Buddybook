@@ -43,7 +43,6 @@ export function HeroCarousel({ slides }: { slides: HeroSlide[] }) {
     const onResize = () => applyOffset(startIndex);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startIndex]);
 
   useEffect(() => {

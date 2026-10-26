@@ -4,13 +4,18 @@ import { WriterSidebar } from "@/components/writer/WriterSidebar";
 import { WriterHeader } from "@/components/writer/WriterHeader";
 import { getCurrentUser } from "@/lib/api/session";
 
-export default async function WriterLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: { novelId: string };
-}) {
+export default async function WriterLayout(
+  props: {
+    children: React.ReactNode;
+    params: Promise<{ novelId: string }>;
+  }
+) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 

@@ -3,8 +3,9 @@ import { requireUuidParam } from "@/lib/api/validate";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/novels/:novelId/world-building — โหลด node/edge สำหรับ @xyflow/react
-export async function GET(_request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function GET(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");

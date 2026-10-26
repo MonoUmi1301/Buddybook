@@ -24,11 +24,23 @@ interface QuillEditorProps {
   defaultValue?: string;
   onChange?: (html: string) => void;
   placeholder?: string;
+  /** "chapter" = toolbar เต็มสำหรับเขียนตอน ; "basic" = จัดรูปแบบข้อความอย่างเดียว (แนะนำเรื่อง) ไม่มีรูป/วิดีโอ */
+  variant?: "chapter" | "basic";
 }
+
+const BASIC_TOOLBAR = [
+  ["bold", "italic", "underline", "strike"],
+  [{ align: [] }],
+  [{ list: "ordered" }, { list: "bullet" }],
+  [{ color: [] }, { background: [] }],
+  ["divider"],
+  ["link"],
+  ["clean"],
+];
 
 // Rich text editor สำหรับเขียนตอนนิยาย ใช้ quill ตรง ๆ (ไม่มี react-quill wrapper เป็น dependency)
 // toolbar อ้างอิงจาก icon.pdf ในโฟลเดอร์ buddybook_real (กลุ่ม format ที่ Quill รองรับ built-in)
-export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillEditorProps) {
+export function QuillEditor({ defaultValue = "", onChange, placeholder, variant = "chapter" }: QuillEditorProps) {
   // กล่องครอบที่ React ดูแล — ตัว editor และ toolbar ที่ Quill สร้างจะอยู่ข้างในนี้ทั้งหมด
   const wrapperRef = useRef<HTMLDivElement>(null);
   const quillRef = useRef<Quill | null>(null);
@@ -51,7 +63,8 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
     // ไม่ถูกลบ เลยขึ้นซ้ำ 2 แถว จึงสร้าง div ให้ Quill เองภายใน wrapper แล้วล้างทิ้งทั้งหมดตอน unmount
     const editorEl = document.createElement("div");
     // chapter-indent: ย่อหน้าบรรทัดแรกให้เหมือนหน้าอ่าน (globals.css) — แค่การแสดงผล ไม่ใส่ช่องว่างลงในเนื้อหา
-    editorEl.className = "chapter-indent min-h-[400px] bg-white";
+    // basic: กล่องเตี้ยกว่า (แนะนำเรื่อง) — ย่อหน้าบรรทัดแรกเหมือนตอนนิยาย
+    editorEl.className = variant === "basic" ? "chapter-indent rich-basic min-h-[200px] bg-white" : "chapter-indent min-h-[400px] bg-white";
     wrapper.appendChild(editorEl);
 
     const quill = new Quill(editorEl, {
@@ -59,7 +72,7 @@ export function QuillEditor({ defaultValue = "", onChange, placeholder }: QuillE
       placeholder,
       modules: {
         toolbar: {
-          container: [
+          container: variant === "basic" ? BASIC_TOOLBAR : [
             ["bold", "italic", "underline", "strike"],
             [{ script: "sub" }, { script: "super" }],
             ["blockquote"],

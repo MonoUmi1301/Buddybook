@@ -34,8 +34,8 @@ beforeAll(async () => {
   await makeUser("line", { email: `line_${tag}@line.buddybook.local`, password_hash: null, oauth_provider: "line" });
 });
 
-beforeEach(() => {
-  resetRateLimits();
+beforeEach(async () => {
+  await resetRateLimits();
   sent.reset.length = 0;
   sent.hint.length = 0;
 });
@@ -69,7 +69,7 @@ describe("forgot password", () => {
 
   it("answers an unknown email exactly like a known one (no account enumeration)", async () => {
     const known = await forgot(`pw_${tag}@test.buddybook.dev`);
-    resetRateLimits();
+    await resetRateLimits();
     const unknown = await forgot(`nobody_${tag}@test.buddybook.dev`);
     expect(unknown.status).toBe(known.status);
     expect(unknown.json).toEqual(known.json);

@@ -12,8 +12,10 @@ import {
   loginOrRegisterWithOAuth,
   requestPasswordReset,
   resetPassword,
+  requestCompleteProfileOtp,
+  verifyCompleteProfileOtp,
 } from "@/modules/auth/auth.service";
-import { verifyRefreshToken, signAccessToken } from "@/lib/jwt";
+import { verifyRefreshToken, signAccessToken, tokenPayloadFor } from "@/lib/jwt";
 import { buildGoogleAuthUrl, createOAuthState, verifyOAuthState, exchangeGoogleCode } from "@/lib/googleOAuth";
 import { buildLineAuthUrl, exchangeLineCode } from "@/lib/lineOAuth";
 import { buildFacebookAuthUrl, exchangeFacebookCode } from "@/lib/facebookOAuth";
@@ -113,11 +115,12 @@ export async function refresh(req: Request, res: Response) {
   // เช็คสถานะจริงทุกครั้งที่ต่ออายุ (ทุก ~15 นาทีต่อผู้ใช้ ไม่แพง) และใช้ role ปัจจุบันแทนค่าที่ฝังใน token
   const user = await prisma.user.findUnique({
     where: { user_id: payload.user_id },
-    select: { role: true, is_suspended: true, deleted_at: true },
+    select: { user_id: true, role: true, email: true, is_suspended: true, deleted_at: true, account_type: true },
   });
-  if (!user || user.deleted_at) throw ApiError.unauthorized("Invalid or expired refresh token");
+  if (!user || user.deleted_at || user.account_type === "DEMO") throw ApiError.unauthorized("Invalid or expired refresh token");
   if (user.is_suspended) throw ApiError.forbidden("This account has been suspended");
-  const access_token = signAccessToken({ user_id: payload.user_id, role: user.role });
+  // email_required คิดจาก DB ทุกครั้ง — บัญชีที่อีเมลถูกล้าง (npm run db:line-emails) โดนบังคับกรอกภายใน ~15 นาที
+  const access_token = signAccessToken(tokenPayloadFor(user));
   res.status(200).json({ access_token });
 }
 
@@ -150,7 +153,7 @@ export async function resetPasswordHandler(req: Request, res: Response) {
 const oauthProviderSchema = z.object({ provider: z.enum(["google", "facebook", "line"]) });
 
 const buildAuthUrlByProvider: Partial<Record<"google" | "facebook" | "line", (state: string) => string>> = {
-  google: buildGoogleAuthUrl,
+  google: (state) => buildGoogleAuthUrl(state),
   line: buildLineAuthUrl,
   facebook: buildFacebookAuthUrl,
 };
@@ -158,7 +161,7 @@ const buildAuthUrlByProvider: Partial<Record<"google" | "facebook" | "line", (st
 const exchangeCodeByProvider: Partial<
   Record<"google" | "facebook" | "line", (code: string) => Promise<OAuthProfile>>
 > = {
-  google: exchangeGoogleCode,
+  google: (code) => exchangeGoogleCode(code),
   line: exchangeLineCode,
   facebook: exchangeFacebookCode,
 };
@@ -173,6 +176,13 @@ export async function oauthStart(req: Request, res: Response) {
   }
 
   const state = createOAuthState();
+  // ?purpose=verify_age — ปุ่ม "ยืนยันอายุด้วย Google" (Google เท่านั้น) ขอ scope วันเกิดเสมอ
+  // callback ของ flow นี้ไปที่ POST /users/me/age-verification/google แทนการล็อกอิน
+  if (req.query.purpose === "verify_age") {
+    if (provider !== "google") throw ApiError.badRequest("Age verification is only supported with Google");
+    res.status(200).json({ redirect_url: buildGoogleAuthUrl(state, { requestBirthday: true }), state });
+    return;
+  }
   res.status(200).json({ redirect_url: buildAuthUrl(state), state });
 }
 
@@ -197,5 +207,23 @@ export async function oauthCallback(req: Request, res: Response) {
 
   const profile = await exchangeCode(code);
   const result = await loginOrRegisterWithOAuth(profile);
+  res.status(200).json(result);
+}
+
+const completeProfileEmailSchema = z.object({ email: emailSchema });
+
+/** POST /auth/complete-profile/request-otp — บัญชี LINE ที่ยังไม่มีอีเมล ขอ OTP ไปยังอีเมลที่กรอก */
+export async function completeProfileRequestOtp(req: Request, res: Response) {
+  const { email } = completeProfileEmailSchema.parse(req.body);
+  const result = await requestCompleteProfileOtp(req.user!.user_id, email);
+  res.status(200).json(result);
+}
+
+const completeProfileOtpSchema = z.object({ otp: z.string().regex(/^\d{6}$/) });
+
+/** POST /auth/complete-profile/verify-otp — OTP ถูก → บันทึกอีเมล + คืน token ชุดใหม่ (ไม่มี email_required) */
+export async function completeProfileVerifyOtp(req: Request, res: Response) {
+  const { otp } = completeProfileOtpSchema.parse(req.body);
+  const result = await verifyCompleteProfileOtp(req.user!.user_id, otp);
   res.status(200).json(result);
 }

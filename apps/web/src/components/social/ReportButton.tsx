@@ -7,6 +7,8 @@ import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui/Toaster";
 import { useDialogA11y } from "@/hooks/use-dialog-a11y";
+import { ModalBackdrop } from "@/components/ui/modal-backdrop";
+import { handleAsync } from "@/lib/handleAsync";
 
 export type ReportTargetType = "novel" | "chapter" | "comment" | "review" | "user";
 
@@ -120,15 +122,14 @@ function ReportDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !submitting && onClose()}>
+    <ModalBackdrop className="z-50 items-center bg-black/40 p-4" onDismiss={() => !submitting && onClose()}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="report-dialog-title"
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl bg-white p-5 text-left text-neutral-800 shadow-xl"
+        className="relative w-full max-w-md rounded-2xl bg-white p-5 text-left text-neutral-800 shadow-xl"
       >
         <div className="flex items-center justify-between">
           <h2 id="report-dialog-title" className="text-base font-semibold">
@@ -173,11 +174,11 @@ function ReportDialog({
           <Button variant="outline" size="sm" onClick={onClose} disabled={submitting}>
             ยกเลิก
           </Button>
-          <Button size="sm" onClick={submit} loading={submitting}>
+          <Button size="sm" onClick={handleAsync(submit)} loading={submitting}>
             ส่งรายงาน
           </Button>
         </div>
       </div>
-    </div>
+    </ModalBackdrop>
   );
 }

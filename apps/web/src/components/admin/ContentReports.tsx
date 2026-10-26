@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { toast } from "@/components/ui/Toaster";
 import { formatThaiDate } from "@/lib/format";
+import { handleAsync } from "@/lib/handleAsync";
 
 type ReportStatus = "open" | "dismissed" | "actioned";
 type TargetType = "novel" | "chapter" | "comment" | "review" | "user";
@@ -44,7 +45,7 @@ const REASON_LABEL: Record<ContentReportRow["reason"], string> = {
 
 /** สิ่งที่ปุ่ม "จัดการ" ทำกับเป้าหมายแต่ละชนิด (ดู apps/api/src/modules/reports/reports.service.ts) */
 const ACTION_LABEL: Record<TargetType, string> = {
-  novel: "ตั้งเป็นส่วนตัว",
+  novel: "ระงับนิยาย",
   chapter: "ซ่อนตอน",
   comment: "ลบคอมเมนต์",
   review: "ลบรีวิว",
@@ -98,12 +99,18 @@ export function ContentReports({ initial }: { initial: Page }) {
   }
 
   async function resolve(row: ContentReportRow, action: "dismiss" | "action") {
-    if (action === "action" && !window.confirm(`ยืนยัน "${ACTION_LABEL[row.target_type]}"?`)) return;
+    let note: string | undefined;
+    if (action === "action" && row.target_type === "novel") {
+      // post-moderation — หมายเหตุนี้คือเหตุผลการระงับที่นักเขียนเห็น (เว้นว่าง = สรุปจากประเภทรายงาน)
+      const input = window.prompt("เหตุผลการระงับนิยาย (นักเขียนจะเห็นข้อความนี้ เว้นว่างได้)");
+      if (input === null) return;
+      note = input.trim() || undefined;
+    } else if (action === "action" && !window.confirm(`ยืนยัน "${ACTION_LABEL[row.target_type]}"?`)) return;
     setBusyId(row.report_id);
     const res = await fetch(`/api/v1/admin/content-reports/${row.report_id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action, ...(note ? { note } : {}) }),
     });
     if (res.ok) {
       // รายงานอื่นที่ชี้เป้าหมายเดียวกันถูกปิดไปด้วย
@@ -117,8 +124,6 @@ export function ContentReports({ initial }: { initial: Page }) {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-neutral-900">รายงานเนื้อหา</h2>
-      <p className="mb-4 text-xs text-neutral-500">รายงานจากผู้ใช้ — การจัดการจะปิดทุกรายงานของเนื้อหาเดียวกันและแจ้งผลผู้รายงาน</p>
 
       <div className="mb-4 flex gap-2" role="tablist">
         {STATUS_TABS.map((t) => (
@@ -127,7 +132,7 @@ export function ContentReports({ initial }: { initial: Page }) {
             type="button"
             role="tab"
             aria-selected={status === t.value}
-            onClick={() => switchTab(t.value)}
+            onClick={handleAsync(() => switchTab(t.value))}
             className={cn(
               "rounded-pill px-4 py-1.5 text-sm",
               status === t.value ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
@@ -188,7 +193,7 @@ export function ContentReports({ initial }: { initial: Page }) {
                   <button
                     type="button"
                     disabled={busyId === row.report_id}
-                    onClick={() => resolve(row, "dismiss")}
+                    onClick={handleAsync(() => resolve(row, "dismiss"))}
                     className="min-h-[44px] rounded-pill border border-neutral-300 px-5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                   >
                     ปล่อยผ่าน
@@ -196,7 +201,7 @@ export function ContentReports({ initial }: { initial: Page }) {
                   <button
                     type="button"
                     disabled={busyId === row.report_id || !row.target}
-                    onClick={() => resolve(row, "action")}
+                    onClick={handleAsync(() => resolve(row, "action"))}
                     className="min-h-[44px] rounded-pill bg-red-600 px-5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                   >
                     {ACTION_LABEL[row.target_type]}
@@ -213,7 +218,7 @@ export function ContentReports({ initial }: { initial: Page }) {
           {loading ? (
             <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
           ) : (
-            <button type="button" onClick={loadMore} className="text-sm text-primary-600 hover:underline">
+            <button type="button" onClick={handleAsync(loadMore)} className="text-sm text-primary-600 hover:underline">
               โหลดเพิ่ม
             </button>
           )}

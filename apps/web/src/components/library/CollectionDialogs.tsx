@@ -16,6 +16,7 @@ import {
   type CollectionTint,
   type LibraryEntry,
 } from "@/lib/library";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface CollectionFormDialogProps {
   open: boolean;
@@ -56,7 +57,7 @@ export function CollectionFormDialog({ open, collection, onClose, onSubmit }: Co
 
   return (
     <Dialog open={open} title={collection ? "แก้ไขชั้น" : "สร้างชั้นใหม่"} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-5">
+      <form onSubmit={handleAsync(submit)} className="space-y-5">
         <label className="block text-sm font-medium text-neutral-700">
           ชื่อชั้น
           <input
@@ -198,11 +199,11 @@ export function AddNovelsDialog({ open, collection, entries, onClose, onToggle }
               <button
                 type="button"
                 disabled={pending === entry.novel.novel_id}
-                onClick={async () => {
+                onClick={handleAsync(async () => {
                   setPending(entry.novel.novel_id);
                   await onToggle(entry.novel.novel_id, checked);
                   setPending(null);
-                }}
+                })}
                 aria-pressed={checked}
                 className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left hover:bg-neutral-50 disabled:opacity-60"
               >

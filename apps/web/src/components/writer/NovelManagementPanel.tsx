@@ -8,10 +8,12 @@ import { BookOpen, Eye, EyeOff, Pencil, Plus, Trash2, Wand2 } from "lucide-react
 import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
 import { EditNovelForm } from "@/components/writer/EditNovelForm";
+import { ModerationNotice } from "@/components/writer/ModerationNotice";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 import { estimatePageCount } from "@/lib/textStats";
 import { THAI_TIME_ZONE } from "@/lib/format";
+import { handleAsync } from "@/lib/handleAsync";
 
 export type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
 
@@ -19,6 +21,8 @@ interface NovelManagementPanelProps {
   novel: ManagedNovel;
   chapters: ManagedChapter[];
   tags: NovelWizardTag[];
+  /** เปิดฟอร์มอุทธรณ์ทันที (ลิงก์ ?appeal=1 จากแจ้งเตือน/อีเมลระงับนิยาย) */
+  openAppeal?: boolean;
 }
 
 const formatLabel: Record<ManagedNovel["format"], string> = {
@@ -32,10 +36,10 @@ const contentRatingLabel: Record<ManagedNovel["content_rating"], string> = {
   mature: "18+",
 };
 
-const visibilityBadge: Record<ManagedNovel["visibility"], { label: string; color: "emerald" | "slate" | "amber" }> = {
+const visibilityBadge: Record<ManagedNovel["visibility"], { label: string; color: "emerald" | "slate" | "red" }> = {
   published: { label: "เผยแพร่แล้ว", color: "emerald" },
   private: { label: "ส่วนตัว", color: "slate" },
-  pending_review: { label: "รอตรวจสอบ", color: "amber" },
+  suspended: { label: "ถูกระงับ", color: "red" },
 };
 
 const chapterStatusBadge: Record<ManagedChapter["status"], { label: string; color: "emerald" | "slate" | "amber" | "red" }> = {
@@ -50,7 +54,7 @@ function formatDateTime(iso: string): string {
 }
 
 /** หน้าจัดการนิยาย — ข้อมูลนิยาย + รายการตอนทุกสถานะ + ลบ (Phase D) */
-export function NovelManagementPanel({ novel: initialNovel, chapters: initialChapters, tags }: NovelManagementPanelProps) {
+export function NovelManagementPanel({ novel: initialNovel, chapters: initialChapters, tags, openAppeal }: NovelManagementPanelProps) {
   const router = useRouter();
   const [novel, setNovel] = useState(initialNovel);
   const [chapters, setChapters] = useState(initialChapters);
@@ -170,6 +174,16 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
     <div>
       {error && <p className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>}
 
+      {novel.visibility === "suspended" && novel.moderation_case && (
+        <ModerationNotice
+          novelId={novel.novel_id}
+          novelTitle={novel.title}
+          moderationCase={novel.moderation_case}
+          openAppealOnMount={openAppeal}
+          onAppealed={(updated) => setNovel((prev) => ({ ...prev, moderation_case: updated }))}
+        />
+      )}
+
       {editing ? (
         <EditNovelForm
           novel={novel}
@@ -224,12 +238,12 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <Tag color={visibilityBadge[novel.visibility].color}>{visibilityBadge[novel.visibility].label}</Tag>
-              {novel.visibility === "pending_review" ? (
-                <span className="text-xs text-neutral-400">เนื้อหากำลังอยู่ระหว่างตรวจสอบ ยังเปลี่ยนสถานะเองไม่ได้ช่วงนี้</span>
+              {novel.visibility === "suspended" ? (
+                <span className="text-xs text-neutral-500">ทีมงานระงับการเผยแพร่ไว้ ยื่นอุทธรณ์เพื่อขอให้ตรวจซ้ำ</span>
               ) : (
                 <button
                   type="button"
-                  onClick={handleToggleVisibility}
+                  onClick={handleAsync(handleToggleVisibility)}
                   disabled={changingVisibility}
                   className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-500 hover:text-primary-600 disabled:opacity-50"
                 >
@@ -307,7 +321,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
                   {(chapter.status === "published" || chapter.status === "hidden") && (
                     <button
                       type="button"
-                      onClick={() => handleToggleHidden(chapter)}
+                      onClick={handleAsync(() => handleToggleHidden(chapter))}
                       disabled={busyChapterId === chapter.chapter_id}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition-colors hover:bg-neutral-100 disabled:opacity-50"
                       aria-label={chapter.status === "hidden" ? "เผยแพร่อีกครั้ง" : "ซ่อนตอนนี้"}
@@ -357,7 +371,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
               <Button
                 variant="primary"
                 className="!bg-red-500 hover:!bg-red-600"
-                onClick={handleDeleteChapter}
+                onClick={handleAsync(handleDeleteChapter)}
                 loading={busyChapterId === pendingDeleteChapter.chapter_id}
               >
                 ยืนยันลบ
@@ -382,7 +396,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
               <Button
                 variant="primary"
                 className="!bg-red-500 hover:!bg-red-600"
-                onClick={handleDeleteNovel}
+                onClick={handleAsync(handleDeleteNovel)}
                 loading={deletingNovel}
               >
                 ย้ายไปถังขยะ

@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/admin/content-reports?status=&cursor=
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const query = parseSearchParams(request, contentReportsQuerySchema);
   if ("error" in query) return query.error;

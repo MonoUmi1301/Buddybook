@@ -6,7 +6,7 @@ import { HAS_INTERESTS_COOKIE } from "@/lib/api/auth";
 /**
  * เพิ่มภายหลัง (bug fix) — GET /api/v1/users/me/onboarding-sync
  * cookie bb_has_interests ถูกตั้งแค่ตอนตอบ onboarding จบ (POST /users/me/interests) ผู้ใช้ที่ตอบไปแล้วแต่
- * ล็อกอินจากเบราว์เซอร์ใหม่/ล้าง cookie จึงไม่มี cookie นี้ → middleware.ts redirect ไป /onboarding →
+ * ล็อกอินจากเบราว์เซอร์ใหม่/ล้าง cookie จึงไม่มี cookie นี้ → proxy.ts redirect ไป /onboarding →
  * หน้า onboarding เห็น has_interests=true จาก DB แล้ว redirect กลับ "/" → วนลูปไม่รู้จบ
  * Server Component ตั้ง cookie เองไม่ได้ หน้า onboarding จึงส่งมาที่ route handler นี้ (อยู่ใต้ /api
  * ซึ่งยกเว้นจาก redirect ของ middleware) เพื่อตั้ง cookie ตามข้อมูลจริงใน DB แล้วค่อยไปหน้าแรก

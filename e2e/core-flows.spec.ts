@@ -338,7 +338,7 @@ test("5. support: user sends a ticket, admin replies, user is notified", async (
   await context.close();
 });
 
-test("6. age gate: under-18 cannot open 18+ novels or chapters, adults can", async ({ request, browser }) => {
+test("6. age gate: 15-year-old reads 13+ but not 18+, guests must verify, adults can", async ({ request, browser }) => {
   const [, novel] = await api(request, "writer", "POST", "/novels", {
     title: "นิยายสำหรับผู้ใหญ่ (ทดสอบ)",
     legal_status: "original",
@@ -356,12 +356,15 @@ test("6. age gate: under-18 cannot open 18+ novels or chapters, adults can", asy
   shared.mature_novel_id = novel.novel_id;
   shared.mature_chapter_id = chapter.chapter_id;
 
+  // core_minor ยืนยันอายุไว้แล้วว่า 15 (seed-e2e-core) → AGE_RESTRICTED, คนที่ยังไม่ล็อกอิน → ต้องยืนยันก่อน
   const [sN, bodyN] = await api(request, "minor", "GET", `/novels/${novel.novel_id}`);
   expect(sN).toBe(403);
-  expect(bodyN.details?.code).toBe("AGE_VERIFICATION_REQUIRED");
+  expect(bodyN.details).toEqual({ code: "AGE_RESTRICTED", required_age: 18 });
   const [sC] = await api(request, "minor", "GET", `/chapters/${chapter.chapter_id}`);
   expect(sC).toBe(403);
-  expect((await api(request, null, "GET", `/chapters/${chapter.chapter_id}`))[0]).toBe(403);
+  const [sG, bodyG] = await api(request, null, "GET", `/chapters/${chapter.chapter_id}`);
+  expect(sG).toBe(403);
+  expect(bodyG.details?.code).toBe("AGE_VERIFICATION_REQUIRED");
   expect((await api(request, "reader", "GET", `/novels/${novel.novel_id}`))[0]).toBe(200);
   expect((await api(request, "reader", "GET", `/chapters/${chapter.chapter_id}`))[0]).toBe(200);
 
@@ -369,17 +372,14 @@ test("6. age gate: under-18 cannot open 18+ novels or chapters, adults can", asy
   const [, search] = await api(request, "minor", "GET", `/novels/search?q=${encodeURIComponent("นิยายสำหรับผู้ใหญ่")}`);
   expect(JSON.stringify(search)).not.toContain(novel.novel_id);
 
-  // ผู้ใช้กรอกวันเกิดที่อายุไม่ถึง 18 → ยังไม่ผ่าน
-  const teenBirth = new Date();
-  teenBirth.setUTCFullYear(teenBirth.getUTCFullYear() - 15);
-  const [, verify] = await api(request, "minor", "PATCH", "/users/me/age-verification", {
-    birth_date: teenBirth.toISOString().slice(0, 10),
-  });
-  expect(verify.age_verified).toBe(false);
+  // ไม่มีช่องทางกรอกวันเกิดเองแล้ว — ยืนยันได้เฉพาะ Google / e-KYC
+  const [sSelf] = await api(request, "minor", "PATCH", "/users/me/age-verification", { birth_date: "1990-01-01" });
+  expect(sSelf).toBe(404);
 
   const { context, page } = await pageAs(browser, "minor");
   await page.goto(`/novels/${novel.novel_id}`);
-  await expect(page.getByText("เนื้อหาสำหรับผู้ใหญ่")).toBeVisible();
+  await expect(page.getByText("เนื้อหาสำหรับอายุ 18 ปีขึ้นไป")).toBeVisible();
+  await expect(page.getByText("ยังไม่ถึง 18 ปี")).toBeVisible();
   await page.goto(`/novels/${novel.novel_id}/chapters/${chapter.chapter_id}`);
   await expect(page.getByText("เนื้อหาเฉพาะผู้ใหญ่")).toHaveCount(0);
   await context.close();

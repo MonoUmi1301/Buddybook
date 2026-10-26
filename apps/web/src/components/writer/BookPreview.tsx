@@ -425,7 +425,7 @@ export function BookPreview({ data, backHref }: { data: BookPreviewData; backHre
   useEffect(() => {
     let cancelled = false;
     setTextPages(null);
-    (async () => {
+    void (async () => {
       try {
         await document.fonts?.ready;
       } catch {

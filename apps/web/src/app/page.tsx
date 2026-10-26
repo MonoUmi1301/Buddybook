@@ -21,6 +21,7 @@ interface ApiNovel {
   review_count?: number;
   like_count?: number;
   chapter_count?: number;
+  is_demo?: boolean;
   author: { username: string; pen_name: string | null };
 }
 
@@ -36,6 +37,7 @@ function toNovelSummary(n: ApiNovel): NovelSummary {
     reviewCount: n.review_count,
     tags: [],
     href: `/novels/${n.novel_id}`,
+    isDemo: n.is_demo ?? false,
   };
 }
 
@@ -58,7 +60,7 @@ interface HomeTag {
 }
 
 async function fetchRawNovels(searchParams: URLSearchParams): Promise<ApiNovel[]> {
-  const result = await callApi({ method: "GET", path: "/novels/search", searchParams, token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/novels/search", searchParams, token: await getAccessToken() });
   if ("error" in result || result.status !== 200) return [];
   return (result.json as { novels: ApiNovel[] }).novels;
 }
@@ -70,7 +72,7 @@ async function fetchNovels(searchParams: URLSearchParams): Promise<NovelSummary[
     method: "GET",
     path: "/novels/search",
     searchParams,
-    token: getAccessToken(),
+    token: await getAccessToken(),
   });
   if ("error" in result || result.status !== 200) return [];
   const data = result.json as { novels: ApiNovel[] };
@@ -80,18 +82,18 @@ async function fetchNovels(searchParams: URLSearchParams): Promise<NovelSummary[
 export default async function HomePage() {
   const user = await getCurrentUser();
   // เพิ่มภายหลัง (Phase Q, MASTER BRIEF) — ตัด bb_onboarding_skipped cookie ออก ไม่มีทางข้ามแล้ว
-  // middleware.ts เป็นตัวหลักที่บังคับ redirect จากทุกหน้าอยู่แล้ว (Phase R) แต่คงเช็คซ้ำไว้ที่นี่
-  // เป็น defense-in-depth เผื่อ middleware cookie ยังไม่ sync (ดูเหตุผลใน middleware.ts)
+  // proxy.ts เป็นตัวหลักที่บังคับ redirect จากทุกหน้าอยู่แล้ว (Phase R) แต่คงเช็คซ้ำไว้ที่นี่
+  // เป็น defense-in-depth เผื่อ middleware cookie ยังไม่ sync (ดูเหตุผลใน proxy.ts)
   if (user && !user.has_interests) redirect("/onboarding");
 
   // เพิ่มภายหลัง (BRIEF: Navbar Global Mode) — Navbar.tsx เขียน cookie นี้ตอนกดสลับ นิยาย/แฟนฟิค
   // อ่านที่นี่เพื่อกรองเนื้อหาหน้าแรกทั้งหมดให้ตรงโหมด (ไม่งั้น "หน้าหลักต้องสลับ" จะไม่มีทางเกิดขึ้นจริง
   // เพราะหน้านี้เป็น Server Component render ครั้งเดียวตอน request ไม่มีทาง react ต่อ client state ได้)
   // ไม่มี cookie (ยังไม่เคยเลือก) = "นิยาย" ตรงกับแท็บที่ Navbar ไฮไลต์ไว้ (ดู DEFAULT_WORK_TYPE)
-  const workType = resolveWorkType(cookies().get(WORK_TYPE_COOKIE)?.value);
+  const workType = resolveWorkType((await cookies()).get(WORK_TYPE_COOKIE)?.value);
 
   const legal: Record<string, string> = workType ? { legal_status: workType } : {};
-  const token = getAccessToken();
+  const token = await getAccessToken();
 
   // เปลี่ยนภายหลัง (perf) — เดิมเป็น waterfall 5 ทอด (recommendations -> top/trending/tags -> genre ->
   // coverflow/continue-reading) ทั้งที่แทบทุกตัวไม่ได้รอกัน ตอนนี้ยิงพร้อมกันหมดหลังรู้ว่าเป็นใคร

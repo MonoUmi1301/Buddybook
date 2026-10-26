@@ -6,6 +6,7 @@ import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { GiftButton } from "@/components/gifts/GiftButton";
 import { ChapterUnlockPanel } from "@/components/reader/ChapterUnlockPanel";
+import { markReaderNavigation } from "@/components/reader/ResumeReadingPrompt";
 import type { GiftTarget } from "@/lib/gifts";
 
 type FontFamily = "sans" | "serif" | "reading";
@@ -181,6 +182,7 @@ export function ReaderContent({
           {prevChapterId ? (
             <Link
               href={`/novels/${novelId}/chapters/${prevChapterId}`}
+              onClick={() => markReaderNavigation(prevChapterId)}
               className="flex items-center gap-1 text-sm font-medium hover:underline"
               style={{ color: activeTheme.muted }}
             >
@@ -192,6 +194,7 @@ export function ReaderContent({
           {nextChapterId ? (
             <Link
               href={`/novels/${novelId}/chapters/${nextChapterId}`}
+              onClick={() => markReaderNavigation(nextChapterId)}
               className="flex items-center gap-1 text-sm font-medium hover:underline"
               style={{ color: activeTheme.muted }}
             >

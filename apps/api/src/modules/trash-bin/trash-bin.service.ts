@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
 import type { ChapterStatus, CharacterRole, Prisma, TrashContentType } from "@prisma/client";
+import { toSafeChapterHtml } from "@/lib/richText";
 
 async function assertNovelOwner(novel_id: string, user_id: string) {
   const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { author_id: true } });
@@ -65,7 +66,7 @@ async function recreateFromSnapshot(
           novel_id: snapshot.novel_id as string,
           chapter_number: snapshot.chapter_number as number,
           title: snapshot.title as string,
-          content: (snapshot.content as string | null) ?? undefined,
+          content: toSafeChapterHtml(snapshot.content as string | null) ?? undefined,
           status: snapshot.status as ChapterStatus,
           word_count: snapshot.word_count as number,
           published_at: snapshot.published_at ? new Date(snapshot.published_at as string) : null,

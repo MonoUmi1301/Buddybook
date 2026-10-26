@@ -8,7 +8,7 @@ export default async function WalletPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const result = await callApi({ method: "GET", path: "/wallet/transactions", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/wallet/transactions", token: await getAccessToken() });
   const initialBalance =
     !("error" in result) && result.status === 200 ? (result.json as { balance: number }).balance : 0;
 

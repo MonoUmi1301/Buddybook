@@ -6,6 +6,7 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { formatApiError } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface SetupData {
   secret: string;
@@ -139,7 +140,7 @@ export function TwoFactorSection({ enabled }: { enabled: boolean }) {
               ปิดใช้งาน
             </Button>
           ) : (
-            <Button type="button" variant="outline" className="shrink-0" onClick={handleStartSetup} loading={loading}>
+            <Button type="button" variant="outline" className="shrink-0" onClick={handleAsync(handleStartSetup)} loading={loading}>
               เปิดใช้งาน
             </Button>
           ))}
@@ -148,7 +149,7 @@ export function TwoFactorSection({ enabled }: { enabled: boolean }) {
       {stage === "setup" && setupData && (
         <form
           className="mt-4 space-y-3 rounded-xl border-2 border-primary-200 bg-primary-50/50 p-4"
-          onSubmit={handleConfirmSetup}
+          onSubmit={handleAsync(handleConfirmSetup)}
         >
           <p className="text-sm text-neutral-600">
             เปิดแอป Authenticator แล้วสแกน QR code นี้ หรือกรอกรหัสลับด้านล่างด้วยตัวเอง
@@ -188,7 +189,7 @@ export function TwoFactorSection({ enabled }: { enabled: boolean }) {
       {stage === "disable" && (
         <form
           className="mt-4 space-y-3 rounded-xl border-2 border-red-200 bg-red-50/50 p-4"
-          onSubmit={handleDisable}
+          onSubmit={handleAsync(handleDisable)}
         >
           <p className="text-sm text-neutral-600">กรอกรหัสผ่านเพื่อยืนยันการปิดใช้งาน 2FA</p>
           <Input

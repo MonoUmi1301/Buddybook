@@ -39,7 +39,7 @@ export async function callApi({
   // (ไม่งั้น api เห็นทุกคนเป็น IP ของ Next server) — ส่งเฉพาะตอนเปิดอ่านตอน ไม่ทำให้หน้าอื่นกลายเป็น dynamic
   if (method === "GET" && path.startsWith("/chapters/")) {
     try {
-      const forwarded = requestHeaders().get("x-forwarded-for") ?? requestHeaders().get("x-real-ip");
+      const forwarded = (await requestHeaders()).get("x-forwarded-for") ?? (await requestHeaders()).get("x-real-ip");
       if (forwarded) headers["X-Forwarded-For"] = forwarded;
     } catch {
       // เรียกนอก request scope (เช่น build time) — ไม่มี IP ให้ส่ง

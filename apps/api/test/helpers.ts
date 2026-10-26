@@ -46,7 +46,8 @@ export function createHarness(prefix: string) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...headers,
         },
-        body: body ? JSON.stringify(body) : undefined,
+        // สตริง = ส่งตามนั้นทุกไบต์ (เช่น webhook ที่ต้องเซ็นจาก raw body)
+        body: typeof body === "string" ? body : body ? JSON.stringify(body) : undefined,
       });
       const text = await res.text();
       let json: any = null;

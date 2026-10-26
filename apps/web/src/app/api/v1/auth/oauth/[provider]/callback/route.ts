@@ -1,9 +1,18 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { callApi } from "@/lib/api/proxy";
-import { setAuthCookies } from "@/lib/api/auth";
+import { getAccessToken, setAuthCookies } from "@/lib/api/auth";
 import { appUrl } from "@/lib/api/config";
-import { OAUTH_STATE_COOKIE, clearOAuthStateCookie, setOAuth2faCookie, stateMatches } from "@/lib/api/oauth";
+import {
+  OAUTH_AGE_VERIFY_COOKIE,
+  OAUTH_STATE_COOKIE,
+  clearOAuthAgeVerifyCookie,
+  clearOAuthStateCookie,
+  safeReturnPath,
+  setOAuth2faCookie,
+  stateMatches,
+  withAgeVerifyResult,
+} from "@/lib/api/oauth";
 
 type OAuthLoginResponse =
   | {
@@ -11,6 +20,8 @@ type OAuthLoginResponse =
       access_token: string;
       refresh_token: string;
       user: { user_id: string; username: string; role: string };
+      /** LINE ไม่ส่งอีเมลมา — บัญชียังไม่มีอีเมล ต้องไปกรอกที่ /complete-profile ก่อน */
+      needs_email?: boolean;
     }
   | { requires_2fa: true; challenge_token: string };
 
@@ -19,17 +30,44 @@ function fail(error: string) {
   return clearOAuthStateCookie(NextResponse.redirect(appUrl(`/login?error=${error}`)));
 }
 
+/** จบ flow ยืนยันอายุ — กลับหน้าที่กดปุ่ม (หน้าเกตจะเปิดเนื้อหาเองถ้าอายุถึงเกณฑ์ ไม่ถึงก็แสดงข้อความแทน) */
+function finishAgeVerify(returnTo: string, result: "ok" | "no_birthday" | "failed") {
+  const response = NextResponse.redirect(appUrl(withAgeVerifyResult(safeReturnPath(returnTo), result)));
+  return clearOAuthAgeVerifyCookie(clearOAuthStateCookie(response));
+}
+
 // GET /api/v1/auth/oauth/:provider/callback — Google (หรือ provider อื่น) redirect browser
 // มาที่นี่ตรง ๆ พร้อม ?code=...&state=... (ต้องตรงกับ redirect_uri ที่ลงทะเบียนไว้ใน Cloud Console)
-export async function GET(request: Request, { params }: { params: { provider: string } }) {
+export async function GET(request: Request, props: { params: Promise<{ provider: string }> }) {
+  const params = await props.params;
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
 
-  if (!code || !state) return fail("oauth_missing_code");
+  const ageVerifyReturnTo = (await cookies()).get(OAUTH_AGE_VERIFY_COOKIE)?.value;
+  // ผู้ใช้กดยกเลิกที่หน้า consent ของ Google (?error=access_denied ไม่มี code)
+  if (!code || !state) return ageVerifyReturnTo ? finishAgeVerify(ageVerifyReturnTo, "failed") : fail("oauth_missing_code");
 
   // state ต้องตรงกับที่เก็บไว้ตอนเริ่ม flow ในเบราว์เซอร์นี้ — ลายเซ็น/อายุเช็คซ้ำอีกชั้นที่ apps/api
-  if (!stateMatches(cookies().get(OAUTH_STATE_COOKIE)?.value, state)) return fail("oauth_state");
+  if (!stateMatches((await cookies()).get(OAUTH_STATE_COOKIE)?.value, state)) {
+    return ageVerifyReturnTo ? finishAgeVerify(ageVerifyReturnTo, "failed") : fail("oauth_state");
+  }
+
+  // flow "ยืนยันอายุด้วย Google" (เริ่มจาก ./verify-age) — ยืนยันอายุของบัญชีที่ล็อกอินอยู่ ไม่ออก session ใหม่
+  if (ageVerifyReturnTo) {
+    const token = await getAccessToken();
+    if (!token) return clearOAuthAgeVerifyCookie(fail("oauth_failed"));
+    const verify = await callApi({
+      method: "POST",
+      path: "/users/me/age-verification/google",
+      token,
+      body: { code, state },
+    });
+    if ("error" in verify) return finishAgeVerify(ageVerifyReturnTo, "failed");
+    if (verify.status === 422) return finishAgeVerify(ageVerifyReturnTo, "no_birthday");
+    if (verify.status !== 200) return finishAgeVerify(ageVerifyReturnTo, "failed");
+    return finishAgeVerify(ageVerifyReturnTo, "ok");
+  }
 
   const result = await callApi({
     method: "POST",
@@ -50,6 +88,6 @@ export async function GET(request: Request, { params }: { params: { provider: st
     return clearOAuthStateCookie(setOAuth2faCookie(response, body.challenge_token));
   }
 
-  const response = clearOAuthStateCookie(NextResponse.redirect(appUrl("/")));
+  const response = clearOAuthStateCookie(NextResponse.redirect(appUrl(body.needs_email ? "/complete-profile" : "/")));
   return setAuthCookies(response, { access_token: body.access_token, refresh_token: body.refresh_token });
 }

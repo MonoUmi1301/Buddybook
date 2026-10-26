@@ -4,8 +4,9 @@ import { parseJsonBody, requireUuidParam } from "@/lib/api/validate";
 import { supportStatusSchema } from "@/lib/api/schemas";
 
 // PATCH /api/v1/support/tickets/:ticketId/status (gap 3.2)
-export async function PATCH(request: Request, { params }: { params: { ticketId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ ticketId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   const id = requireUuidParam(params.ticketId, "ticket_id");
   if ("error" in id) return id.error;

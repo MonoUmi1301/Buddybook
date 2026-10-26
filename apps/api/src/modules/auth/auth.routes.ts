@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "@/utils/asyncHandler";
-import { requireAuth } from "@/middleware/auth.middleware";
+import { requireAuth, requireAuthAllowMissingEmail } from "@/middleware/auth.middleware";
 import { bodyField, rateLimitByKey, rateLimitPerUser } from "@/middleware/rateLimit.middleware";
 import { env } from "@/config/env";
 import * as authController from "@/modules/auth/auth.controller";
@@ -32,6 +32,10 @@ router.post("/login/verify-2fa", authLimit("auth-verify-2fa", "challenge_token")
 router.post("/2fa/setup", requireAuth, asyncHandler(authController.setup2fa));
 router.post("/2fa/confirm", requireAuth, twoFactorLimit, asyncHandler(authController.confirm2fa));
 router.post("/2fa/disable", requireAuth, twoFactorLimit, asyncHandler(authController.disable2fa));
+// บัญชี LINE ที่ LINE ไม่ส่งอีเมลมา — endpoint เดียวที่ token email_required ใช้ได้ (refresh/logout ไม่ต้องล็อกอินอยู่แล้ว)
+const completeProfileLimit = rateLimitPerUser({ bucket: "auth-complete-profile", max: () => env.AUTH_RATE_LIMIT_PER_15MIN, windowMs: AUTH_WINDOW_MS });
+router.post("/complete-profile/request-otp", requireAuthAllowMissingEmail, completeProfileLimit, asyncHandler(authController.completeProfileRequestOtp));
+router.post("/complete-profile/verify-otp", requireAuthAllowMissingEmail, completeProfileLimit, asyncHandler(authController.completeProfileVerifyOtp));
 router.post("/refresh", asyncHandler(authController.refresh));
 router.post("/logout", asyncHandler(authController.logout));
 router.post("/password/forgot", authLimit("auth-forgot", "email"), asyncHandler(authController.forgotPassword));
@@ -39,7 +43,7 @@ router.post("/password/reset", authLimit("auth-reset", "token"), asyncHandler(au
 
 // --- OAuth — Google/LINE/Facebook ทำงานจริงครบทั้ง 3 ราย (ดู lib/googleOAuth.ts, lib/lineOAuth.ts,
 // lib/facebookOAuth.ts) แต่ละตัว gate ตัวเองด้วย isXOAuthConfigured() — ถ้ายังไม่ตั้งค่า env จะ
-// ตอบ 400 ไม่ใช่ crash ตอน boot (เหมือน Cloudinary/SlipOK) ไม่ใช่ endpoint ที่ยังไม่ implement ---
+// ตอบ 400 ไม่ใช่ crash ตอน boot (เหมือน Cloudinary) ไม่ใช่ endpoint ที่ยังไม่ implement ---
 router.get("/oauth/:provider", asyncHandler(authController.oauthStart));
 router.post("/oauth/:provider/callback", asyncHandler(authController.oauthCallback));
 

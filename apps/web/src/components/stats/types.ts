@@ -2,7 +2,7 @@ export interface NovelOverviewRow {
   novel_id: string;
   title: string;
   cover_image_url: string | null;
-  visibility: "published" | "private" | "pending_review";
+  visibility: "published" | "private" | "suspended";
   views: number;
   views_7d: number;
   readers: number;

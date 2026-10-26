@@ -6,7 +6,8 @@ import type { OAuthProvider } from "@prisma/client";
 export interface OAuthProfile {
   provider: OAuthProvider;
   sub: string;
-  email: string;
+  /** null = provider ไม่ส่งอีเมลมา (LINE ที่ผู้ใช้ไม่อนุญาตอีเมล) — สร้างบัญชีโดยไม่มีอีเมล แล้วบังคับกรอกที่ /complete-profile */
+  email: string | null;
   name: string;
   picture: string | null;
   /** provider ยืนยันแล้วว่าเจ้าของบัญชีเป็นเจ้าของอีเมลนี้จริง — false = ห้ามใช้อีเมลนี้ผูกกับบัญชีที่มีอยู่แล้ว

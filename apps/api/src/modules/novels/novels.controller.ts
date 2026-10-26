@@ -6,6 +6,7 @@ import * as trashBinService from "@/modules/trash-bin/trash-bin.service";
 import * as charactersService from "@/modules/characters/characters.service";
 import * as locationsService from "@/modules/locations/locations.service";
 import * as timelineService from "@/modules/timeline/timeline.service";
+import * as moderationService from "@/modules/admin/moderation.service";
 import { ApiError } from "@/utils/ApiError";
 import { STICKER_IDS } from "@/lib/stickers";
 
@@ -37,7 +38,8 @@ const searchQuerySchema = z.object({
   sort: z.enum(["newest", "views"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
-  mine: z.coerce.boolean().optional(),
+  // query string เป็นสตริงเสมอ — z.coerce.boolean() แปลง "false" เป็น true จึงรับเฉพาะ "true"/"false" ตรง ๆ
+  mine: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
 });
 
 export async function search(req: Request, res: Response) {
@@ -112,7 +114,7 @@ const createNovelBodySchema = z
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
     // เพิ่มภายหลัง — "แนะนำนิยาย" คำเกริ่นนำยาว แยกจาก synopsis
-    introduction: z.string().max(20000).optional(),
+    introduction: z.string().max(50000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: z.enum(["original", "fan-fiction", "translation"]),
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -163,10 +165,11 @@ const updateNovelBodySchema = z
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
     // null = ล้างค่า (ผู้เขียนลบข้อความในช่องแนะนำนิยายทิ้ง)
-    introduction: z.string().max(20000).nullable().optional(),
+    introduction: z.string().max(50000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: z.enum(["ongoing", "completed", "hiatus"]).optional(),
-    visibility: z.enum(["published", "private", "pending_review"]).optional(),
+    // post-moderation — เผยแพร่ได้ทันทีไม่ต้องรออนุมัติ; suspended ตั้งได้เฉพาะแอดมิน (PATCH /admin/novels/:id/suspend)
+    visibility: z.enum(["published", "private"]).optional(),
     tag_ids: z.array(z.number().int().positive()).optional(),
     format: z.enum(["multi_chapter", "one_shot"]).optional(),
     is_translated: z.boolean().optional(),
@@ -567,4 +570,15 @@ export async function createReview(req: Request, res: Response) {
   const body = createReviewBodySchema.parse(req.body);
   const review = await novelsService.createReview(novel_id, req.user!.user_id, body);
   res.status(201).json(review);
+}
+
+const appealBodySchema = z.object({
+  message: z.string().trim().min(20, "อธิบายเหตุผลหรือสิ่งที่แก้ไขอย่างน้อย 20 ตัวอักษร").max(5000),
+});
+
+/** POST /novels/:novel_id/appeal — นักเขียนยื่นอุทธรณ์นิยายที่ถูกระงับ ส่งกลับเข้าคิวตรวจของแอดมิน */
+export async function appeal(req: Request, res: Response) {
+  const { novel_id } = z.object({ novel_id: z.string().uuid() }).parse(req.params);
+  const { message } = appealBodySchema.parse(req.body);
+  res.status(201).json(await moderationService.appealSuspension(novel_id, req.user!.user_id, message));
 }

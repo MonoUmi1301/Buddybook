@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { toast } from "@/components/ui/Toaster";
 import { formatThaiDate } from "@/lib/format";
 import { WITHDRAWAL_STATUS_LABEL, type WithdrawalRow } from "@/components/wallet/WithdrawalSection";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface AdminWithdrawalRow extends WithdrawalRow {
   user: { user_id: string; username: string; pen_name: string | null; email: string };
@@ -66,7 +67,7 @@ export function WithdrawalsManager({ initial }: { initial: AdminWithdrawalRow[] 
             type="button"
             role="tab"
             aria-selected={status === t}
-            onClick={() => switchTab(t)}
+            onClick={handleAsync(() => switchTab(t))}
             className={cn(
               "rounded-pill px-4 py-1.5 text-sm",
               status === t ? "bg-neutral-900 text-white" : "border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
@@ -127,7 +128,7 @@ export function WithdrawalsManager({ initial }: { initial: AdminWithdrawalRow[] 
                   <button
                     type="button"
                     disabled={busyId === row.withdrawal_id}
-                    onClick={() => process(row, "rejected")}
+                    onClick={handleAsync(() => process(row, "rejected"))}
                     className="min-h-[44px] rounded-pill border border-neutral-300 px-5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                   >
                     ปฏิเสธ
@@ -135,7 +136,7 @@ export function WithdrawalsManager({ initial }: { initial: AdminWithdrawalRow[] 
                   <button
                     type="button"
                     disabled={busyId === row.withdrawal_id}
-                    onClick={() => process(row, "paid")}
+                    onClick={handleAsync(() => process(row, "paid"))}
                     className="min-h-[44px] rounded-pill bg-emerald-600 px-5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     โอนแล้ว

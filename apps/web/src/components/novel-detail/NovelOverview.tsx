@@ -60,9 +60,11 @@ export function NovelOverview({ novel, characters, lastPublishedAt, totalCharact
       {novel.introduction?.trim() && (
         <div>
           <h2 className="text-lg font-semibold text-neutral-900">แนะนำเรื่อง</h2>
-          <p className="mt-3 max-w-prose whitespace-pre-line text-base leading-relaxed text-neutral-700">
-            {novel.introduction.trim()}
-          </p>
+          {/* HTML จาก Quill ที่ API กรองแล้ว (lib/richText.ts → toSafeRichText) ; สไตล์ .rich-text ใน globals.css */}
+          <div
+            className="rich-text chapter-indent mt-3 text-base text-neutral-700"
+            dangerouslySetInnerHTML={{ __html: novel.introduction }}
+          />
         </div>
       )}
 

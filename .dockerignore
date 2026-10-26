@@ -1,5 +1,5 @@
-# build context ใช้แค่ package.json/package-lock.json (ดู docker/node.Dockerfile) — ตัดของหนักออก
-# ไม่ให้ Docker ต้องอัปโหลด node_modules/.next ของ host ทุกครั้งที่ build
+# build context ของ docker/node.Dockerfile (dev) และ docker/api|web.Dockerfile (production) — ตัดของหนัก
+# และของที่ห้ามเข้า image ออก (secret, backup DB ที่มีข้อมูลผู้ใช้จริง)
 **/node_modules
 **/.next
 **/dist
@@ -7,5 +7,11 @@
 apps/nlp-worker
 **/.env
 **/.env.local
+**/.env.production
 **/*.log
 **/*.tsbuildinfo
+backups
+.venv
+**/__pycache__
+test-results
+.claude

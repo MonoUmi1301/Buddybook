@@ -8,8 +8,6 @@ const router = Router();
 router.use(requireAuth);
 
 router.get("/transactions", asyncHandler(walletController.listTransactions));
-// ส่วนขยายนอก API_Endpoints.md เดิม — เติมเงินจริงผ่าน SlipOK (ดู lib/slipok.ts) เก็บไว้เผื่อใช้อีก
-router.post("/topup/verify-slip", asyncHandler(walletController.verifyTopupSlip));
 // เพิ่มภายหลัง (audit fix) — เติมเงินผ่าน Stripe Checkout (embedded) แทนการอัปโหลดสลิปเป็นทางหลัก
 router.post("/topup/checkout-session", asyncHandler(walletController.createCheckoutSession));
 // สถานะคำสั่งเติม coin จาก DB — webhook เป็นคนเปลี่ยนสถานะ ฝั่ง client แค่อ่าน

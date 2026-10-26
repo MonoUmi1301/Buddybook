@@ -1,10 +1,11 @@
-import { z, ZodIssueCode, type ZodErrorMap } from "zod";
+import { z } from "zod";
 
 /**
  * ข้อความ validation ภาษาไทยสำหรับ zod ทั้งแอป (เดิมเป็นค่า default ภาษาอังกฤษ เช่น "Invalid email",
  * "String must contain at least 8 character(s)" ซึ่งไปโผล่ในป็อปอัปให้ผู้ใช้เห็นตรง ๆ แล้วไม่เข้าใจ)
  * schema ที่ตั้งข้อความเองไว้แล้ว (เช่น .min(4, "หัวข้ออย่างน้อย 4 ตัวอักษร")) ยังใช้ข้อความนั้นตามเดิม
  * — ไฟล์นี้มีสำเนาใน apps/web/src/lib/zodThai.ts (สองแอปไม่แชร์โค้ดกัน) แก้ให้ตรงกันทั้งคู่
+ * zod 4: ตั้งผ่าน z.config({ customError }) และ issue code/ชื่อ field เปลี่ยนจาก zod 3 (invalid_format, origin ฯลฯ)
  */
 const STRING_FORMAT: Record<string, string> = {
   email: "รูปแบบอีเมลไม่ถูกต้อง",
@@ -15,49 +16,43 @@ const STRING_FORMAT: Record<string, string> = {
   regex: "รูปแบบไม่ถูกต้อง",
 };
 
-export const thaiErrorMap: ZodErrorMap = (issue, ctx) => {
+export const thaiErrorMap: z.core.$ZodErrorMap = (issue) => {
   switch (issue.code) {
-    case ZodIssueCode.invalid_type:
-      if (issue.received === "undefined" || issue.received === "null") return { message: "จำเป็นต้องกรอก" };
-      if (issue.expected === "number" || issue.expected === "integer") return { message: "ต้องเป็นตัวเลข" };
-      return { message: "ข้อมูลไม่ถูกต้อง" };
-    case ZodIssueCode.invalid_string: {
-      const v = issue.validation;
-      const key = typeof v === "string" ? v : "regex";
-      return { message: STRING_FORMAT[key] ?? "รูปแบบไม่ถูกต้อง" };
-    }
-    case ZodIssueCode.too_small:
-      if (issue.type === "string") {
-        return { message: Number(issue.minimum) <= 1 ? "จำเป็นต้องกรอก" : `ต้องมีอย่างน้อย ${issue.minimum} ตัวอักษร` };
+    case "invalid_type":
+      if (issue.input === undefined || issue.input === null) return "จำเป็นต้องกรอก";
+      if (issue.expected === "number" || issue.expected === "int" || issue.expected === "bigint") return "ต้องเป็นตัวเลข";
+      if (issue.expected === "date") return "วันที่ไม่ถูกต้อง";
+      return "ข้อมูลไม่ถูกต้อง";
+    case "invalid_format":
+      return STRING_FORMAT[issue.format] ?? "รูปแบบไม่ถูกต้อง";
+    case "too_small":
+      if (issue.origin === "string") {
+        return Number(issue.minimum) <= 1 ? "จำเป็นต้องกรอก" : `ต้องมีอย่างน้อย ${issue.minimum} ตัวอักษร`;
       }
-      if (issue.type === "array") return { message: `ต้องเลือกอย่างน้อย ${issue.minimum} รายการ` };
-      if (issue.type === "number" || issue.type === "bigint") {
-        return { message: issue.inclusive ? `ต้องไม่น้อยกว่า ${issue.minimum}` : `ต้องมากกว่า ${issue.minimum}` };
+      if (issue.origin === "array" || issue.origin === "set") return `ต้องเลือกอย่างน้อย ${issue.minimum} รายการ`;
+      if (issue.origin === "number" || issue.origin === "int" || issue.origin === "bigint") {
+        return issue.inclusive ? `ต้องไม่น้อยกว่า ${issue.minimum}` : `ต้องมากกว่า ${issue.minimum}`;
       }
-      return { message: "ค่าน้อยเกินไป" };
-    case ZodIssueCode.too_big:
-      if (issue.type === "string") return { message: `ยาวได้ไม่เกิน ${issue.maximum} ตัวอักษร` };
-      if (issue.type === "array") return { message: `เลือกได้ไม่เกิน ${issue.maximum} รายการ` };
-      if (issue.type === "number" || issue.type === "bigint") {
-        return { message: issue.inclusive ? `ต้องไม่เกิน ${issue.maximum}` : `ต้องน้อยกว่า ${issue.maximum}` };
+      return "ค่าน้อยเกินไป";
+    case "too_big":
+      if (issue.origin === "string") return `ยาวได้ไม่เกิน ${issue.maximum} ตัวอักษร`;
+      if (issue.origin === "array" || issue.origin === "set") return `เลือกได้ไม่เกิน ${issue.maximum} รายการ`;
+      if (issue.origin === "number" || issue.origin === "int" || issue.origin === "bigint") {
+        return issue.inclusive ? `ต้องไม่เกิน ${issue.maximum}` : `ต้องน้อยกว่า ${issue.maximum}`;
       }
-      return { message: "ค่ามากเกินไป" };
-    case ZodIssueCode.invalid_enum_value:
-    case ZodIssueCode.invalid_literal:
-    case ZodIssueCode.invalid_union:
-    case ZodIssueCode.invalid_union_discriminator:
-      return { message: "ตัวเลือกไม่ถูกต้อง" };
-    case ZodIssueCode.invalid_date:
-      return { message: "วันที่ไม่ถูกต้อง" };
-    case ZodIssueCode.not_multiple_of:
-      return { message: `ต้องเป็นจำนวนเท่าของ ${issue.multipleOf}` };
-    case ZodIssueCode.unrecognized_keys:
-      return { message: "มีข้อมูลที่ไม่รู้จักปนมา" };
-    case ZodIssueCode.custom:
-      return { message: issue.message ?? "ข้อมูลไม่ถูกต้อง" };
+      return "ค่ามากเกินไป";
+    case "invalid_value":
+    case "invalid_union":
+      return "ตัวเลือกไม่ถูกต้อง";
+    case "not_multiple_of":
+      return `ต้องเป็นจำนวนเท่าของ ${issue.divisor}`;
+    case "unrecognized_keys":
+      return "มีข้อมูลที่ไม่รู้จักปนมา";
+    case "custom":
+      return issue.message ?? "ข้อมูลไม่ถูกต้อง";
     default:
-      return { message: ctx.defaultError };
+      return undefined;
   }
 };
 
-z.setErrorMap(thaiErrorMap);
+z.config({ customError: thaiErrorMap });

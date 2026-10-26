@@ -31,8 +31,9 @@ interface ChapterListItem {
 }
 
 // แท็บ Base — แผนที่จักรวาลของเรื่อง ดู wf_map_dm.png
-export default async function BasePage({ params }: { params: { novelId: string } }) {
-  const token = getAccessToken();
+export default async function BasePage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const token = await getAccessToken();
   const [result, chaptersResult] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}/world-building`, token }),
     callApi({ method: "GET", path: `/novels/${params.novelId}/chapters`, token }),

@@ -286,7 +286,7 @@ export function LibraryView({ entries: initialEntries, counts: initialCounts, co
               menu={[
                 { label: "เพิ่ม / เอานิยายออก", onSelect: () => setAddTo(collection.collection_id) },
                 { label: "เปลี่ยนชื่อ", onSelect: () => setFormFor(collection) },
-                { label: "ลบคอลเลคชัน", danger: true, onSelect: () => deleteCollection(collection) },
+                { label: "ลบคอลเลคชัน", danger: true, onSelect: () => void deleteCollection(collection) },
               ]}
             />
           ))}

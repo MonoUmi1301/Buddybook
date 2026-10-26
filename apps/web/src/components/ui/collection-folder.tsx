@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import * as React from "react"
 
 /**
@@ -457,7 +458,7 @@ function ArtCanvas({
       c.height = src.height
       c.getContext("2d")?.drawImage(src, 0, 0)
       setReady(true)
-    })
+    }).catch(console.error)
     return () => {
       live = false
     }
@@ -713,7 +714,7 @@ export default function CollectionFolder({
           {/* back panel and its artwork */}
           <div className="gf-back" style={{ clipPath: "path('" + BACK_PATH + "')" }} aria-hidden="true">
             {image ? (
-              <img className="gf-art" src={image} alt="" width={W + 24} height={H + 24} draggable={false} />
+              <Image unoptimized className="gf-art" src={image} alt="" width={W + 24} height={H + 24} draggable={false} />
             ) : backArt !== "none" ? (
               <ArtCanvas className="gf-art" art={backArt} seed={seed} w={W + 24} h={H + 24} density={density} priority={0} />
             ) : null}
@@ -771,7 +772,7 @@ export default function CollectionFolder({
                 <>
                   {picture ? (
                     file.image ? (
-                      <img className="gf-sheet-art" src={file.image} alt="" width={sheetW} height={SHEET_H} draggable={false} />
+                      <Image unoptimized className="gf-sheet-art" src={file.image} alt="" width={sheetW} height={SHEET_H} draggable={false} />
                     ) : (
                       <ArtCanvas
                         className="gf-sheet-art"
@@ -856,6 +857,7 @@ export default function CollectionFolder({
               ref={menuRef}
               id={"gf-menu-" + uid}
               role="menu"
+              tabIndex={-1}
               aria-label={label + " options"}
               className="gf-menu"
               data-open={menuOpen || undefined}

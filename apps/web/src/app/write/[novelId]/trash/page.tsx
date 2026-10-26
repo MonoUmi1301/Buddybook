@@ -14,11 +14,12 @@ interface NovelSummary {
 }
 
 // จัดการถังขยะของนิยาย — wireframe screen 21-22
-export default async function NovelTrashPage({ params }: { params: { novelId: string } }) {
+export default async function NovelTrashPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [novelResult, trashResult] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     callApi({ method: "GET", path: `/novels/${params.novelId}/trash-bin`, token }),

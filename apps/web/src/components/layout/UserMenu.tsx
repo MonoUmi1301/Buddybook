@@ -2,17 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BookMarked, Coins, History, LogOut, Moon, PenSquare, Settings, BarChart3, Bell, LifeBuoy } from "lucide-react";
+import { BookMarked, Coins, History, LogOut, Moon, PenSquare, Settings, BarChart3, Bell, LifeBuoy, ShieldCheck } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { toast } from "@/components/ui/Toaster";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface UserMenuUser {
   userId: string;
   username: string;
   email: string;
   avatarUrl?: string;
+  /** บัญชีแอดมิน — มีป้าย "ผู้ดูแลระบบ" + เมนูไปหลังบ้าน */
+  isAdmin?: boolean;
 }
 
 interface UserMenuProps {
@@ -41,6 +44,7 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
         body: "{}",
       });
       if (!res.ok) throw new Error(String(res.status));
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- โหลดใหม่ทั้งหน้าเพื่อล้าง state ของผู้ใช้ที่ออกจากระบบ
       window.location.assign("/");
     } catch {
       setLoggingOut(false);
@@ -58,7 +62,14 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const menuItems: { icon: typeof Moon; label: string; href?: string; onClick?: () => void }[] = [
+  // บัญชีแอดมินเป็นบัญชีทีมงาน — ไม่มีเมนูฝั่งผู้อ่าน/นักเขียน (ชั้นหนังสือ, สร้างผลงาน, เติม coin ฯลฯ)
+  const adminMenuItems: { icon: typeof Moon; label: string; href?: string; onClick?: () => void }[] = [
+    { icon: Moon, label: "ธีม", onClick: toggleTheme },
+    { icon: Bell, label: "การแจ้งเตือน", href: "/notifications" },
+    { icon: Settings, label: "ตั้งค่าบัญชี", href: "/settings" },
+  ];
+
+  const userMenuItems: { icon: typeof Moon; label: string; href?: string; onClick?: () => void }[] = [
     { icon: Moon, label: "ธีม", onClick: toggleTheme },
     { icon: BookMarked, label: "ชั้นหนังสือ", href: "/library" },
     { icon: PenSquare, label: "สร้างผลงาน", href: "/write" },
@@ -69,6 +80,7 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
     { icon: Bell, label: "การแจ้งเตือน", href: "/notifications" },
     { icon: LifeBuoy, label: "ศูนย์ช่วยเหลือ", href: "/support" },
   ];
+  const menuItems = user.isAdmin ? adminMenuItems : userMenuItems;
 
   return (
     <div className="relative" ref={ref}>
@@ -79,7 +91,17 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
         aria-expanded={open}
         className="rounded-full transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
       >
-        <Avatar src={user.avatarUrl} alt={user.username} size="md" />
+        <span className="relative block">
+          <Avatar src={user.avatarUrl} alt={user.username} size="md" />
+          {user.isAdmin && (
+            <span
+              className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-500 text-white ring-2 ring-white"
+              title="ผู้ดูแลระบบ"
+            >
+              <ShieldCheck className="h-2.5 w-2.5" />
+            </span>
+          )}
+        </span>
       </button>
 
       <div
@@ -104,8 +126,26 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
               {user.username}
             </p>
             <p className={cn("truncate text-xs", isDark ? "text-zinc-400" : "text-neutral-500")}>{user.email}</p>
+            {user.isAdmin && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-pill bg-primary-500/15 px-2 py-0.5 text-[10px] font-semibold text-primary-600">
+                <ShieldCheck className="h-3 w-3" /> ผู้ดูแลระบบ
+              </span>
+            )}
           </div>
         </Link>
+
+        {user.isAdmin && (
+          <div className={cn("border-b px-2 py-2", isDark ? "border-surface-border" : "border-neutral-200")}>
+            <Link
+              href="/admin"
+              role="menuitem"
+              className="flex items-center gap-3 rounded-lg bg-primary-500 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-600"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              หลังบ้านแอดมิน
+            </Link>
+          </div>
+        )}
 
         <ul className="py-1">
           {menuItems.map(({ icon: Icon, label, href, onClick }) => (
@@ -144,7 +184,7 @@ export function UserMenu({ user, theme = "dark" }: UserMenuProps) {
           <button
             type="button"
             role="menuitem"
-            onClick={handleLogout}
+            onClick={handleAsync(handleLogout)}
             disabled={loggingOut}
             className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-60"
           >

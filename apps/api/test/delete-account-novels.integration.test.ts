@@ -8,7 +8,7 @@ import { createHarness } from "./helpers";
 /** นิยายของบัญชีที่ถูกลบต้องหายจากเว็บ (ผลทดสอบ: หน้า "kido โดย ผู้ใช้ที่ถูกลบ_468242e3") */
 const h = createHarness("delacct");
 
-async function novel(author_id: string, title: string, visibility: "published" | "pending_review" = "published") {
+async function novel(author_id: string, title: string, visibility: "published" | "private" = "published") {
   const n = await prisma.novel.create({
     data: { author_id, title: `${title} ${h.tag}`, visibility },
     select: { novel_id: true },
@@ -31,7 +31,7 @@ describe("deleting an account", () => {
     // บัญชี OAuth ล้วนลบได้โดยไม่ต้องกรอกรหัสผ่าน
     await prisma.user.update({ where: { user_id: author.id }, data: { password_hash: null, oauth_provider: "google", oauth_id: `g_${h.tag}` } });
     const published = await novel(author.id, "published");
-    const draft = await novel(author.id, "draft", "pending_review");
+    const draft = await novel(author.id, "draft", "private");
 
     expect((await h.api("GET", `/novels/${published}`, reader.token)).status).toBe(200);
 
@@ -55,7 +55,7 @@ describe("deleting an account", () => {
       expect(r.visibility).toBe("private");
     }
     expect(rows.find((r) => r.novel_id === published)?.visibility_before_delete).toBe("published");
-    expect(rows.find((r) => r.novel_id === draft)?.visibility_before_delete).toBe("pending_review");
+    expect(rows.find((r) => r.novel_id === draft)?.visibility_before_delete).toBe("private");
 
     expect((await h.api("GET", `/novels/${published}`, reader.token)).status).toBe(404);
     const search = await h.api("GET", `/novels/search?q=${encodeURIComponent(`published ${h.tag}`)}`);

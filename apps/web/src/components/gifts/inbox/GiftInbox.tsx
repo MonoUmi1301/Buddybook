@@ -21,6 +21,7 @@ import {
 } from "@/lib/gifts";
 import { cn } from "@/lib/cn";
 import { errorText } from "@/lib/formatApiError";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface GiftInboxProps {
   authorName: string;
@@ -279,7 +280,7 @@ export function GiftInbox({ authorName, initialItems, initialCursor, initialStat
               <div className="mt-6 flex justify-center">
                 <button
                   type="button"
-                  onClick={loadMore}
+                  onClick={handleAsync(loadMore)}
                   disabled={loading !== null}
                   className="inline-flex min-h-[44px] items-center gap-2 rounded-pill border border-gift-edge px-6 text-sm hover:border-gift-bear disabled:opacity-50"
                 >

@@ -4,8 +4,9 @@ import { updateTagSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/admin/tags/:tagId — tag_id เป็น SERIAL int ไม่ใช่ UUID
-export async function PATCH(request: Request, { params }: { params: { tagId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ tagId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireIntParam(params.tagId, "tag_id");
@@ -23,8 +24,9 @@ export async function PATCH(request: Request, { params }: { params: { tagId: str
 }
 
 // DELETE /api/v1/admin/tags/:tagId
-export async function DELETE(_request: Request, { params }: { params: { tagId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ tagId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireIntParam(params.tagId, "tag_id");

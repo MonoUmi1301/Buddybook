@@ -11,6 +11,10 @@ interface SignUploadParams {
   folder: string;
 }
 
+/** ชนิดไฟล์ที่อัปโหลดได้ (code audit L2) — อยู่ในพารามิเตอร์ที่เซ็น จึงแก้ฝั่ง browser ไม่ได้
+ *  ไม่มี svg (ฝังสคริปต์ได้) และ pdf ; heic/heif สำหรับรูปจาก iPhone */
+export const ALLOWED_UPLOAD_FORMATS = "avif,gif,heic,heif,jpeg,jpg,png,webp";
+
 /**
  * สร้าง signature สำหรับ signed direct upload จาก browser ไป Cloudinary ตรง ๆ (ไม่ผ่าน server
  * ของเรา — ตาม BuddyBook_System_Architecture.md ส่วน Storage) อัลกอริทึมตาม Cloudinary docs:
@@ -19,9 +23,10 @@ interface SignUploadParams {
  */
 export function signUpload({ folder }: SignUploadParams) {
   const timestamp = Math.floor(Date.now() / 1000);
-  const paramsToSign = `folder=${folder}&timestamp=${timestamp}`;
+  const paramsToSign = `allowed_formats=${ALLOWED_UPLOAD_FORMATS}&folder=${folder}&timestamp=${timestamp}`;
   const signature = crypto
-    .createHash("sha1")
+    // SHA-1 เป็นอัลกอริทึมที่ Cloudinary กำหนดให้ใช้เซ็น upload (ไม่ได้ใช้เก็บรหัสผ่าน) — เปลี่ยนเองฝั่งเดียวจะเซ็นไม่ผ่าน
+    .createHash("sha1") // NOSONAR
     .update(paramsToSign + env.CLOUDINARY_API_SECRET)
     .digest("hex");
 
@@ -31,5 +36,6 @@ export function signUpload({ folder }: SignUploadParams) {
     api_key: env.CLOUDINARY_API_KEY,
     cloud_name: env.CLOUDINARY_CLOUD_NAME,
     folder,
+    allowed_formats: ALLOWED_UPLOAD_FORMATS,
   };
 }

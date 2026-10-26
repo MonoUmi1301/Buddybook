@@ -5,16 +5,18 @@ import { getAccessToken, requireAccessToken } from "@/lib/api/auth";
 
 // GET /api/v1/novels/:novelId/chapters — Public (แนบ token ถ้ามี — Express ใช้ req.user เพื่อโชว์
 // ตอนร่างให้เจ้าของนิยายเห็นด้วย ไม่ใช่แค่ตอนที่เผยแพร่แล้ว จุดนี้ไม่เคยส่ง token ไปเลยมาก่อน)
-export async function GET(_request: Request, { params }: { params: { novelId: string } }) {
+export async function GET(_request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const id = requireUuidParam(params.novelId, "novel_id");
   if ("error" in id) return id.error;
 
-  return forwardToApi({ method: "GET", path: `/novels/${id.value}/chapters`, token: getAccessToken() });
+  return forwardToApi({ method: "GET", path: `/novels/${id.value}/chapters`, token: await getAccessToken() });
 }
 
 // POST /api/v1/novels/:novelId/chapters — Writer Workspace
-export async function POST(request: Request, { params }: { params: { novelId: string } }) {
-  const auth = requireAccessToken();
+export async function POST(request: Request, props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.novelId, "novel_id");

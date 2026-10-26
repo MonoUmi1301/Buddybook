@@ -23,6 +23,8 @@ router.post("/", requireAuth, asyncHandler(novelsController.create));
 router.patch("/:novel_id", requireAuth, asyncHandler(novelsController.update));
 router.delete("/:novel_id", requireAuth, asyncHandler(novelsController.remove));
 router.post("/:novel_id/restore", requireAuth, asyncHandler(novelsController.restore));
+// post-moderation — อุทธรณ์ / ขอให้ตรวจซ้ำนิยายที่ถูกแอดมินระงับ
+router.post("/:novel_id/appeal", requireAuth, asyncHandler(novelsController.appeal));
 router.delete("/:novel_id/permanent", requireAuth, asyncHandler(novelsController.removePermanently));
 
 router.post("/:novel_id/chapters", requireAuth, asyncHandler(novelsController.createChapterForNovel));

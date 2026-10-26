@@ -15,6 +15,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
 !.env.example
 
 # สำรองฐานข้อมูล (npm run db:backup) — มีข้อมูลผู้ใช้จริง ห้าม commit
@@ -64,3 +65,7 @@ backups/
 # ข้อมูลเทรน v4 (สร้างใหม่ได้ด้วย train/build_dataset.py) และไฟล์ zip สำหรับอัปโหลดขึ้น Colab (~420MB)
 apps/nlp-worker/train/data/
 apps/nlp-worker/train/colab/
+
+# SonarQube local scan helpers (hook.text holds a scanner token)
+hook.text
+issues.json

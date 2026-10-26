@@ -4,7 +4,7 @@
 # - ไม่ COPY source code — ตอนรันจริง bind mount ./apps/* เข้ามาแทน (hot reload)
 # - node_modules อยู่ใน image แล้ว compose เอาไปวางเป็น anonymous volume ทับ bind mount อีกชั้น
 #   เพื่อไม่ให้ node_modules ของ Windows host (binary คนละ platform) หลุดเข้ามาใน container
-FROM node:20-alpine
+FROM node:24-alpine
 
 # openssl: Prisma query engine (linux-musl-openssl-3.0.x) ต้องใช้
 # libc6-compat: บาง native binary ที่คาดหวัง glibc

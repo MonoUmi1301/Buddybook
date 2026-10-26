@@ -6,6 +6,8 @@
  *
  * รันซ้ำได้: ลบผู้ใช้ @e2e-core.buddybook.local ชุดเดิม (และทุกอย่างที่ผูกกับพวกเขา) ก่อนสร้างใหม่
  * รหัสผ่านทุกบัญชี: e2e12345 (บัญชีทดสอบในเครื่องเท่านั้น)
+ * account_type = REAL (ค่า default) โดยตั้งใจ — เป็นบัญชีทดสอบอัตโนมัติที่ต้องล็อกอินได้ ไม่ใช่ข้อมูลตัวอย่างบนเว็บ
+ *   ห้ามรันบน production (บัญชีที่สร้างหลัง migration demo_real_accounts ไม่ถูก scripts/mark-demo.ts แตะ)
  */
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
@@ -50,10 +52,20 @@ async function main() {
       select: { user_id: true, email: true },
     });
 
-  const writer = await make("core_writer", { pen_name: "นักเขียนแกนหลัก", age_verified: true, age_verification_source: "self_declared" });
-  const reader = await make("core_reader", { age_verified: true, age_verification_source: "self_declared" });
-  const minor = await make("core_minor", { age_verified: false, age_verification_source: "self_declared" });
-  const admin = await make("core_admin", { role: "admin", age_verified: true });
+  const writer = await make("core_writer", { pen_name: "นักเขียนแกนหลัก" });
+  // นักอ่านผู้ใหญ่ที่ยืนยันอายุด้วย Google (ไม่มีการกรอกวันเกิดเองแล้ว — ยอมรับเฉพาะ Google / e-KYC)
+  const reader = await make("core_reader", {
+    age_verified: true,
+    age_verification_source: "google",
+    birth_date: new Date(Date.UTC(1995, 0, 1)),
+  });
+  // ผู้เยาว์อายุ 15 ที่ยืนยันด้วย Google แล้ว — อ่านเรต 13+ ได้ แต่ 18+ ไม่ได้
+  const minor = await make("core_minor", {
+    age_verified: false,
+    age_verification_source: "google",
+    birth_date: new Date(Date.UTC(new Date().getUTCFullYear() - 15, 0, 1)),
+  });
+  const admin = await make("core_admin", { role: "admin" });
 
   // เติมเหรียญตั้งต้นให้ผู้อ่าน (ledger แบบเดียวกับ top-up จริง — balance_after คือยอดล่าสุด)
   await prisma.walletTransaction.create({

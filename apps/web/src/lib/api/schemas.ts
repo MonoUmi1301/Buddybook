@@ -41,6 +41,15 @@ export const verifyRegisterOtpSchema = z.object({
   otp: z.string().trim().length(6),
 });
 
+// บัญชี LINE ที่ยังไม่มีอีเมล — กรอกอีเมล (ขอ OTP) แล้วยืนยันรหัส 6 หลักที่หน้า /complete-profile
+export const completeProfileEmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(255),
+});
+
+export const completeProfileOtpSchema = z.object({
+  otp: z.string().trim().regex(/^\d{6}$/),
+});
+
 // เพิ่มภายหลัง (audit fix — 2FA) — ยืนยันขั้นที่สองตอนล็อกอิน (รหัสจากแอป Authenticator)
 export const verifyLogin2faSchema = z.object({
   // ไม่ส่งมา = ล็อกอินผ่าน OAuth (challenge อยู่ใน httpOnly cookie bb_oauth_2fa — ดู lib/api/oauth.ts)
@@ -78,10 +87,11 @@ export const updateMeSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "At least one field is required" });
 
-export const ageVerificationSchema = z.object({
-  birth_date: z.string().refine((v) => !Number.isNaN(Date.parse(v)), {
-    message: "birth_date must be a valid date",
-  }),
+// e-KYC — ต้องติ๊กยินยอมจริง (true) และส่งฉบับข้อความที่ผู้ใช้เห็น (lib/kycConsent.ts)
+export const kycSessionSchema = z.object({
+  consent: z.literal(true),
+  consent_version: z.string().min(1).max(20),
+  return_to: z.string().max(300).optional(),
 });
 
 export const interestsSchema = z.object({
@@ -114,7 +124,8 @@ export const novelsSearchQuerySchema = z.object({
   sort: z.enum(["newest", "views"]).optional(),
   page: z.coerce.number().int().positive().default(1),
   // ส่วนขยายนอก API_Endpoints.md เดิม — ดูเหตุผลใน apps/api/src/modules/novels/novels.service.ts
-  mine: z.coerce.boolean().optional(),
+  // query string เป็นสตริงเสมอ — z.coerce.boolean() แปลง "false" เป็น true จึงรับเฉพาะ "true"/"false" ตรง ๆ
+  mine: z.enum(["true", "false"]).transform((v) => v === "true").optional(),
 });
 
 // เพิ่มภายหลัง (หน้า My Library) — สถานะในชั้นหนังสือ ต้องตรงกับ enum LibraryStatus ใน schema.prisma
@@ -219,7 +230,7 @@ export const updateReceivedGiftSchema = z
 // ---------------------------------------------------------------------------
 
 export const legalStatusEnum = z.enum(["original", "fan-fiction", "translation"]);
-export const visibilityEnum = z.enum(["published", "private", "pending_review"]);
+export const visibilityEnum = z.enum(["published", "private"]);
 export const chapterStatusEnum = z.enum(["draft", "published", "scheduled", "hidden"]);
 export const characterRoleEnum = z.enum(["protagonist", "antagonist", "supporting"]);
 export const novelFormatEnum = z.enum(["multi_chapter", "one_shot"]);
@@ -229,7 +240,7 @@ export const createNovelSchema = z
   .object({
     title: z.string().trim().min(1).max(255),
     synopsis: z.string().max(10000).optional(),
-    introduction: z.string().max(20000).optional(),
+    introduction: z.string().max(50000).optional(),
     cover_image_url: z.string().url().optional(),
     legal_status: legalStatusEnum,
     tag_ids: z.array(z.number().int().positive()).default([]),
@@ -271,7 +282,7 @@ export const updateNovelSchema = z
   .object({
     title: z.string().trim().min(1).max(255).optional(),
     synopsis: z.string().max(10000).optional(),
-    introduction: z.string().max(20000).nullable().optional(),
+    introduction: z.string().max(50000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: novelStatusEnum.optional(),
     visibility: visibilityEnum.optional(),
@@ -592,8 +603,23 @@ export const updateTimelineEventSchema = z
 // 5. Admin & System Management
 // ---------------------------------------------------------------------------
 
-export const rejectNovelSchema = z.object({
-  reason: z.string().trim().min(1).max(1000),
+// post-moderation — แทนคิวอนุมัติ (approve/reject) เดิม
+export const moderationQueueQuerySchema = z.object({
+  tab: z.enum(["unreviewed", "reported", "appeals", "suspended"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+});
+
+export const suspendNovelSchema = z.object({
+  reason: z.string().trim().min(10).max(2000),
+});
+
+export const resolveModerationSchema = z.object({
+  decision: z.enum(["reinstate", "uphold"]),
+  note: z.string().trim().max(2000).optional(),
+});
+
+export const appealNovelSchema = z.object({
+  message: z.string().trim().min(20).max(5000),
 });
 
 export const userRoleEnum = z.enum(["admin", "user"]);
@@ -618,6 +644,11 @@ export const updateTagSchema = z
 
 export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
+});
+
+/** GET /admin/users — ตัวกรองบัญชี ทั้งหมด / ผู้ใช้จริง / ตัวอย่าง */
+export const adminUsersQuerySchema = paginationQuerySchema.extend({
+  type: z.enum(["all", "real", "demo"]).default("all"),
 });
 
 // เพิ่มภายหลัง (Gift donations) — แอดมินจัดการแคตตาล็อกของขวัญ + การ์ดที่ถูกรายงาน
@@ -653,11 +684,6 @@ export const resolveGiftReportSchema = z.object({ action: z.enum(["dismiss", "hi
 export const uploadSignSchema = z.object({
   // "chapters" เดิมขาดไป (รูปในเนื้อหาตอนอัปโหลดผ่าน proxy ไม่ได้) + "support" รูปแนบแจ้งปัญหา (gap 3.2)
   folder: z.enum(["covers", "avatars", "locations", "slips", "chapters", "support"]),
-});
-
-export const verifySlipSchema = z.object({
-  package_id: z.string().min(1),
-  slip_image_url: z.string().url(),
 });
 
 // เพิ่มภายหลัง (audit fix — เปลี่ยนมาใช้ Stripe) — สร้าง Checkout Session สำหรับแพ็กที่เลือก
@@ -726,6 +752,6 @@ export const supportMessageSchema = z.object({
 export const supportStatusSchema = z.object({ status: z.enum(["open", "in_progress", "resolved", "closed"]) });
 
 // gap 3.3 — หน้าแจ้งเตือน
-const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply"]);
+const notificationTypeEnum = z.enum(["comment", "reply", "donation", "system", "new_chapter", "new_follower", "support_reply", "moderation", "review"]);
 export const notificationReadAllSchema = z.object({ type: notificationTypeEnum.optional() });
 export const notificationPreferencesSchema = z.object({ muted_types: z.array(notificationTypeEnum).max(7) });

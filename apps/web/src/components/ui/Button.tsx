@@ -43,6 +43,24 @@ const sizeClasses: Record<NonNullable<ButtonProps["size"]>, string> = {
   lg: "h-12 px-6 text-base gap-2",
 };
 
+/** คลาสเดียวกับ <Button> — ใช้กับ <Link> ที่ต้องหน้าตาเป็นปุ่ม (ห้ามซ้อน <button> ใน <a>) */
+export function buttonClasses({
+  variant = "primary",
+  size = "md",
+  fullWidth,
+  className,
+}: Pick<ButtonProps, "variant" | "size" | "fullWidth" | "className"> = {}) {
+  return cn(
+    "inline-flex items-center justify-center rounded-pill font-medium transition-colors duration-150",
+    "disabled:cursor-not-allowed",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+    variantClasses[variant],
+    sizeClasses[size],
+    fullWidth && "w-full",
+    className
+  );
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
     { className, variant = "primary", size = "md", loading = false, fullWidth, disabled, children, ...props },
@@ -52,15 +70,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || loading}
-        className={cn(
-          "inline-flex items-center justify-center rounded-pill font-medium transition-colors duration-150",
-          "disabled:cursor-not-allowed",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
-          variantClasses[variant],
-          sizeClasses[size],
-          fullWidth && "w-full",
-          className
-        )}
+        className={buttonClasses({ variant, size, fullWidth, className })}
         {...props}
       >
         {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}

@@ -4,8 +4,9 @@ import { updateTimelineEventSchema } from "@/lib/api/schemas";
 import { requireAccessToken } from "@/lib/api/auth";
 
 // PATCH /api/v1/timeline-events/:eventId
-export async function PATCH(request: Request, { params }: { params: { eventId: string } }) {
-  const auth = requireAccessToken();
+export async function PATCH(request: Request, props: { params: Promise<{ eventId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.eventId, "event_id");
@@ -23,8 +24,9 @@ export async function PATCH(request: Request, { params }: { params: { eventId: s
 }
 
 // DELETE /api/v1/timeline-events/:eventId — ย้ายลงถังขยะ
-export async function DELETE(_request: Request, { params }: { params: { eventId: string } }) {
-  const auth = requireAccessToken();
+export async function DELETE(_request: Request, props: { params: Promise<{ eventId: string }> }) {
+  const params = await props.params;
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const id = requireUuidParam(params.eventId, "event_id");

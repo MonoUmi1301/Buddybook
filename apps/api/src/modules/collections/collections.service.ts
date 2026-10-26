@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/utils/ApiError";
-import { countLibraryChapters, libraryNovelSelect, toLibraryNovel } from "@/modules/library/library.service";
+import { assertContentRatingAllowed } from "@/lib/contentRating";
+import { assertNovelVisible } from "@/lib/novelVisibility";
+import {
+  countLibraryChapters,
+  libraryNovelSelect,
+  readableNovelWhere,
+  toLibraryNovel,
+} from "@/modules/library/library.service";
 
 export const COLLECTION_TINTS = ["purple", "coral", "blue", "orange", "mint", "pink"] as const;
 export type CollectionTint = (typeof COLLECTION_TINTS)[number];
@@ -14,11 +21,13 @@ async function getOwnedCollection(collection_id: string, user_id: string) {
 
 /** GET /collections — ชั้นย่อยทั้งหมดของผู้ใช้พร้อมนิยายในชั้น (เรียงตาม position) */
 export async function listCollections(user_id: string) {
+  const novel = await readableNovelWhere(user_id);
   const collections = await prisma.collection.findMany({
     where: { user_id },
     orderBy: [{ position: "asc" }, { created_at: "asc" }],
     include: {
       items: {
+        where: { novel },
         orderBy: [{ position: "asc" }, { added_at: "asc" }],
         include: { novel: { select: libraryNovelSelect } },
       },
@@ -80,8 +89,12 @@ export async function deleteCollection(collection_id: string, user_id: string) {
  *  (collection เป็นชั้นย่อยของชั้นหนังสือ — ไม่ควรมีนิยายในชั้นย่อยที่ไม่อยู่ในชั้นหลัก) */
 export async function addItem(collection_id: string, user_id: string, novel_id: string) {
   await getOwnedCollection(collection_id, user_id);
-  const novel = await prisma.novel.findUnique({ where: { novel_id }, select: { novel_id: true } });
-  if (!novel) throw ApiError.notFound("Novel not found");
+  const novel = await prisma.novel.findUnique({
+    where: { novel_id },
+    select: { author_id: true, visibility: true, content_rating: true, deleted_at: true },
+  });
+  if (!novel || novel.deleted_at) throw ApiError.notFound("Novel not found");
+  await assertContentRatingAllowed(novel, user_id, assertNovelVisible(novel, user_id));
 
   const last = await prisma.collectionItem.findFirst({
     where: { collection_id },

@@ -4,7 +4,7 @@ import { pickSearchParams } from "@/lib/api/query";
 
 // GET /api/v1/admin/support/tickets?status= — คิวเรื่องแจ้งปัญหา (gap 3.2)
 export async function GET(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
   return forwardToApi({
     method: "GET",

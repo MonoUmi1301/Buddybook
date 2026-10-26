@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface OnboardingTag {
   tag_id: number;
@@ -189,7 +190,7 @@ export function OnboardingWizard({ tags }: OnboardingWizardProps) {
         <Button variant="outline" onClick={handleBack} disabled={step === 0}>
           ย้อนกลับ
         </Button>
-        <Button variant="tan" size="lg" disabled={!current.isValid} loading={submitting} onClick={handleNext}>
+        <Button variant="tan" size="lg" disabled={!current.isValid} loading={submitting} onClick={handleAsync(handleNext)}>
           {isLastStep ? "เสร็จสิ้น" : "ถัดไป"}
         </Button>
       </div>

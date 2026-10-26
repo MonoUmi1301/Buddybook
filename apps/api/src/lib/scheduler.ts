@@ -1,5 +1,6 @@
 import { env } from "@/config/env";
 import { healGraphIfDirty } from "@/lib/graphSync";
+import { purgeExpiredRateLimits } from "@/middleware/rateLimit.middleware";
 import * as internalService from "@/modules/internal/internal.service";
 import * as recommendationsService from "@/modules/recommendations/recommendations.service";
 
@@ -45,6 +46,12 @@ export function defaultJobs(): ScheduledJob[] {
       intervalMs: env.SCHEDULE_GRAPH_HEAL_INTERVAL_SEC * 1000,
       run: healGraphIfDirty,
       runOnStart: true,
+    },
+    {
+      // ตัวนับ rate limit ที่หมดหน้าต่างไปเกิน 1 วัน (ตาราง rate_limits)
+      name: "purge-rate-limits",
+      intervalMs: 60 * 60 * 1000,
+      run: () => purgeExpiredRateLimits(),
     },
   ];
 }

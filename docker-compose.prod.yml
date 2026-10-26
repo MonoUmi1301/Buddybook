@@ -1,0 +1,124 @@
+# BuddyBook — production stack บน VPS (https://buddybook.tech)
+#
+#   ครั้งแรก: cp .env.production.example .env.production แล้วกรอกค่า
+#             + ตั้ง Nginx/certbot บนเครื่อง VPS ตาม docker/nginx/buddybook.tech.conf
+#   ขึ้นระบบ:  docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#   + NLP worker:          เพิ่ม --profile nlp     (ต้องมีโฟลเดอร์โมเดลที่ NLP_MODEL_DIR)
+#   สร้างแอดมิน: docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate npx tsx prisma/create-admin.ts
+#
+# Neo4j ใช้ Aura (NEO4J_URI=neo4j+s://...) ไม่มี container neo4j
+# เส้นทาง: Nginx บนเครื่อง (80/443) → web 127.0.0.1:3000 ทุก path (รวม /api/v1/* — Route Handler ของ Next
+# แปลง cookie เป็น Bearer แล้วส่งต่อ api:4000) ยกเว้น /api/v1/webhooks/* ที่ส่งตรงไป api 127.0.0.1:4000
+# web/api bind แค่ 127.0.0.1 — เข้าจากนอกเครื่องไม่ได้ ต้องผ่าน Nginx เท่านั้น postgres ไม่เปิด port เลย
+
+name: buddybook-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: buddybook
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: buddybook
+    volumes:
+      # postgres 18 image เก็บข้อมูลใต้ /var/lib/postgresql/18/docker — mount ที่ระดับบนตามที่ image แนะนำ
+      - pgdata:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buddybook -d buddybook"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  # ใช้ stage "build" (มี prisma CLI + tsx) — รัน migrate deploy ครั้งเดียวแล้วจบ api รอให้สำเร็จก่อน
+  # ห้ามเปลี่ยนเป็น migrate dev / reset (ลบข้อมูล)
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: build
+    image: buddybook-api-build
+    working_dir: /app/apps/api
+    command: ["npx", "prisma", "migrate", "deploy"]
+    env_file: .env.production
+    environment:
+      DATABASE_URL: postgresql://buddybook:${POSTGRES_PASSWORD}@postgres:5432/buddybook?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: runtime
+    image: buddybook-api
+    restart: unless-stopped
+    init: true
+    # Nginx บนเครื่องส่ง /api/v1/webhooks/* มาตรงนี้ (Stripe/Didit)
+    ports:
+      - "127.0.0.1:4000:4000"
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_URL: postgresql://buddybook:${POSTGRES_PASSWORD}@postgres:5432/buddybook?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        API_URL: http://api:4000
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:-}
+    image: buddybook-web
+    restart: unless-stopped
+    init: true
+    ports:
+      - "127.0.0.1:3000:3000"
+    # ไม่ใช้ env_file — web ไม่ต้องรู้ secret ของ api
+    environment:
+      API_URL: http://api:4000
+      APP_URL: ${APP_URL:?set APP_URL in .env.production}
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+  nlp-worker:
+    build:
+      context: ./apps/nlp-worker
+    image: buddybook-nlp-worker
+    profiles: ["nlp"]
+    restart: unless-stopped
+    init: true
+    environment:
+      API_BASE_URL: http://api:4000/api/v1
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN in .env.production}
+      MODEL_PATH: /model
+      POLL_INTERVAL_SECONDS: "10"
+    volumes:
+      - ${NLP_MODEL_DIR:-./apps/nlp-worker/model}:/model:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  pgdata:

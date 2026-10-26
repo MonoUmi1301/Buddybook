@@ -9,10 +9,12 @@ import { cn } from "@/lib/cn";
 import {
   NOTIFICATION_ICON,
   NOTIFICATION_TYPE_LABEL,
+  UNMUTABLE_NOTIFICATION_TYPES,
   timeAgo,
   type NotificationItem,
   type NotificationType,
 } from "@/lib/notifications";
+import { handleAsync } from "@/lib/handleAsync";
 
 interface Page {
   notifications: NotificationItem[];
@@ -24,14 +26,16 @@ interface Page {
 }
 
 const PAGE_SIZE = 20;
-const FILTERS: { value: NotificationType | "all"; label: string }[] = [
+const FILTERS: { value: NotificationType | "all"; label: string; hint?: string }[] = [
   { value: "all", label: "ทั้งหมด" },
   { value: "new_chapter", label: "ตอนใหม่" },
   { value: "comment", label: "คอมเมนต์" },
+  { value: "review", label: "รีวิว" },
   { value: "reply", label: "ตอบกลับ" },
   { value: "donation", label: "ของขวัญ" },
   { value: "new_follower", label: "ผู้ติดตาม" },
   { value: "support_reply", label: "ทีมงาน" },
+  { value: "moderation", label: "ผลตรวจสอบนิยาย", hint: "แอดมินระงับ/คืนสถานะนิยายของคุณ หรือแจ้งผลอุทธรณ์" },
   { value: "system", label: "ระบบ" },
 ];
 
@@ -118,7 +122,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
             ยังไม่อ่าน <strong className="tabular-nums text-neutral-900">{data.unread_count.toLocaleString("th-TH")}</strong> รายการ
           </p>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={markAll} disabled={data.unread_count === 0}>
+            <Button size="sm" variant="outline" onClick={handleAsync(markAll)} disabled={data.unread_count === 0}>
               <CheckCheck className="h-4 w-4" /> อ่านทั้งหมด
             </Button>
             <Button size="sm" variant="outline" className="lg:hidden" onClick={() => setShowSettings((v) => !v)} aria-expanded={showSettings}>
@@ -127,11 +131,13 @@ export function NotificationCenter({ initial }: { initial: Page }) {
           </div>
         </div>
 
-        <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {/* เดิมเลื่อนแนวนอนแบบซ่อน scrollbar — บนจอแคบ/เมาส์ปุ่มท้าย ๆ ตกขอบและเลื่อนไปดูไม่ได้ จึงให้ขึ้นบรรทัดใหม่แทน */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           {FILTERS.map((f) => (
             <button
               key={f.value}
               type="button"
+              title={f.hint}
               onClick={() => {
                 setFilter(f.value);
                 setPage(1);
@@ -144,7 +150,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
               {f.label}
             </button>
           ))}
-          <label className="ml-1 flex shrink-0 items-center gap-1.5 text-sm text-neutral-600">
+          <label className="ml-1 flex min-h-[36px] shrink-0 items-center gap-1.5 text-sm text-neutral-600">
             <input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setPage(1); }} className="h-4 w-4 rounded border-neutral-300" />
             เฉพาะที่ยังไม่อ่าน
           </label>
@@ -163,7 +169,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
                   <li key={n.notification_id}>
                     <button
                       type="button"
-                      onClick={() => open(n)}
+                      onClick={handleAsync(() => open(n))}
                       className={cn("flex w-full gap-3 px-4 py-3.5 text-left hover:bg-neutral-50", !n.is_read && "bg-primary-50/40")}
                     >
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500/15 text-primary-600">
@@ -210,7 +216,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
         </h2>
         <p className="mb-3 mt-0.5 text-xs text-neutral-500">ปิดประเภทที่ไม่ต้องการเห็น (เปิดกลับได้ทุกเมื่อ)</p>
         <ul className="space-y-2">
-          {(Object.keys(NOTIFICATION_TYPE_LABEL) as NotificationType[]).map((t) => {
+          {(Object.keys(NOTIFICATION_TYPE_LABEL) as NotificationType[]).filter((t) => !UNMUTABLE_NOTIFICATION_TYPES.includes(t)).map((t) => {
             const on = !muted.includes(t);
             return (
               <li key={t}>
@@ -221,7 +227,7 @@ export function NotificationCenter({ initial }: { initial: Page }) {
                     role="switch"
                     aria-checked={on}
                     checked={on}
-                    onChange={() => toggleMute(t)}
+                    onChange={handleAsync(() => toggleMute(t))}
                     className="peer sr-only"
                   />
                   <span

@@ -20,10 +20,11 @@ const RANGES = [7, 30, 90] as const;
  * desktop-first: แถบเลือกเรื่อง + ตัวเลขสรุป 4 คอลัมน์ + กราฟ/ความรู้สึกผู้อ่าน + ตารางรายตอน
  * iPad: ตัวเลข 3 คอลัมน์ / มือถือ: 2 คอลัมน์, แถบเลือกเรื่องเลื่อนข้างในกรอบตัวเอง
  */
-export default async function WriterStatsPage({ searchParams }: { searchParams: { novel?: string; days?: string } }) {
+export default async function WriterStatsPage(props: { searchParams: Promise<{ novel?: string; days?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const token = getAccessToken();
+  const token = await getAccessToken();
 
   const overviewRes = await callApi({ method: "GET", path: "/me/stats/novels", token });
   const novels =

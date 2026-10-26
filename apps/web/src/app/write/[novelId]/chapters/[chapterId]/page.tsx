@@ -22,15 +22,16 @@ interface ChapterDetail {
   scheduled_publish_at?: string | null;
 }
 
-export default async function ChapterEditorPage({
-  params,
-}: {
-  params: { novelId: string; chapterId: string };
-}) {
+export default async function ChapterEditorPage(
+  props: {
+    params: Promise<{ novelId: string; chapterId: string }>;
+  }
+) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [novelResult, chapterResult] = await Promise.all([
     callApi({ method: "GET", path: `/novels/${params.novelId}`, token }),
     callApi({ method: "GET", path: `/chapters/${params.chapterId}`, token }),

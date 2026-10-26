@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   if ("error" in parsed) return parsed.error;
 
   // ล็อกอินด้วยรหัสผ่าน: challenge_token มากับ body / ล็อกอินผ่าน OAuth: อยู่ใน httpOnly cookie ที่ callback ตั้งไว้
-  const challenge_token = parsed.data.challenge_token ?? cookies().get(OAUTH_2FA_COOKIE)?.value;
+  const challenge_token = parsed.data.challenge_token ?? (await cookies()).get(OAUTH_2FA_COOKIE)?.value;
   if (!challenge_token) {
     return NextResponse.json({ error: "เซสชันหมดอายุ กรุณาล็อกอินใหม่อีกครั้ง" }, { status: 401 });
   }

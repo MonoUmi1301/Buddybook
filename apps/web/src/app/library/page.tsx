@@ -11,11 +11,12 @@ const FILTERS: LibraryFilter[] = ["all", "reading", "up_next", "completed"];
 
 // หน้าชั้นหนังสือของผู้อ่าน — ดึงข้อมูลทั้งหมดฝั่ง server (GET /library + /collections) แล้วส่งให้ LibraryView
 // กรองสถานะฝั่ง client (เก็บใน URL ?status=) ไม่ต้องยิง API ใหม่ทุกครั้งที่กดตัวกรอง
-export default async function LibraryPage({ searchParams }: { searchParams: { status?: string } }) {
+export default async function LibraryPage(props: { searchParams: Promise<{ status?: string }> }) {
+  const searchParams = await props.searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const [libraryResult, collectionsResult] = await Promise.all([
     callApi({ method: "GET", path: "/library", token }),
     callApi({ method: "GET", path: "/collections", token }),

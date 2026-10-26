@@ -1,12 +1,20 @@
+import { fileURLToPath } from "node:url";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // production image (docker/web.Dockerfile) รัน .next/standalone — ไม่มีผลกับ next dev
+  // tracing root = root ของ monorepo เพราะ dependency ถูก hoist ไปไว้ที่ node_modules ของ root
+  output: "standalone",
+  outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)),
   // เพิ่มภายหลัง — ปิด client Router Cache ของหน้า dynamic (ค่าเดิมของ Next 14.2 = เก็บไว้ 30 วิ)
   // เดิมกลับเข้าหน้าจัดการนิยายหลังลบ/สร้าง/ตั้งเวลาตอน จะได้หน้าเก่าจาก cache ต้องกดรีเฟรชเองถึงจะอัปเดต
   experimental: {
     staleTimes: { dynamic: 0 },
   },
   images: {
+    // Next 16 รับเฉพาะ quality ที่ประกาศไว้ (ค่าเริ่มต้น [75]) — Avatar และหมุดแผนที่ใช้ 90 ให้ภาพคม
+    qualities: [75, 90],
     remotePatterns: [
       {
         // Cloudinary — cover images / avatars (ตาม Tech Stack ใน spec)
@@ -38,6 +46,24 @@ const nextConfig = {
         hostname: "profile.line-scdn.net",
       },
     ],
+  },
+  // code audit H2 — header ที่ไม่ขึ้นกับ request (CSP ที่ต้องมี nonce ต่อ request อยู่ใน src/middleware.ts)
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // ยืนยันตัวตน e-KYC ใช้กล้องบนหน้าของ Didit (redirect ออกไป) ไม่ใช่บนหน้าเรา
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(self \"https://js.stripe.com\")" },
+          ...(process.env.NODE_ENV === "production"
+            ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+            : []),
+        ],
+      },
+    ];
   },
   async rewrites() {
     // Fallback เท่านั้น — endpoint ส่วนใหญ่มี Route Handler จริงใน src/app/api/v1/...

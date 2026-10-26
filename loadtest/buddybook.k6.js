@@ -71,10 +71,10 @@ export function setup() {
   return { readers, writer, novels, chapters, writerNovel: writerNovel.novel_id, draft: draft.chapter_id };
 }
 
-const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]; // NOSONAR — สุ่มพฤติกรรมผู้ใช้จำลอง
 
 export default function (data) {
-  const roll = Math.random();
+  const roll = Math.random(); // NOSONAR
   const ip = `10.${__VU % 250}.${Math.floor(__VU / 250)}.${(__ITER % 200) + 1}`;
 
   if (roll < 0.6) {
@@ -115,5 +115,5 @@ export default function (data) {
       check(http.get(`${API}/me/stats/novels/${data.writerNovel}?days=30`, auth), { "stats 200": (x) => x.status === 200 });
     });
   }
-  sleep(1 + Math.random() * 2); // เวลาคิด/อ่านของผู้ใช้จริง
+  sleep(1 + Math.random() * 2); // NOSONAR // เวลาคิด/อ่านของผู้ใช้จริง
 }

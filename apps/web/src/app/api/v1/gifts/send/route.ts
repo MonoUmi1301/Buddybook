@@ -5,7 +5,7 @@ import { requireAccessToken } from "@/lib/api/auth";
 
 // POST /api/v1/gifts/send — ส่งของขวัญ/Custom coins พร้อมการ์ด (idempotency_key บังคับ กันหักเงินซ้ำ)
 export async function POST(request: Request) {
-  const auth = requireAccessToken();
+  const auth = await requireAccessToken();
   if ("error" in auth) return auth.error;
 
   const parsed = await parseJsonBody(request, sendGiftSchema);

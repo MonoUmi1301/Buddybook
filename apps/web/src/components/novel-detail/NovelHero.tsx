@@ -9,6 +9,7 @@ import { CharacterMapButton, type PublicCharacterMap } from "@/components/novel-
 import { ReportButton } from "@/components/social/ReportButton";
 import { GiftButton } from "@/components/gifts/GiftButton";
 import { NovelChips } from "@/components/novel/NovelChips";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 import { cn } from "@/lib/cn";
 import { getPenName } from "@/lib/displayName";
 import { formatCompactNumber } from "@/lib/format";
@@ -22,9 +23,10 @@ import {
   type LegalStatus,
   type NovelStatus,
 } from "@/lib/novelLabels";
+import { handleAsync } from "@/lib/handleAsync";
 
 export interface NovelDetailData {
-  /** published | private | pending_review ... — ใช้บอกเจ้าของในโหมดทดลองอ่าน */
+  /** published | private | suspended ... — ใช้บอกเจ้าของในโหมดทดลองอ่าน */
   visibility?: string;
   novel_id: string;
   title: string;
@@ -39,7 +41,14 @@ export interface NovelDetailData {
   view_count: number;
   created_at: string;
   allow_donations: boolean;
-  author: { user_id: string; username: string; pen_name: string | null; avatar_url: string | null };
+  is_demo?: boolean;
+  author: {
+    user_id: string;
+    username: string;
+    pen_name: string | null;
+    avatar_url: string | null;
+    account_type?: "DEMO" | "REAL";
+  };
   primary_tag: { tag_id: number; name: string } | null;
   secondary_tag: { tag_id: number; name: string } | null;
   tags: { tag_id: number; name: string; category: string | null }[];
@@ -162,6 +171,7 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
           <span className={cn("rounded-pill px-2.5 py-0.5 ring-1 ring-inset", contentRatingClasses[novel.content_rating])}>
             {contentRatingLabel[novel.content_rating]}
           </span>
+          {novel.is_demo && <DemoBadge className="px-2.5 text-xs" />}
         </div>
 
         <h1 className="mt-3 text-2xl font-bold leading-tight text-neutral-900 sm:text-h2">{novel.title}</h1>
@@ -218,7 +228,7 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
           {isLoggedIn ? (
             <button
               type="button"
-              onClick={toggleLibrary}
+              onClick={handleAsync(toggleLibrary)}
               disabled={savingLibrary}
               aria-pressed={saved}
               className={cn(
@@ -258,7 +268,7 @@ export function NovelHero({ novel, stats, initialInLibrary = false, isLoggedIn, 
 
           <button
             type="button"
-            onClick={isLoggedIn ? toggleLike : undefined}
+            onClick={isLoggedIn ? handleAsync(toggleLike) : undefined}
             disabled={likingInFlight || !isLoggedIn}
             aria-pressed={liked}
             aria-label={liked ? "เลิกถูกใจ" : "ถูกใจ"}

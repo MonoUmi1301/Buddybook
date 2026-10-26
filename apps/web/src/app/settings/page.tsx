@@ -3,6 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AccountSettingsForm } from "@/components/settings/AccountSettingsForm";
 import { TwoFactorSection } from "@/components/settings/TwoFactorSection";
+import { AgeVerificationSection } from "@/components/settings/AgeVerificationSection";
 import { DeleteAccountSection } from "@/components/settings/DeleteAccountSection";
 import { getCurrentUser } from "@/lib/api/session";
 
@@ -22,6 +23,10 @@ export default async function SettingsPage() {
 
         <div className="mt-6">
           <AccountSettingsForm username={user.username} penName={user.pen_name} bio={user.bio} avatarUrl={user.avatar_url} />
+        </div>
+
+        <div className="mt-6">
+          <AgeVerificationSection verifiedAge={user.verified_age} source={user.age_verification_source} />
         </div>
 
         <div className="mt-6">

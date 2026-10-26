@@ -54,6 +54,22 @@
   background-color: transparent;
 }
 
+/* ให้ส่วนที่เบราว์เซอร์วาดเอง (พื้น textarea/input ที่ไม่ได้ใส่ bg-*, scrollbar, checkbox) เป็นโทนมืดตามธีมด้วย
+ * — เดิมช่องที่ลืมใส่ bg-white (เช่น "รายละเอียด" หน้าแจ้งปัญหา) ยังเป็นพื้นขาวในโหมดมืด */
+.dark {
+  color-scheme: dark;
+}
+
+/* คำแนะนำในช่องพิมพ์ (placeholder) หายทันทีที่คลิกช่องเพื่อพิมพ์ ไม่ต้องรอพิมพ์ตัวแรก
+ * รวม Quill editor (เนื้อหาตอน/คำโปรย) ที่วาด placeholder เองผ่าน .ql-blank::before */
+input:focus::placeholder,
+textarea:focus::placeholder {
+  color: transparent;
+}
+.ql-editor.ql-blank:focus::before {
+  content: none;
+}
+
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
@@ -77,6 +93,29 @@
 .chapter-indent li p {
   text-indent: 0;
 }
+
+/* ข้อความจัดรูปแบบจาก Quill นอกหน้าอ่านตอน (แนะนำเรื่องในหน้านิยาย) — ใช้คู่กับ .chapter-indent (ย่อหน้าบรรทัดแรก)
+   class จัดหน้า/เยื้อง/รายการของ Quill 2 (<ol><li data-list="bullet">) ต้องกำหนดเองเพราะไม่ได้โหลด quill.snow.css */
+.rich-text {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.rich-text p { min-height: 1em; }
+.rich-text .ql-align-center { text-align: center; }
+.rich-text .ql-align-right { text-align: right; }
+.rich-text .ql-align-justify { text-align: justify; }
+.rich-text ol { padding-left: 1.5em; }
+.rich-text li[data-list="ordered"] { list-style-type: decimal; }
+.rich-text li[data-list="bullet"] { list-style-type: disc; }
+.rich-text li .ql-ui { display: none; }
+.rich-text blockquote { border-left: 3px solid #d4d4d4; padding-left: 0.75em; color: #525252; }
+.rich-text a { color: var(--color-primary-600, #2563eb); text-decoration: underline; }
+.rich-text hr { border: 0; border-top: 1px solid currentColor; opacity: 0.35; margin: 1em 0; }
+.rich-text .ql-indent-1 { padding-left: 2em; }
+.rich-text .ql-indent-2 { padding-left: 4em; }
+.rich-text .ql-indent-3 { padding-left: 6em; }
+/* editor แนะนำเรื่อง — ให้หน้าตาตอนพิมพ์ตรงกับที่แสดงผล */
+.quill-sticky .rich-basic .ql-editor { min-height: 200px; }
 
 /* editor เขียนตอน (Quill): กล่องเนื้อหาเลื่อนขึ้นลงในตัวเอง (สูงสุด 70% ของจอ) แถบเครื่องมือจึงอยู่บนกล่องเสมอ
    ไม่ต้องเลื่อนทั้งหน้ากลับขึ้นไปหา ; ตัวอักษร/ระยะบรรทัดเท่าหน้าอ่าน (1.8) ให้นักเขียนเห็นหน้าตาใกล้ของจริง */

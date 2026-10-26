@@ -44,7 +44,7 @@ const thaiDate = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString
 
 /** หลังบ้าน — ความรู้สึกผู้อ่านทั้งแพลตฟอร์ม รวมฝั่งเชิงลบที่ตั้งใจไม่แสดงในหน้าสถิติของนักเขียน */
 export default async function AdminSentimentPage() {
-  const result = await callApi({ method: "GET", path: "/admin/reports/sentiment", token: getAccessToken() });
+  const result = await callApi({ method: "GET", path: "/admin/reports/sentiment", token: await getAccessToken() });
   if ("error" in result || result.status !== 200) {
     return <p className="rounded-card border border-neutral-200 p-5 text-sm text-neutral-500">โหลดข้อมูลไม่สำเร็จ ลองรีเฟรชอีกครั้ง</p>;
   }
@@ -185,7 +185,7 @@ export default async function AdminSentimentPage() {
       <section className="rounded-card border border-neutral-200 p-5">
         <h2 className="text-base font-semibold text-neutral-900">นิยายที่ผู้อ่านไม่ค่อยพอใจ</h2>
         <p className="mb-3 text-xs text-neutral-500">
-          อย่างน้อย 5 ข้อความที่วิเคราะห์แล้ว เรียงจากสัดส่วนเชิงลบมากสุด · "ติงานเขียน" = เชิงลบที่ถูกติดป้ายว่าพูดถึงงานเขียน
+          อย่างน้อย 5 ข้อความที่วิเคราะห์แล้ว เรียงจากสัดส่วนเชิงลบมากสุด · &ldquo;ติงานเขียน&rdquo; = เชิงลบที่ถูกติดป้ายว่าพูดถึงงานเขียน
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] text-sm">

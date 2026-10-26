@@ -10,17 +10,18 @@ import { getCurrentUser } from "@/lib/api/session";
 interface NovelSummary {
   novel_id: string;
   title: string;
-  visibility: "published" | "private" | "pending_review";
+  visibility: "published" | "private" | "suspended";
   author: { user_id: string };
 }
 
 // หลังสร้างนิยายเสร็จ ขั้นที่ 2/2 — ให้เลือกว่าจะไปเขียนตอนแรกเลย หรือไปเครื่องมือช่วยแต่งนิยายก่อน
 // (ขั้นที่ 1 เลือกสถานะการเผยแพร่ แยกไปอยู่ที่ /write/[novelId]/publish)
-export default async function ChooseNextStepPage({ params }: { params: { novelId: string } }) {
+export default async function ChooseNextStepPage(props: { params: Promise<{ novelId: string }> }) {
+  const params = await props.params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const novelResult = await callApi({ method: "GET", path: `/novels/${params.novelId}`, token });
   if ("error" in novelResult || novelResult.status !== 200) notFound();
   const novel = novelResult.json as NovelSummary;
