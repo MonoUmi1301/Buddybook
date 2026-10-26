@@ -40,7 +40,9 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
-  // ต้องติ๊กยอมรับนโยบายความเป็นส่วนตัวก่อน ปุ่ม LINE ถึงจะกดได้ (route เริ่ม OAuth เช็ค ?consent=1 ซ้ำอีกชั้น)
+  // กดปุ่ม LINE แล้วค่อยแสดงข้อความขอความยินยอม — ต้องติ๊กยอมรับก่อนถึงจะไปต่อที่ LINE ได้
+  // (route เริ่ม OAuth เช็ค ?consent=1 ซ้ำอีกชั้น)
+  const [showLineConsent, setShowLineConsent] = useState(false);
   const [lineConsent, setLineConsent] = useState(false);
   // เพิ่มภายหลัง (audit fix — ความปลอดภัยรหัสผ่าน) — ต้อง track เป็น state (ไม่ใช่แค่ FormData ตอน
   // submit เหมือนเดิม) เพื่อโชว์ PasswordRequirementsHint แบบสด ๆ ตอนพิมพ์ (เฉพาะโหมด register)
@@ -317,41 +319,52 @@ export function AuthForm({ mode, oauthTwoFactor = false, initialError = null }: 
               <FacebookIcon className="absolute left-5 h-5 w-5" />
               {isLogin ? "เข้าสู่ระบบด้วย Facebook" : "สมัครสมาชิกด้วย Facebook"}
             </Button>
-            <div className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600">
-              <p>
-                เมื่อเข้าสู่ระบบด้วย LINE BuddyBook จะเก็บชื่อที่แสดง รูปโปรไฟล์ และอีเมลของคุณ เพื่อใช้สร้างบัญชี
-                ยืนยันตัวตน และติดต่อเรื่องบัญชี/การเติมเหรียญ เราจะไม่เปิดเผยอีเมลต่อบุคคลอื่น{" "}
-                <Link href="/privacy" target="_blank" className="font-medium text-primary-500 hover:underline">
-                  อ่านนโยบายความเป็นส่วนตัว
-                </Link>
-              </p>
-              <label className="flex cursor-pointer items-center gap-2 font-medium text-neutral-800">
-                <input
-                  type="checkbox"
-                  checked={lineConsent}
-                  onChange={(e) => setLineConsent(e.target.checked)}
-                  className="h-4 w-4 accent-primary-500"
-                />
-                ฉันยอมรับนโยบายความเป็นส่วนตัว
-              </label>
-            </div>
             <Button
               type="button"
               variant="line"
               fullWidth
               size="lg"
               className="relative"
-              disabled={!lineConsent}
-              title={lineConsent ? undefined : "กรุณาติ๊กยอมรับนโยบายความเป็นส่วนตัวก่อน"}
-              onClick={() => {
-                if (!lineConsent) return;
-                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
-                window.location.href = "/api/v1/auth/oauth/line?consent=1";
-              }}
+              aria-expanded={showLineConsent}
+              onClick={() => setShowLineConsent((open) => !open)}
             >
               <LineIcon className="absolute left-5 h-5 w-5" />
               {isLogin ? "เข้าสู่ระบบด้วย Line" : "สมัครสมาชิกด้วย Line"}
             </Button>
+            {showLineConsent && (
+              <div className="space-y-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs leading-relaxed text-neutral-600">
+                <p>
+                  เมื่อเข้าสู่ระบบด้วย LINE BuddyBook จะเก็บชื่อที่แสดง รูปโปรไฟล์ และอีเมลของคุณ เพื่อใช้สร้างบัญชี
+                  ยืนยันตัวตน และติดต่อเรื่องบัญชี/การเติมเหรียญ เราจะไม่เปิดเผยอีเมลต่อบุคคลอื่น{" "}
+                  <Link href="/privacy" target="_blank" className="font-medium text-primary-500 hover:underline">
+                    อ่านนโยบายความเป็นส่วนตัว
+                  </Link>
+                </p>
+                <label className="flex cursor-pointer items-center gap-2 font-medium text-neutral-800">
+                  <input
+                    type="checkbox"
+                    checked={lineConsent}
+                    onChange={(e) => setLineConsent(e.target.checked)}
+                    className="h-4 w-4 accent-primary-500"
+                  />
+                  ฉันยอมรับนโยบายความเป็นส่วนตัว
+                </label>
+                <Button
+                  type="button"
+                  variant="line"
+                  fullWidth
+                  disabled={!lineConsent}
+                  title={lineConsent ? undefined : "กรุณาติ๊กยอมรับนโยบายความเป็นส่วนตัวก่อน"}
+                  onClick={() => {
+                    if (!lineConsent) return;
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- route handler ของ OAuth/ออกจากระบบต้องโหลดหน้าเต็ม (router.push นำทางไป route handler ไม่ได้)
+                    window.location.href = "/api/v1/auth/oauth/line?consent=1";
+                  }}
+                >
+                  ยอมรับและไปต่อที่ LINE
+                </Button>
+              </div>
+            )}
             <Button
               type="button"
               variant="google"
