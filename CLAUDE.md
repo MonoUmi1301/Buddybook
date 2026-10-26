@@ -19,7 +19,7 @@
 - Back up the dev DB: `npm run db:backup`
 - Run Dev (API): `cd apps/api && npm run dev`
 - Run Dev (Web): `cd apps/web && npm run dev`
-- Production (VPS): `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build` (template `.env.production.example`). Nginx (`docker/nginx/nginx.conf`) sends everything incl. `/api/v1/*` to web — Next Route Handlers turn the cookie into a Bearer token; only `/api/v1/webhooks/*` goes straight to api. `API_URL` and `NEXT_PUBLIC_*` are baked in at `next build`.
+- Production (VPS): `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build` (template `.env.production.example`). Host Nginx (`docker/nginx/buddybook.tech.conf`, not a container; web/api bind 127.0.0.1:3000/4000, Neo4j is Aura) sends everything incl. `/api/v1/*` to web — Next Route Handlers turn the cookie into a Bearer token; only `/api/v1/webhooks/*` goes straight to api. `API_URL` and `NEXT_PUBLIC_*` are baked in at `next build`.
 
 ## Core Rules & Architecture
 - Search State: Unified under `/api/v1/novels/search` accepting `q`, `author`, `workType`, `genre_ids`, `sub_genre_ids`, `pairing_ids`, `fandom_ids`, `tag_ids`.
