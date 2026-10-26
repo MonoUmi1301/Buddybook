@@ -4945,32 +4945,6 @@
         }
       }
     },
-    "/api/v1/wallet/topup/verify-slip": {
-      "post": {
-        "tags": [
-          "wallet"
-        ],
-        "summary": "POST /api/v1/wallet/topup/verify-slip",
-        "description": "ต้องล็อกอิน",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "x-access": "user",
-        "responses": {
-          "200": {
-            "description": "สำเร็จ"
-          },
-          "400": {
-            "description": "ข้อมูลไม่ผ่านการตรวจสอบ (zod)"
-          },
-          "401": {
-            "description": "ไม่ได้ล็อกอิน / token ไม่ถูกต้อง"
-          }
-        }
-      }
-    },
     "/api/v1/wallet/transactions": {
       "get": {
         "tags": [

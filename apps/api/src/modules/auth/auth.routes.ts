@@ -39,7 +39,7 @@ router.post("/password/reset", authLimit("auth-reset", "token"), asyncHandler(au
 
 // --- OAuth — Google/LINE/Facebook ทำงานจริงครบทั้ง 3 ราย (ดู lib/googleOAuth.ts, lib/lineOAuth.ts,
 // lib/facebookOAuth.ts) แต่ละตัว gate ตัวเองด้วย isXOAuthConfigured() — ถ้ายังไม่ตั้งค่า env จะ
-// ตอบ 400 ไม่ใช่ crash ตอน boot (เหมือน Cloudinary/SlipOK) ไม่ใช่ endpoint ที่ยังไม่ implement ---
+// ตอบ 400 ไม่ใช่ crash ตอน boot (เหมือน Cloudinary) ไม่ใช่ endpoint ที่ยังไม่ implement ---
 router.get("/oauth/:provider", asyncHandler(authController.oauthStart));
 router.post("/oauth/:provider/callback", asyncHandler(authController.oauthCallback));
 

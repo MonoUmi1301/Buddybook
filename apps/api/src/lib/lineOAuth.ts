@@ -2,7 +2,7 @@ import { env } from "@/config/env";
 import { ApiError } from "@/utils/ApiError";
 import type { OAuthProfile } from "@/lib/oauthProfile";
 
-/** เช่นเดียวกับ Google/Cloudinary/SlipOK — ฟีเจอร์ LINE login ทั้งหมด gate ตัวเองด้วยอันนี้ */
+/** เช่นเดียวกับ Google/Cloudinary — ฟีเจอร์ LINE login ทั้งหมด gate ตัวเองด้วยอันนี้ */
 export function isLineOAuthConfigured(): boolean {
   return Boolean(env.LINE_CLIENT_ID && env.LINE_CLIENT_SECRET);
 }

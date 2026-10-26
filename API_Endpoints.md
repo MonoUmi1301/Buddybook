@@ -186,7 +186,7 @@ Rate limit: `login`, `register/*`, `login/verify-2fa`, `password/*` จำกั
 - ชั้นหนังสือ/คอลเลกชัน: `GET /library/continue-reading`, `PATCH /library/:novel_id`, `GET|POST /collections`, `PATCH|DELETE /collections/:id`, `POST /collections/:id/items`, `DELETE /collections/:id/items/:novel_id`
 - นิยาย: `GET /novels/:id/comments`, `POST|DELETE /novels/:id/like`, `PATCH /novels/:id/plot-notes|theme-notes|map-drawings`, `GET|POST /novels/:id/map-versions`, `POST /map-versions/:id/restore`, `POST /novels/:id/location-edges`, `DELETE /location-edges/:id`
 - ของขวัญ: `GET /gifts/catalog`, `POST /gifts/send`, `GET /authors/:user_id/gifts/public`, `GET /me/gifts/received|sent|stats`, `POST /me/gifts/:id/thank`, `PATCH /me/gifts/:id`, `GET /users/:user_id/supporter-badges`, แอดมิน `/admin/gifts`, `/admin/gift-reports`
-- เติมเงิน: `POST /wallet/topup/checkout-session`, `GET /wallet/topup/orders/:order_id/status`, `POST /wallet/topup/verify-slip`, `POST /webhooks/stripe` (ยืนยันด้วยลายเซ็น Stripe)
+- เติมเงิน: `POST /wallet/topup/checkout-session`, `GET /wallet/topup/orders/:order_id/status`, `POST /webhooks/stripe` (ยืนยันด้วยลายเซ็น Stripe)
 - ผู้อ่านออนไลน์: `POST /presence/heartbeat` `{ leaving?: boolean }` → 204 — หน้าอ่านตอนส่งทุก 1 นาทีตอนแท็บเปิดอยู่ (ล็อกอินเท่านั้น) หน้าภาพรวมแอดมินนับผู้ที่ส่งมาภายใน ~2 นาที
 
 ### 7. ปิดช่องว่างตาม Proposal (docs/gap-analysis-plan.md)

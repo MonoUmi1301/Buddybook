@@ -6,7 +6,7 @@ import { pickGoogleBirthday, type BirthDate } from "@/lib/ageVerification";
 
 const BIRTHDAY_SCOPE = "https://www.googleapis.com/auth/user.birthday.read";
 
-/** เช่นเดียวกับ Cloudinary/SlipOK — ฟีเจอร์ Google login ทั้งหมด gate ตัวเองด้วยอันนี้
+/** เช่นเดียวกับ Cloudinary — ฟีเจอร์ Google login ทั้งหมด gate ตัวเองด้วยอันนี้
  *  ไม่บังคับให้ตั้งค่าตอน boot เพราะยังไม่มีทุกโปรเจกต์ที่ต้องใช้ */
 export function isGoogleOAuthConfigured(): boolean {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
