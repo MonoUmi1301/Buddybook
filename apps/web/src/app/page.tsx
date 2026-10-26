@@ -21,6 +21,7 @@ interface ApiNovel {
   review_count?: number;
   like_count?: number;
   chapter_count?: number;
+  is_demo?: boolean;
   author: { username: string; pen_name: string | null };
 }
 
@@ -36,6 +37,7 @@ function toNovelSummary(n: ApiNovel): NovelSummary {
     reviewCount: n.review_count,
     tags: [],
     href: `/novels/${n.novel_id}`,
+    isDemo: n.is_demo ?? false,
   };
 }
 

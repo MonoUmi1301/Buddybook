@@ -50,7 +50,8 @@ async function main() {
   if (!admin) throw new Error("ยังไม่มีบัญชีแอดมิน — รัน npx tsx prisma/create-admin.ts ก่อน");
 
   const users = await prisma.user.findMany({
-    where: { role: "user", deleted_at: null, is_suspended: false },
+    // เฉพาะบัญชี DEMO — ไม่เอารายงาน/คำขอถอนปลอมไปผูกกับผู้ใช้จริง
+    where: { role: "user", account_type: "DEMO", deleted_at: null, is_suspended: false },
     select: { user_id: true },
     take: 12,
     orderBy: { created_at: "asc" },
@@ -60,10 +61,10 @@ async function main() {
 
   // ---------- 1. รายงานเนื้อหา ----------
   const [novel, chapter, comment, review] = await Promise.all([
-    prisma.novel.findFirst({ where: { visibility: "published", deleted_at: null }, orderBy: { view_count: "desc" }, select: { novel_id: true, author_id: true } }),
-    prisma.chapter.findFirst({ where: { status: "published" }, orderBy: { created_at: "desc" }, select: { chapter_id: true } }),
-    prisma.comment.findFirst({ orderBy: { created_at: "desc" }, select: { comment_id: true } }),
-    prisma.review.findFirst({ where: { comment_text: { not: null } }, orderBy: { created_at: "desc" }, select: { review_id: true } }),
+    prisma.novel.findFirst({ where: { visibility: "published", deleted_at: null, is_demo: true }, orderBy: { view_count: "desc" }, select: { novel_id: true, author_id: true } }),
+    prisma.chapter.findFirst({ where: { status: "published", is_demo: true }, orderBy: { created_at: "desc" }, select: { chapter_id: true } }),
+    prisma.comment.findFirst({ where: { is_demo: true }, orderBy: { created_at: "desc" }, select: { comment_id: true } }),
+    prisma.review.findFirst({ where: { comment_text: { not: null }, is_demo: true }, orderBy: { created_at: "desc" }, select: { review_id: true } }),
   ]);
 
   const reportRows: Prisma.ContentReportCreateManyInput[] = [];
@@ -132,7 +133,7 @@ async function main() {
 
   // ---------- 3. คำขอถอนเงิน (หัก coin จริงในบัญชีตัวอย่างแบบเดียวกับตอนนักเขียนกดถอน) ----------
   const authors = await prisma.novel.findMany({
-    where: { deleted_at: null, author: { role: "user", deleted_at: null } },
+    where: { deleted_at: null, is_demo: true, author: { role: "user", account_type: "DEMO", deleted_at: null } },
     distinct: ["author_id"],
     select: { author_id: true },
     take: 10,
@@ -172,7 +173,7 @@ async function main() {
 
   // ---------- 4. การ์ดของขวัญที่ถูกรายงาน ----------
   const donations = await prisma.donation.findMany({
-    where: { message: { not: null }, reported_at: null },
+    where: { message: { not: null }, reported_at: null, is_demo: true },
     orderBy: { created_at: "desc" },
     take: 2,
     select: { donation_id: true },

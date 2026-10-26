@@ -20,7 +20,13 @@ export interface AdminStats {
   pending_withdrawals: number;
   open_support_tickets: number;
   new_users_7d: number;
+  /** แยกผู้ใช้จริง (REAL) กับข้อมูลตัวอย่าง (DEMO) ต่อประเภทข้อมูล */
+  demo_split: Record<DemoSplitKey, { real: number; demo: number }>;
 }
+
+export type DemoSplitKey = "users" | "novels" | "chapters" | "reviews" | "comments" | "donations";
+
+const zeroSplit = { real: 0, demo: 0 };
 
 export const emptyAdminStats: AdminStats = {
   total_users: 0,
@@ -37,6 +43,14 @@ export const emptyAdminStats: AdminStats = {
   pending_withdrawals: 0,
   open_support_tickets: 0,
   new_users_7d: 0,
+  demo_split: {
+    users: zeroSplit,
+    novels: zeroSplit,
+    chapters: zeroSplit,
+    reviews: zeroSplit,
+    comments: zeroSplit,
+    donations: zeroSplit,
+  },
 };
 
 export async function getAdminStats(): Promise<AdminStats> {

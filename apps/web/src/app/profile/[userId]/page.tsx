@@ -18,6 +18,7 @@ import { getAccessToken } from "@/lib/api/auth";
 import { FollowButton } from "@/components/social/FollowButton";
 import { ReportButton } from "@/components/social/ReportButton";
 import { getPenName } from "@/lib/displayName";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 import { formatCompactNumber, formatThaiMonthYear } from "@/lib/format";
 
 interface PublicProfile {
@@ -26,6 +27,7 @@ interface PublicProfile {
   pen_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  account_type?: "DEMO" | "REAL";
   created_at: string;
   novel_count: number;
   novels: ProfileNovel[];
@@ -179,6 +181,7 @@ export default async function ProfilePage(props: { params: Promise<{ userId: str
                       {isWriter ? <PenLine className="h-3 w-3" /> : <BookOpen className="h-3 w-3" />}
                       {isWriter ? "นักเขียน" : "นักอ่าน"}
                     </span>
+                    {profile.account_type === "DEMO" && <DemoBadge className="px-2.5 text-xs" />}
                   </div>
                   <p className="mt-0.5 text-sm text-neutral-500">@{profile.username}</p>
                 </div>

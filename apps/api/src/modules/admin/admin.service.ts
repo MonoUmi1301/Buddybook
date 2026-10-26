@@ -4,13 +4,15 @@ import { setUserSuspendedCache } from "@/lib/suspension";
 import { ApiError } from "@/utils/ApiError";
 import { startOfThaiMonth } from "@/modules/gifts/gifts.service";
 import { env } from "@/config/env";
-import type { TagCategory, UserRole } from "@prisma/client";
+import type { AccountType, TagCategory, UserRole } from "@prisma/client";
 import { getQueueCounts } from "@/modules/admin/moderation.service";
 
-/** Reference implementation — GET /admin/users?page= */
-export async function listUsers(page: number, pageSize = 20) {
+/** Reference implementation — GET /admin/users?page=&type=all|real|demo */
+export async function listUsers(page: number, account_type?: AccountType, pageSize = 20) {
+  const where: Prisma.UserWhereInput = account_type ? { account_type } : {};
   const [users, total] = await Promise.all([
     prisma.user.findMany({
+      where,
       orderBy: { created_at: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -19,11 +21,12 @@ export async function listUsers(page: number, pageSize = 20) {
         username: true,
         email: true,
         role: true,
+        account_type: true,
         is_suspended: true,
         created_at: true,
       },
     }),
-    prisma.user.count(),
+    prisma.user.count({ where }),
   ]);
   return { users, total };
 }
@@ -125,6 +128,7 @@ export async function getStats() {
     pending_withdrawals,
     open_support_tickets,
     new_users_7d,
+    demoSplit,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.novel.count(),
@@ -141,6 +145,7 @@ export async function getStats() {
     prisma.withdrawalRequest.count({ where: { status: "pending" } }),
     prisma.supportTicket.count({ where: { status: { in: ["open", "in_progress"] } } }),
     prisma.user.count({ where: { created_at: { gte: weekAgo } } }),
+    getDemoSplit(),
   ]);
   return {
     total_users,
@@ -157,6 +162,34 @@ export async function getStats() {
     pending_withdrawals,
     open_support_tickets,
     new_users_7d,
+    demo_split: demoSplit,
+  };
+}
+
+/** สถิติแยกผู้ใช้จริง (REAL) กับข้อมูลตัวอย่าง (DEMO) ต่อตาราง — การ์ด "ข้อมูลจริง / ตัวอย่าง" บนหน้าภาพรวมแอดมิน */
+async function getDemoSplit() {
+  const split = (rows: { is_demo: boolean; _count: { _all: number } }[]) => ({
+    real: rows.find((r) => !r.is_demo)?._count._all ?? 0,
+    demo: rows.find((r) => r.is_demo)?._count._all ?? 0,
+  });
+  const [users, novels, chapters, reviews, comments, donations] = await Promise.all([
+    prisma.user.groupBy({ by: ["account_type"], _count: { _all: true } }),
+    prisma.novel.groupBy({ by: ["is_demo"], where: { deleted_at: null }, _count: { _all: true } }),
+    prisma.chapter.groupBy({ by: ["is_demo"], _count: { _all: true } }),
+    prisma.review.groupBy({ by: ["is_demo"], _count: { _all: true } }),
+    prisma.comment.groupBy({ by: ["is_demo"], _count: { _all: true } }),
+    prisma.donation.groupBy({ by: ["is_demo"], _count: { _all: true } }),
+  ]);
+  return {
+    users: {
+      real: users.find((u) => u.account_type === "REAL")?._count._all ?? 0,
+      demo: users.find((u) => u.account_type === "DEMO")?._count._all ?? 0,
+    },
+    novels: split(novels),
+    chapters: split(chapters),
+    reviews: split(reviews),
+    comments: split(comments),
+    donations: split(donations),
   };
 }
 

@@ -637,6 +637,11 @@ export const paginationQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
 });
 
+/** GET /admin/users — ตัวกรองบัญชี ทั้งหมด / ผู้ใช้จริง / ตัวอย่าง */
+export const adminUsersQuerySchema = paginationQuerySchema.extend({
+  type: z.enum(["all", "real", "demo"]).default("all"),
+});
+
 // เพิ่มภายหลัง (Gift donations) — แอดมินจัดการแคตตาล็อกของขวัญ + การ์ดที่ถูกรายงาน
 const giftItemFields = {
   slug: z.string().trim().min(1).max(50).regex(/^[a-z0-9-]+$/),

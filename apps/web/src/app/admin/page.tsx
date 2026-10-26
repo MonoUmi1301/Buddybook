@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { redirect } from "next/navigation";
 import { AdminHero } from "@/components/ui/admin-hero";
-import { getAdminStats } from "@/lib/adminStats";
+import { getAdminStats, type DemoSplitKey } from "@/lib/adminStats";
 import { getCurrentUser } from "@/lib/api/session";
 import { getPenName } from "@/lib/displayName";
 import { cn } from "@/lib/cn";
@@ -43,6 +43,15 @@ export default async function AdminDashboardPage() {
     { href: "/admin/gift-reports", label: "การ์ดของขวัญถูกรายงาน", count: stats.open_gift_reports, icon: Flag },
   ];
   const totalPending = tasks.reduce((s, t) => s + t.count, 0);
+
+  const splitRows: { key: DemoSplitKey; label: string }[] = [
+    { key: "users", label: "บัญชีผู้ใช้" },
+    { key: "novels", label: "นิยาย" },
+    { key: "chapters", label: "ตอน" },
+    { key: "reviews", label: "รีวิว" },
+    { key: "comments", label: "คอมเมนต์" },
+    { key: "donations", label: "โดเนท/ของขวัญ" },
+  ];
 
   return (
     <div className="space-y-5">
@@ -110,6 +119,41 @@ export default async function AdminDashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* ข้อมูลจริง vs ตัวอย่าง — REAL = ผู้ใช้จริง, DEMO = จาก seed/mock (ดู scripts/mark-demo.ts) */}
+      <section className="rounded-card border border-neutral-200 bg-white p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-neutral-900">ข้อมูลจริง / ข้อมูลตัวอย่าง</h3>
+          <div className="flex gap-2 text-xs">
+            <Link href="/admin/users?type=real" className="rounded-pill border border-neutral-300 px-3 py-1 text-neutral-600 hover:bg-neutral-50">
+              ดูผู้ใช้จริง
+            </Link>
+            <Link href="/admin/users?type=demo" className="rounded-pill border border-neutral-300 px-3 py-1 text-neutral-600 hover:bg-neutral-50">
+              ดูบัญชีตัวอย่าง
+            </Link>
+          </div>
+        </div>
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {splitRows.map(({ key, label }) => {
+            const s = stats.demo_split[key];
+            const total = s.real + s.demo;
+            return (
+              <li key={key} className="rounded-xl border border-neutral-200 px-3 py-2.5">
+                <p className="text-xs text-neutral-500">{label}</p>
+                <p className="mt-1 text-lg font-bold text-emerald-700">
+                  {s.real.toLocaleString()} <span className="text-xs font-medium">จริง</span>
+                </p>
+                <p className="text-sm font-semibold text-amber-700">
+                  {s.demo.toLocaleString()} <span className="text-xs font-medium">ตัวอย่าง</span>
+                </p>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-amber-200" aria-hidden>
+                  <div className="h-full bg-emerald-500" style={{ width: `${total ? (s.real / total) * 100 : 0}%` }} />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
 
       {/* เพิ่มภายหลัง (Gift donations) — ค่าธรรมเนียมแพลตฟอร์มจากของขวัญ */}
       <div className="rounded-card border border-neutral-200 bg-white p-5">

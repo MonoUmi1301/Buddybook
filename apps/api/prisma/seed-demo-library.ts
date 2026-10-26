@@ -1,13 +1,13 @@
 /**
  * BuddyBook — ผู้ใช้เดโมสำหรับหน้า My Library (ชั้นหนังสือ / ชั้นย่อย / ความคืบหน้าการอ่าน)
  *
- * สร้าง: นักอ่านเดโมที่ล็อกอินได้จริง 1 คน + นักเขียนเดโม 1 คน (เจ้าของนิยายตัวอย่าง 12 เรื่อง)
+ * สร้าง: นักอ่านเดโม 1 คน + นักเขียนเดโม 1 คน (เจ้าของนิยายตัวอย่าง 12 เรื่อง)
  *        ชั้นหนังสือ ~20 เรื่อง (นิยายตัวอย่าง + นิยาย mock ที่เผยแพร่อยู่), สถานะ, ความคืบหน้า, 3 ชั้นย่อย
  *
  * ต้องรันหลัง seed.ts และ seed-mock-novels.ts
  *   npx tsx prisma/seed-demo-library.ts
  *
- * ล็อกอิน: demo_reader@demo.buddybook.local / demo1234
+ * บัญชีทั้งหมดเป็น DEMO (account_type) — ล็อกอินไม่ได้ ใช้เป็นข้อมูลตัวอย่างเท่านั้น
  * รันซ้ำได้: ลบผู้ใช้ @demo.buddybook.local ชุดเดิม (cascade ไปนิยาย/ชั้น/ความคืบหน้า) ก่อนสร้างใหม่
  */
 import bcrypt from "bcryptjs";
@@ -85,6 +85,7 @@ async function main() {
       oauth_provider: "google",
       oauth_id: "demo-shelf-author",
       bio: "บัญชีตัวอย่างสำหรับนิยายในชั้นหนังสือเดโม",
+      account_type: "DEMO",
       created_at: daysAgo(300),
     },
   });
@@ -97,6 +98,7 @@ async function main() {
       password_hash: await bcrypt.hash("demo1234", 10),
       bio: "บัญชีเดโมสำหรับลองหน้า My Library",
       age_verified: true,
+      account_type: "DEMO",
       created_at: daysAgo(200),
     },
   });
@@ -117,6 +119,7 @@ async function main() {
         status: n.status,
         view_count: BigInt(n.views),
         primary_tag_id: genre(n.genre).tag_id,
+        is_demo: true,
         created_at: daysAgo(250 - i * 10),
       },
     });
@@ -131,6 +134,7 @@ async function main() {
           status: "published",
           word_count: 1800 + ((i * 37 + c * 53) % 1400),
           published_at: daysAgo(240 - i * 10 - c),
+          is_demo: true,
         },
       });
       chapterIds.push(ch.chapter_id);

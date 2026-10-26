@@ -2,6 +2,7 @@ import { existsSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Session } from "neo4j-driver";
+import type { AccountType } from "@prisma/client";
 import { withNeo4jSession } from "@/lib/neo4j";
 
 /**
@@ -9,7 +10,8 @@ import { withNeo4jSession } from "@/lib/neo4j";
  * (Neo4j เป็นแค่ derived store ตาม BuddyBook_System_Architecture.md ส่วนที่ 4.2 — ถ้า sync
  * ล้มเหลว ไม่ควร fail request หลักที่เรียกมา ผู้เรียกควร catch เองแล้ว log ไว้เฉย ๆ)
  * Schema อ้างอิงจาก recommendation_graph_import.cql:
- *   (:User)-[:INTERESTED_IN]->(:Tag)
+ *   (:User {account_type: "DEMO" | "REAL"})-[:INTERESTED_IN]->(:Tag)
+ *   (account_type ใช้แยกข้อมูลตัวอย่างตอนวิเคราะห์ — ระบบแนะนำไม่กรองด้วยค่านี้ ใช้ข้อมูล DEMO ตามปกติ)
  *   (:Novel)-[:HAS_TAG]->(:Tag)
  *   (:User)-[:READ {sentiment_score}]->(:Novel)
  */
@@ -83,9 +85,13 @@ export async function deleteUserGraphNode(user_id: string) {
   );
 }
 
-export async function syncUserNode(user_id: string, username: string) {
+export async function syncUserNode(user_id: string, username: string, account_type: AccountType) {
   await writeGraph((session) =>
-    session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username", { user_id, username })
+    session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username, u.account_type = $account_type", {
+      user_id,
+      username,
+      account_type,
+    })
   );
 }
 
@@ -97,9 +103,13 @@ export async function syncNovelNode(novel_id: string, title: string) {
 
 /** แทนที่ INTERESTED_IN ทั้งหมดของ user คนนี้ด้วยชุด tag ปัจจุบัน — idempotent เรียกซ้ำได้ปลอดภัย
  *  (ตอน onboarding เลือก tag ใหม่ หรือแก้ไขทีหลัง ก็เรียกอันนี้ซ้ำได้เลย) */
-export async function syncInterestedIn(user_id: string, username: string, tagNames: string[]) {
+export async function syncInterestedIn(user_id: string, username: string, account_type: AccountType, tagNames: string[]) {
   await writeGraph(async (session) => {
-    await session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username", { user_id, username });
+    await session.run("MERGE (u:User {user_id: $user_id}) SET u.username = $username, u.account_type = $account_type", {
+      user_id,
+      username,
+      account_type,
+    });
     await session.run("MATCH (:User {user_id: $user_id})-[r:INTERESTED_IN]->(:Tag) DELETE r", { user_id });
     for (const name of tagNames) {
       await session.run(
@@ -184,8 +194,11 @@ async function writeBatches<T>(cypher: string, rows: T[]) {
   });
 }
 
-export function syncUserNodesBatch(rows: { user_id: string; username: string }[]) {
-  return writeBatches("UNWIND $rows AS row MERGE (u:User {user_id: row.user_id}) SET u.username = row.username", rows);
+export function syncUserNodesBatch(rows: { user_id: string; username: string; account_type: AccountType }[]) {
+  return writeBatches(
+    "UNWIND $rows AS row MERGE (u:User {user_id: row.user_id}) SET u.username = row.username, u.account_type = row.account_type",
+    rows
+  );
 }
 
 /** แทนที่ INTERESTED_IN ของทุก user ในชุด (tags ว่าง = ลบความสนใจเดิมทิ้ง) */

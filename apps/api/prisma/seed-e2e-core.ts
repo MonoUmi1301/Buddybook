@@ -6,6 +6,8 @@
  *
  * รันซ้ำได้: ลบผู้ใช้ @e2e-core.buddybook.local ชุดเดิม (และทุกอย่างที่ผูกกับพวกเขา) ก่อนสร้างใหม่
  * รหัสผ่านทุกบัญชี: e2e12345 (บัญชีทดสอบในเครื่องเท่านั้น)
+ * account_type = REAL (ค่า default) โดยตั้งใจ — เป็นบัญชีทดสอบอัตโนมัติที่ต้องล็อกอินได้ ไม่ใช่ข้อมูลตัวอย่างบนเว็บ
+ *   ห้ามรันบน production (บัญชีที่สร้างหลัง migration demo_real_accounts ไม่ถูก scripts/mark-demo.ts แตะ)
  */
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";

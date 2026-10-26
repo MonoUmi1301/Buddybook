@@ -113,9 +113,9 @@ export async function refresh(req: Request, res: Response) {
   // เช็คสถานะจริงทุกครั้งที่ต่ออายุ (ทุก ~15 นาทีต่อผู้ใช้ ไม่แพง) และใช้ role ปัจจุบันแทนค่าที่ฝังใน token
   const user = await prisma.user.findUnique({
     where: { user_id: payload.user_id },
-    select: { role: true, is_suspended: true, deleted_at: true },
+    select: { role: true, is_suspended: true, deleted_at: true, account_type: true },
   });
-  if (!user || user.deleted_at) throw ApiError.unauthorized("Invalid or expired refresh token");
+  if (!user || user.deleted_at || user.account_type === "DEMO") throw ApiError.unauthorized("Invalid or expired refresh token");
   if (user.is_suspended) throw ApiError.forbidden("This account has been suspended");
   const access_token = signAccessToken({ user_id: payload.user_id, role: user.role });
   res.status(200).json({ access_token });

@@ -12,6 +12,7 @@ export const libraryNovelSelect = {
   cover_image_url: true,
   status: true,
   view_count: true,
+  is_demo: true,
   author: { select: { user_id: true, username: true, pen_name: true } },
 } satisfies Prisma.NovelSelect;
 

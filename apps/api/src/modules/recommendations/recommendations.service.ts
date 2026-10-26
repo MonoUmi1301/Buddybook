@@ -34,6 +34,7 @@ interface RecommendedNovel {
   cover_image_url: string | null;
   view_count: number;
   author: { username: string; pen_name: string | null };
+  is_demo: boolean;
   reason: RecommendationReason;
   score: number;
   is_long_tail: boolean;
@@ -207,6 +208,7 @@ export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMM
         cover_image_url: true,
         view_count: true,
         created_at: true,
+        is_demo: true,
         author: { select: { username: true, pen_name: true } },
         novel_tags: { select: { tag_id: true } },
       },
@@ -250,6 +252,7 @@ export async function getRecommendations(user_id: string, limit = DEFAULT_RECOMM
       cover_image_url: n.cover_image_url,
       view_count: Number(n.view_count),
       author: n.author,
+      is_demo: n.is_demo,
       reason: primaryReason(merged.get(r.novel_id)!, now),
       score: Math.round(r.score * 1000) / 1000,
       is_long_tail: r.long_tail,
@@ -385,7 +388,7 @@ export function isFullResyncRunning() {
 async function runFullResync() {
   const graph = await import("@/lib/graphSync");
 
-  const users = await prisma.user.findMany({ select: { user_id: true, username: true } });
+  const users = await prisma.user.findMany({ select: { user_id: true, username: true, account_type: true } });
   await graph.syncUserNodesBatch(users);
 
   const interests = await prisma.userInterest.findMany({

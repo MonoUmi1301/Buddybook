@@ -49,9 +49,13 @@ export async function resolveModeration(req: Request, res: Response) {
 
 const paginationQuerySchema = z.object({ page: z.coerce.number().int().positive().default(1) });
 
+// ตัวกรองหน้า /admin/users: ทั้งหมด / ผู้ใช้จริง / ตัวอย่าง
+const listUsersQuerySchema = paginationQuerySchema.extend({ type: z.enum(["all", "real", "demo"]).default("all") });
+const ACCOUNT_TYPE_FILTER = { all: undefined, real: "REAL", demo: "DEMO" } as const;
+
 export async function listUsers(req: Request, res: Response) {
-  const { page } = paginationQuerySchema.parse(req.query);
-  const result = await adminService.listUsers(page);
+  const { page, type } = listUsersQuerySchema.parse(req.query);
+  const result = await adminService.listUsers(page, ACCOUNT_TYPE_FILTER[type]);
   res.status(200).json(result);
 }
 

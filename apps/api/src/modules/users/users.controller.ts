@@ -20,6 +20,7 @@ export async function getMe(req: Request, res: Response) {
       pen_name: true,
       email: true,
       role: true,
+      account_type: true,
       avatar_url: true,
       bio: true,
       age_verified: true,
@@ -201,7 +202,7 @@ export async function getPublicProfile(req: Request, res: Response) {
 
   const user = await prisma.user.findUnique({
     where: { user_id },
-    select: { user_id: true, username: true, pen_name: true, avatar_url: true, bio: true, created_at: true },
+    select: { user_id: true, username: true, pen_name: true, avatar_url: true, bio: true, account_type: true, created_at: true },
   });
   if (!user) throw ApiError.notFound("User not found");
 
@@ -221,6 +222,7 @@ export async function getPublicProfile(req: Request, res: Response) {
       view_count: true,
       status: true,
       hide_like_count: true,
+      is_demo: true,
     },
   });
 
@@ -274,7 +276,7 @@ export async function setInterests(req: Request, res: Response) {
       where: { user_id },
       select: { tag: { select: { tag_id: true, name: true } } },
     }),
-    prisma.user.findUnique({ where: { user_id }, select: { username: true } }),
+    prisma.user.findUnique({ where: { user_id }, select: { username: true, account_type: true } }),
   ]);
 
   // sync ไป Neo4j (INTERESTED_IN) หลัง Postgres commit สำเร็จแล้ว — แก้ cold-start ของ
@@ -283,6 +285,7 @@ export async function setInterests(req: Request, res: Response) {
     syncInterestedIn(
       user_id,
       user.username,
+      user.account_type,
       user_interests.map((ui) => ui.tag.name)
     ).catch((err) => console.error("Neo4j syncInterestedIn failed:", err));
   }

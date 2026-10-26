@@ -17,4 +17,6 @@ export interface NovelSummary {
   tags: { label: string; color: TagColor }[];
   href: string;
   updatedAt?: string;
+  /** ข้อมูลตัวอย่าง (novels.is_demo) — การ์ดแสดง DemoBadge */
+  isDemo?: boolean;
 }

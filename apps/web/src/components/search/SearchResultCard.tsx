@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Eye } from "lucide-react";
 import { StatPill } from "@/components/ui/StatPill";
 import { NovelChips, type NovelChipSource } from "@/components/novel/NovelChips";
+import { DemoBadge } from "@/components/ui/DemoBadge";
 
 export interface SearchNovelItem extends NovelChipSource {
   novel_id: string;
@@ -10,6 +11,7 @@ export interface SearchNovelItem extends NovelChipSource {
   cover_image_url: string | null;
   status: "ongoing" | "completed" | "hiatus";
   view_count: number;
+  is_demo?: boolean;
 }
 
 const statusLabel: Record<SearchNovelItem["status"], string> = {
@@ -34,7 +36,10 @@ export function SearchResultCard({ novel }: { novel: SearchNovelItem }) {
         )}
       </div>
       <div className="flex min-w-0 flex-col justify-center gap-1">
-        <h3 className="line-clamp-1 text-sm font-semibold text-neutral-900">{novel.title}</h3>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h3 className="line-clamp-1 text-sm font-semibold text-neutral-900">{novel.title}</h3>
+          {novel.is_demo && <DemoBadge />}
+        </div>
         <p className="text-xs font-medium text-primary-500">{statusLabel[novel.status]}</p>
         <StatPill icon={Eye} value={novel.view_count} />
         <NovelChips novel={novel} max={6} className="mt-1" />

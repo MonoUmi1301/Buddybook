@@ -113,7 +113,9 @@ export async function searchNovels({
         primary_tag: { select: { tag_id: true, name: true } },
         secondary_tag: { select: { tag_id: true, name: true } },
         novel_tags: { select: { tag: { select: { tag_id: true, name: true } } } },
-        author: { select: { user_id: true, username: true, pen_name: true } },
+        // ป้าย "ตัวอย่าง" บนการ์ด (DemoBadge ฝั่งเว็บ)
+        is_demo: true,
+        author: { select: { user_id: true, username: true, pen_name: true, account_type: true } },
       },
       orderBy: sort === "views" ? { view_count: "desc" } : { created_at: "desc" },
       skip: (page - 1) * pageSize,
@@ -711,7 +713,7 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
   const reviews = await prisma.review.findMany({
     where: { novel_id },
     orderBy: { created_at: "desc" },
-    include: { user: { select: { user_id: true, username: true, avatar_url: true } } },
+    include: { user: { select: { user_id: true, username: true, avatar_url: true, account_type: true } } },
   });
 
   return {
@@ -722,9 +724,10 @@ export async function listNovelReviews(novel_id: string, viewer_id?: string) {
       review_id: r.review_id,
       user:
         r.is_anonymous && r.user.user_id !== viewer_id
-          ? { user_id: r.user.user_id, username: null, avatar_url: null }
+          ? { user_id: r.user.user_id, username: null, avatar_url: null, account_type: null }
           : r.user,
       is_anonymous: r.is_anonymous,
+      is_demo: r.is_demo,
       rating: r.rating,
       comment_text: r.comment_text,
       sticker_id: r.sticker_id,
@@ -986,9 +989,10 @@ export async function getNovelById(novel_id: string, viewer_id?: string) {
       allow_screenshots: true,
       allow_comments: true,
       hide_like_count: true,
+      is_demo: true,
       primary_tag: { select: { tag_id: true, name: true } },
       secondary_tag: { select: { tag_id: true, name: true } },
-      author: { select: { user_id: true, username: true, pen_name: true, avatar_url: true } },
+      author: { select: { user_id: true, username: true, pen_name: true, avatar_url: true, account_type: true } },
       novel_tags: { select: { tag: { select: { tag_id: true, name: true, category: true } } } },
       // เฉพาะ field ที่ปลอดภัยให้สาธารณะเห็น (ไม่ใช่ทั้ง world-building canvas ซึ่งเป็นเครื่องมือ
       // ของเจ้าของนิยายเท่านั้น ดู GET /novels/:id/world-building ที่ requireAuth+เช็คความเป็นเจ้าของ) —

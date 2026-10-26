@@ -132,8 +132,9 @@ export async function verifyRegistrationOtp({ email: rawEmail, otp }: VerifyOtpI
     throw ApiError.conflict("Username or email already in use");
   }
 
+  // สมัครใหม่เป็น REAL เสมอ — ตั้งตรงนี้ ไม่อ่านจาก request (registerSchema ไม่มีช่อง account_type ให้ส่งมา)
   const user = await prisma.user.create({
-    data: { username: pending.username, email: pending.email, password_hash: pending.password_hash },
+    data: { username: pending.username, email: pending.email, password_hash: pending.password_hash, account_type: "REAL" },
   });
   await prisma.pendingRegistration.delete({ where: { email } });
 
@@ -159,7 +160,8 @@ export async function loginUser({ email, password }: LoginInput) {
   }
 
   const passwordMatches = await bcrypt.compare(password, user.password_hash);
-  if (!passwordMatches) {
+  // บัญชี DEMO (ข้อมูลตัวอย่าง) ล็อกอินไม่ได้ — ตอบเหมือนรหัสผิดทุกประการ ไม่บอกว่าบัญชีนี้เป็น DEMO
+  if (!passwordMatches || user.account_type === "DEMO") {
     throw ApiError.unauthorized("Invalid credentials");
   }
 
@@ -202,6 +204,7 @@ export async function verifyLoginTwoFactor({ challenge_token, code }: VerifyLogi
   if (!user || !user.totp_enabled || !user.totp_secret) {
     throw ApiError.unauthorized("บัญชีนี้ไม่ได้เปิดใช้ 2FA");
   }
+  if (user.account_type === "DEMO") throw ApiError.unauthorized("Invalid credentials");
   if (user.is_suspended) {
     throw ApiError.forbidden("This account has been suspended");
   }
@@ -333,9 +336,15 @@ export async function loginOrRegisterWithOAuth(profile: OAuthProfile) {
           oauth_provider: profile.provider,
           oauth_id: profile.sub,
           avatar_url: profile.picture,
+          account_type: "REAL",
         },
       });
     }
+  }
+
+  // บัญชี DEMO (seed ใช้ oauth_id ปลอม) — ปฏิเสธก่อนแตะข้อมูลใด ๆ ของบัญชี ทั้งกรณีเจอจาก oauth_id และกรณีอีเมลตรง
+  if (user.account_type === "DEMO") {
+    throw ApiError.unauthorized("Invalid credentials");
   }
 
   if (user.is_suspended) {
@@ -371,10 +380,11 @@ export async function requestPasswordReset(rawEmail: string) {
   const email = normalizeEmail(rawEmail);
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { user_id: true, password_hash: true, oauth_provider: true },
+    select: { user_id: true, password_hash: true, oauth_provider: true, account_type: true },
   });
   // response หน้าตาเดียวกันเสมอ (ไม่ throw) ไม่ว่าจะมีบัญชีหรือไม่ — กัน user enumeration
-  if (!user) return;
+  // บัญชี DEMO รีเซ็ตรหัสผ่านไม่ได้ — ทำเหมือนไม่มีบัญชี (ไม่ส่งอีเมล)
+  if (!user || user.account_type === "DEMO") return;
   if (!user.password_hash) {
     // บัญชี OAuth ล้วน (ผลทดสอบ #6) — ส่งอีเมลบอกช่องทางเข้าสู่ระบบแทน ไปที่อีเมลเจ้าของบัญชีเท่านั้น
     // ข้ามอีเมลปลอมที่ระบบสร้างให้ (LINE ไม่ส่งอีเมลมา → line_xxx@line.buddybook.local)
@@ -403,6 +413,11 @@ export async function resetPassword(token: string, newPassword: string) {
     throw ApiError.unauthorized("Invalid or expired reset link");
   }
 
+  // ลิงก์ที่ออกก่อนบัญชีถูกติดป้าย DEMO ก็ใช้ไม่ได้ — updateMany กรอง account_type ในคำสั่งเดียว
   const password_hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-  await prisma.user.update({ where: { user_id }, data: { password_hash, updated_at: new Date() } });
+  const { count } = await prisma.user.updateMany({
+    where: { user_id, account_type: "REAL" },
+    data: { password_hash, updated_at: new Date() },
+  });
+  if (count === 0) throw ApiError.unauthorized("Invalid or expired reset link");
 }

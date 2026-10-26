@@ -34,6 +34,12 @@ enum OAuthProvider {
   line
 }
 
+/// แยกจาก role — DEMO = บัญชีจาก seed/mock (ล็อกอิน/รีเซ็ตรหัสผ่านไม่ได้) REAL = ผู้ใช้จริง (สมัครใหม่เป็น REAL เสมอ)
+enum AccountType {
+  DEMO
+  REAL
+}
+
 enum UserRole {
   user
   admin
@@ -253,6 +259,8 @@ model User {
   oauth_provider           OAuthProvider?
   oauth_id                 String?            @db.VarChar(255)
   role                     UserRole           @default(user)
+  /// ดู enum AccountType — ตั้งเป็น DEMO ได้จาก seed / scripts/mark-demo.ts เท่านั้น ไม่รับค่าจาก client
+  account_type             AccountType        @default(REAL)
   avatar_url               String?            @db.Text
   bio                      String?            @db.Text
   age_verified             Boolean            @default(false)
@@ -307,6 +315,7 @@ model User {
   moderation_resolutions NovelModerationCase[] @relation("ModerationResolvedBy")
 
   @@unique([oauth_provider, oauth_id])
+  @@index([account_type])
   @@map("users")
 }
 
@@ -407,6 +416,9 @@ model Novel {
   /// นิยายที่แก้ไขหลังเวลานี้ (updated_at > moderation_reviewed_at) กลับเข้าคิวตรวจอีกครั้ง
   moderation_reviewed_at DateTime? @db.Timestamptz(6)
 
+  /// ข้อมูลตัวอย่าง (seed/mock หรือสร้างโดยบัญชี DEMO) — หน้าเว็บติดป้าย "ตัวอย่าง" ดู scripts/mark-demo.ts
+  is_demo Boolean @default(false)
+
   author           User                  @relation("NovelAuthor", fields: [author_id], references: [user_id], onDelete: Cascade)
   primary_tag      Tag?                  @relation("NovelPrimaryTag", fields: [primary_tag_id], references: [tag_id])
   secondary_tag    Tag?                  @relation("NovelSecondaryTag", fields: [secondary_tag_id], references: [tag_id])
@@ -430,6 +442,7 @@ model Novel {
   @@index([author_id])
   @@index([status, visibility])
   @@index([deleted_at])
+  @@index([is_demo])
   @@map("novels")
 }
 
@@ -449,6 +462,7 @@ model Chapter {
   /// เพิ่มภายหลัง (ตอนติดเหรียญ) — 0 = อ่านฟรี, > 0 = ต้องจ่าย coin ปลดล็อกก่อนอ่าน (ดู chapter-purchases)
   /// CHECK (price_coins BETWEEN 0 AND 1000) — ดู migration paid_chapters_follows_reports_withdrawals
   price_coins          Int           @default(0)
+  is_demo              Boolean       @default(false)
   created_at           DateTime      @default(now()) @db.Timestamptz(6)
   updated_at           DateTime?     @db.Timestamptz(6)
 
@@ -699,6 +713,8 @@ model Comment {
   sentiment_polarity Float?
   /// ความรู้สึกพุ่งไปที่อะไร (ได้หลายป้าย) — NLP worker target.py ติดให้ ว่าง = ระบุไม่ได้
   sentiment_targets  SentimentTarget[] @default([])
+  /// ตามผู้เขียนคอมเมนต์ ไม่ใช่ตามนิยาย — คนจริงคอมเมนต์ในนิยาย DEMO ก็ยังเป็น false
+  is_demo            Boolean           @default(false)
   created_at         DateTime          @default(now()) @db.Timestamptz(6)
 
   chapter        Chapter   @relation(fields: [chapter_id], references: [chapter_id], onDelete: Cascade)
@@ -733,6 +749,8 @@ model Review {
   /// ออกไปให้คนอื่นเห็นตอนอ่านรีวิว) ยังต้องเก็บ user_id จริงไว้เสมอ เพื่อคุม @@unique ด้านล่าง
   /// (รีวิวได้เรื่องละ 1 ครั้ง) และให้เจ้าของรีวิวแก้ไข/ลบของตัวเองได้ตามปกติ
   is_anonymous       Boolean           @default(false)
+  /// ตามผู้เขียนรีวิว ไม่ใช่ตามนิยาย
+  is_demo            Boolean           @default(false)
   created_at         DateTime          @default(now()) @db.Timestamptz(6)
 
   novel Novel @relation(fields: [novel_id], references: [novel_id], onDelete: Cascade)
@@ -740,6 +758,7 @@ model Review {
 
   // CHECK (rating BETWEEN 1 AND 5), CHECK (sentiment_score BETWEEN 0 AND 1) — ดู migration 20260930100000_manual_check_constraints
   @@unique([novel_id, user_id])
+  @@index([is_demo])
   @@map("reviews")
 }
 
@@ -779,6 +798,8 @@ model Donation {
   report_resolved_at DateTime?         @db.Timestamptz(6)
   thank_message      String?           @db.VarChar(200)
   thanked_at         DateTime?         @db.Timestamptz(6)
+  /// ตามผู้ให้ (from_user) — โดเนทให้นักเขียน DEMO ได้ตามปกติ
+  is_demo            Boolean           @default(false)
 
   novel     Novel?    @relation(fields: [novel_id], references: [novel_id], onDelete: SetNull)
   chapter   Chapter?  @relation(fields: [chapter_id], references: [chapter_id], onDelete: SetNull)
@@ -964,6 +985,7 @@ model NovelLike {
   like_id    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   user_id    String   @db.Uuid
   novel_id   String   @db.Uuid
+  is_demo    Boolean  @default(false)
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
   user  User  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
@@ -1024,6 +1046,7 @@ model ChapterPurchase {
   chapter_id  String   @db.Uuid
   price_coins Int
   fee_coins   Int      @default(0)
+  is_demo     Boolean  @default(false)
   created_at  DateTime @default(now()) @db.Timestamptz(6)
 
   user    User    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
@@ -1159,24 +1182,24 @@ model NovelModerationCase {
 /// ผลประเมินระบบแนะนำจากข้อมูลจริง — 1 แถวต่อการรัน `npm run eval:recs:live` (scripts/eval-recommender.ts --save)
 /// เก็บ threshold ที่ถูกเลือก (NDCG@K สูงสุดบน val) และตัวชี้วัดของมันบน test ให้หน้าภาพรวมแอดมินแสดงแทนค่าคงที่
 model RecommenderEvalRun {
-  run_id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  method         String   @db.VarChar(40)
-  threshold      Float
-  k              Int
-  precision      Float
-  recall         Float
-  f1             Float
-  ndcg           Float
-  hit_rate       Float
-  user_coverage  Float
+  run_id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  method        String   @db.VarChar(40)
+  threshold     Float
+  k             Int
+  precision     Float
+  recall        Float
+  f1            Float
+  ndcg          Float
+  hit_rate      Float
+  user_coverage Float
   /// NDCG@K ของ popularity baseline บน test ชุดเดียวกัน
-  baseline_ndcg  Float
-  eval_users     Int
+  baseline_ndcg Float
+  eval_users    Int
   /// จำนวน Postgres vs Neo4j ตรงทุกรายการตอนรัน (ข้อ 1.1 ของรายงาน)
-  graph_in_sync  Boolean
+  graph_in_sync Boolean
   /// ผู้ใช้ที่มีรีวิว >= 5 น้อยกว่า 30 คน — ผลไม่มีนัยสำคัญทางสถิติ
-  low_data       Boolean
+  low_data      Boolean
 
   @@index([created_at(sort: Desc)])
   @@map("recommender_eval_runs")
@@ -1193,28 +1216,28 @@ enum KycStatus {
 /// ผลอายุเก็บที่ User.birth_date + age_verification_source="kyc"; ตารางนี้เก็บแค่สถานะ หลักฐานความยินยอม
 /// และ hash เลขเอกสาร (HMAC มี secret — ย้อนกลับไม่ได้) ไว้กันเอกสารใบเดียวยืนยันหลายบัญชี
 model KycVerification {
-  verification_id  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id          String    @db.Uuid
+  verification_id     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String    @db.Uuid
   /// ส่งให้ผู้ให้บริการเป็น vendor_data แทน user_id (ผู้ให้บริการไม่รู้ตัวตนบัญชีในระบบเรา)
-  external_ref     String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  external_ref        String    @unique @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// session_id ของผู้ให้บริการ (Didit) — ใช้ดึงผลตรวจและสั่งลบภาพ/ข้อมูลชีวภาพฝั่งผู้ให้บริการ
-  provider_session_id String? @unique @db.VarChar(64)
-  provider         String    @db.VarChar(20)
-  status           KycStatus @default(pending)
+  provider_session_id String?   @unique @db.VarChar(64)
+  provider            String    @db.VarChar(20)
+  status              KycStatus @default(pending)
   /// ฉบับข้อความขอความยินยอม (PDPA ม.26 ข้อมูลชีวภาพ) ที่ผู้ใช้กดยอมรับ และเวลาที่ยอมรับ
-  consent_version  String    @db.VarChar(20)
-  consented_at     DateTime  @db.Timestamptz(6)
+  consent_version     String    @db.VarChar(20)
+  consented_at        DateTime  @db.Timestamptz(6)
   /// ID_CARD / PASSPORT และประเทศผู้ออก (ISO alpha-3) — ไม่เก็บเลขเอกสาร
-  document_type    String?   @db.VarChar(20)
-  document_country String?   @db.Char(3)
+  document_type       String?   @db.VarChar(20)
+  document_country    String?   @db.Char(3)
   /// HMAC-SHA256(KYC_ID_HASH_SECRET, ประเทศ:ประเภท:เลขเอกสาร) — ต้องมี secret เพราะเลขบัตร 13 หลักเดาครบได้
-  id_number_hash   String?   @db.Char(64)
+  id_number_hash      String?   @db.Char(64)
   /// รหัสเหตุผลของเราเอง (เช่น PROVIDER_REJECTED, DUPLICATE_IDENTITY) ไม่เก็บข้อความอิสระจากผู้ให้บริการ
-  reject_reason    String?   @db.VarChar(40)
-  retry_allowed    Boolean   @default(true)
-  completed_at     DateTime? @db.Timestamptz(6)
-  created_at       DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+  reject_reason       String?   @db.VarChar(40)
+  retry_allowed       Boolean   @default(true)
+  completed_at        DateTime? @db.Timestamptz(6)
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @default(now()) @db.Timestamptz(6)
 
   user User @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
 

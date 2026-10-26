@@ -39,6 +39,7 @@ interface ReviewApiItem {
   review_id: string;
   user: { user_id: string; username: string | null; avatar_url: string | null };
   is_anonymous: boolean;
+  is_demo?: boolean;
   rating: number | null;
   comment_text: string | null;
   sticker_id: string | null;
@@ -156,6 +157,7 @@ export default async function NovelDetailPage(props: { params: Promise<{ novelId
           stickerId: r.sticker_id ?? null,
           createdAt: r.created_at,
           isAnonymous: r.user.username === null,
+          isDemo: r.is_demo ?? false,
         }))
       : [];
 

@@ -15,6 +15,8 @@
     "eval:recs": "tsx scripts/eval-recs.ts",
     "eval:recs:live": "tsx --env-file=.env scripts/eval-recommender.ts --save",
     "graph:resync": "tsx --env-file=.env scripts/resync-graph.ts",
+    "graph:sync-accounts": "tsx --env-file=.env scripts/sync-account-types.ts",
+    "db:mark-demo": "tsx scripts/mark-demo.ts",
     "report:sentiment": "tsx scripts/report-sentiment.ts",
     "openapi": "tsx scripts/generate-openapi.ts",
     "prisma:generate": "prisma generate",
