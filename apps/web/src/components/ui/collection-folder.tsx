@@ -68,6 +68,10 @@ export type CollectionFolderProps = {
   label?: string
   /** The second line. Defaults to the number of files, which rolls as you add. */
   meta?: string
+  /** A small sticker on the front panel — an icon that says what the folder is for. */
+  emblem?: React.ReactNode
+  /** Any CSS color for the emblem; the sticker is a pale wash of it. */
+  accent?: string
   /** `cream` is solid paper, `light` is milk glass, `dark` is smoked glass. */
   tone?: "cream" | "light" | "dark"
   /** What the back panel holds. Defaults to `none` for cream, `aurora` for glass. */
@@ -512,6 +516,8 @@ const SAMPLE_FILES: FolderFile[] = [
 export default function CollectionFolder({
   label = "My Files",
   meta,
+  emblem,
+  accent,
   tone = "cream",
   art,
   seed = 3,
@@ -704,7 +710,7 @@ export default function CollectionFolder({
       data-open={open || undefined}
       data-entered={entered || undefined}
       data-place={labelPlacement}
-      style={{ width, height: (H + HEADROOM) * k, ...style }}
+      style={{ width, height: (H + HEADROOM) * k, ...(accent ? { "--gf-accent": accent } : null), ...style } as React.CSSProperties}
     >
       <style>{GF_CSS}</style>
       <div className="gf-stage" style={{ transform: "translateY(" + HEADROOM * k + "px) scale(" + k + ")" }}>
@@ -753,6 +759,11 @@ export default function CollectionFolder({
                 setOpen(!open)
               }}
             />
+            {emblem ? (
+              <div className="gf-emblem" aria-hidden="true">
+                {emblem}
+              </div>
+            ) : null}
             <div className="gf-label">
               <span className="gf-title">{label}</span>
               <span className="gf-meta" key={metaLine}>
@@ -1178,6 +1189,32 @@ canvas.gf-sheet-art[data-ready] { opacity: 1; filter: none; }
 }
 .gf-hit:focus-visible ~ .gf-label .gf-title { text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 4px; }
 .gf-front:has(.gf-hit:focus-visible) .gf-front-rim path { stroke-width: 5; }
+
+.gf-emblem {
+  --gf-accent-ink: var(--gf-accent, var(--gf-ink));
+  position: absolute;
+  z-index: 2;
+  left: 26px;
+  top: 30px;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 17px;
+  color: var(--gf-accent-ink);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--gf-accent-ink) 10%, #fffdf8), color-mix(in srgb, var(--gf-accent-ink) 22%, #fffdf8));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .85),
+    inset 0 0 0 1px color-mix(in srgb, var(--gf-accent-ink) 26%, transparent),
+    0 8px 16px -10px color-mix(in srgb, var(--gf-accent-ink) 70%, transparent);
+  rotate: -5deg;
+  pointer-events: none;
+  transition: rotate .5s var(--gf-spring);
+}
+.gf-emblem svg { width: 28px; height: 28px; }
+.gf-root:hover .gf-emblem { rotate: 0deg; }
+.gf-root[data-place="top-left"] .gf-emblem { left: auto; right: 28px; }
 
 .gf-label {
   position: absolute;
