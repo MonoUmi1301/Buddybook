@@ -35,7 +35,7 @@ const FILTERS: { value: NotificationType | "all"; label: string; hint?: string }
   { value: "donation", label: "ของขวัญ" },
   { value: "new_follower", label: "ผู้ติดตาม" },
   { value: "support_reply", label: "ทีมงาน" },
-  { value: "moderation", label: "ผลตรวจสอบนิยาย", hint: "แอดมินระงับ/คืนสถานะนิยายของคุณ หรือแจ้งผลอุทธรณ์" },
+  { value: "moderation", label: "ผลตรวจสอบ", hint: "แอดมินระงับ/คืนสถานะนิยายของคุณ หรือแจ้งผลอุทธรณ์" },
   { value: "system", label: "ระบบ" },
 ];
 
@@ -118,9 +118,15 @@ export function NotificationCenter({ initial }: { initial: Page }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
       <div className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-neutral-600">
-            ยังไม่อ่าน <strong className="tabular-nums text-neutral-900">{data.unread_count.toLocaleString("th-TH")}</strong> รายการ
-          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <p className="text-sm text-neutral-600">
+              ยังไม่อ่าน <strong className="tabular-nums text-neutral-900">{data.unread_count.toLocaleString("th-TH")}</strong> รายการ
+            </p>
+            <label className="flex min-h-[36px] items-center gap-1.5 text-sm text-neutral-600">
+              <input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setPage(1); }} className="h-4 w-4 rounded border-neutral-300" />
+              เฉพาะที่ยังไม่อ่าน
+            </label>
+          </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={handleAsync(markAll)} disabled={data.unread_count === 0}>
               <CheckCheck className="h-4 w-4" /> อ่านทั้งหมด
@@ -131,29 +137,30 @@ export function NotificationCenter({ initial }: { initial: Page }) {
           </div>
         </div>
 
-        {/* เดิมเลื่อนแนวนอนแบบซ่อน scrollbar — บนจอแคบ/เมาส์ปุ่มท้าย ๆ ตกขอบและเลื่อนไปดูไม่ได้ จึงให้ขึ้นบรรทัดใหม่แทน */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+        {/* เดิมเลื่อนแนวนอนแบบซ่อน scrollbar — บนจอแคบ/เมาส์ปุ่มท้าย ๆ ตกขอบและเลื่อนไปดูไม่ได้ จึงให้ขึ้นบรรทัดใหม่แทน
+            ทุกปุ่มมีขอบ 1px เท่ากัน (ปุ่มที่เลือกแค่เปลี่ยนสี) — เดิมปุ่มที่เลือกไม่มีขอบ กว้างต่างกัน 2px แถวเลยตัดบรรทัดใหม่ ปุ่มกระโดดขึ้นลง */}
+        <div className="mb-4 flex flex-wrap items-center gap-1.5" role="group" aria-label="กรองประเภทการแจ้งเตือน">
           {FILTERS.map((f) => (
             <button
               key={f.value}
               type="button"
               title={f.hint}
+              aria-pressed={filter === f.value}
               onClick={() => {
                 setFilter(f.value);
                 setPage(1);
               }}
               className={cn(
-                "min-h-[36px] shrink-0 rounded-pill px-3.5 text-sm",
-                filter === f.value ? "bg-neutral-900 text-white" : "border border-neutral-200 text-neutral-600 hover:text-neutral-900"
+                "min-h-[36px] shrink-0 rounded-pill border px-3 text-sm transition-colors",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400",
+                filter === f.value
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-200 text-neutral-600 hover:border-neutral-300 hover:text-neutral-900"
               )}
             >
               {f.label}
             </button>
           ))}
-          <label className="ml-1 flex min-h-[36px] shrink-0 items-center gap-1.5 text-sm text-neutral-600">
-            <input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setPage(1); }} className="h-4 w-4 rounded border-neutral-300" />
-            เฉพาะที่ยังไม่อ่าน
-          </label>
         </div>
 
         <div className={cn("rounded-card border border-neutral-200", loading && "opacity-60")}>

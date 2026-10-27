@@ -114,7 +114,7 @@ export function CollectionFormDialog({ open, collection, onClose, onSubmit }: Co
         </fieldset>
 
         <fieldset>
-          <legend className="text-sm font-medium text-neutral-700">สีชั้น</legend>
+          <legend className="text-sm font-medium text-neutral-700">สีไอคอน</legend>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {(Object.keys(collectionTintRgb) as CollectionTint[]).map((t) => (
               <button

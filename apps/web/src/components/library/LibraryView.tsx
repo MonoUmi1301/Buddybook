@@ -7,12 +7,13 @@ import { useRouter } from "next/navigation";
 import { Compass, Plus, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { FolderFile } from "@/components/ui/collection-folder";
-import type { CollectionIcon } from "@/lib/collectionIcons";
+import { collectionIconMeta, isCollectionIcon, type CollectionIcon } from "@/lib/collectionIcons";
 import { AcrylicShelf, type ShelfGroup } from "@/components/library/AcrylicShelf";
 import { SpineShelf } from "@/components/library/SpineShelf";
 import { AddNovelsDialog, CollectionFormDialog } from "@/components/library/CollectionDialogs";
 import {
   continueHref,
+  collectionTintRgb,
   coverOf,
   libraryStatusLabel,
   progressPercent,
@@ -267,29 +268,35 @@ export function LibraryView({ entries: initialEntries, counts: initialCounts, co
           ref={folderRowRef}
           className="-mx-8 flex items-end gap-6 overflow-x-auto px-8 pb-2 pt-8 max-lg:-mx-6 max-lg:px-6 max-md:-mx-4 max-md:gap-4 max-md:px-4 scrollbar-hide"
         >
-          {collections.map((collection, i) => (
-            <CollectionFolder
-              key={collection.collection_id + collection.novels.length}
-              label={collection.name}
-              meta={`${collection.novels.length} เรื่อง`}
-              tone="cream"
-              sheetShape="cover"
-              action="more"
-              files={folderFiles(collection.novels)}
-              width={FOLDER_WIDTH}
-              appearDelay={Math.min(i, 6) * 80}
-              open={openId === collection.collection_id}
-              onOpenChange={(isOpen) => {
-                if (!isOpen && outsidePress.current) return;
-                setOpenId((id) => (isOpen ? collection.collection_id : id === collection.collection_id ? null : id));
-              }}
-              menu={[
-                { label: "เพิ่ม / เอานิยายออก", onSelect: () => setAddTo(collection.collection_id) },
-                { label: "เปลี่ยนชื่อ", onSelect: () => setFormFor(collection) },
-                { label: "ลบคอลเลคชัน", danger: true, onSelect: () => void deleteCollection(collection) },
-              ]}
-            />
-          ))}
+          {collections.map((collection, i) => {
+            const EmblemIcon = isCollectionIcon(collection.icon) ? collectionIconMeta[collection.icon].Icon : null;
+            return (
+              <CollectionFolder
+                key={collection.collection_id + collection.novels.length}
+                label={collection.name}
+                meta={`${collection.novels.length} เรื่อง`}
+                // ไอคอนชั้นแปะเป็นสติกเกอร์บนหน้าแฟ้ม สีตามที่เลือกไว้
+                emblem={EmblemIcon ? <EmblemIcon strokeWidth={2.2} /> : undefined}
+                accent={`rgb(${collectionTintRgb[collection.tint]})`}
+                tone="cream"
+                sheetShape="cover"
+                action="more"
+                files={folderFiles(collection.novels)}
+                width={FOLDER_WIDTH}
+                appearDelay={Math.min(i, 6) * 80}
+                open={openId === collection.collection_id}
+                onOpenChange={(isOpen) => {
+                  if (!isOpen && outsidePress.current) return;
+                  setOpenId((id) => (isOpen ? collection.collection_id : id === collection.collection_id ? null : id));
+                }}
+                menu={[
+                  { label: "เพิ่ม / เอานิยายออก", onSelect: () => setAddTo(collection.collection_id) },
+                  { label: "เปลี่ยนชื่อ", onSelect: () => setFormFor(collection) },
+                  { label: "ลบคอลเลคชัน", danger: true, onSelect: () => void deleteCollection(collection) },
+                ]}
+              />
+            );
+          })}
           {collections.length === 0 ? (
             <button
               type="button"
