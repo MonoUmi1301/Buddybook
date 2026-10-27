@@ -9,6 +9,7 @@ import { createHarness } from "./helpers";
 const sent = vi.hoisted(() => ({ otp: new Map<string, string>(), reset: [] as string[] }));
 vi.mock("@/lib/email", () => ({
   isEmailConfigured: () => true,
+  isDeliverableEmail: (to: string | null | undefined) => Boolean(to),
   sendOtpEmail: async (to: string, code: string) => {
     sent.otp.set(to, code);
   },
@@ -16,6 +17,7 @@ vi.mock("@/lib/email", () => ({
     sent.reset.push(to);
   },
   sendOAuthSignInHintEmail: async () => undefined,
+  sendNovelModerationEmail: async () => undefined,
 }));
 
 const h = createHarness("demo");
