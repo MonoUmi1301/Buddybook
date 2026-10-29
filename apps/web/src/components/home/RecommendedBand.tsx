@@ -13,13 +13,13 @@ const EAR_INNER = "#FAD6D6";
 /** หมีโผล่หลังหัวแฟ้ม — ฐานของ SVG ชิดขอบบนของแถบพื้นหลัง */
 function PeekingBear({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 120 100" className={className} aria-hidden="true">
-      <circle cx="52" cy="17" r="15" fill={BEAR_BODY} />
-      <circle cx="52" cy="19" r="9" fill={EAR_INNER} />
-      <circle cx="102" cy="40" r="13" fill={BEAR_BODY} />
-      <circle cx="104" cy="41" r="7.5" fill={EAR_INNER} />
-      <path d="M0 100V52Q0 28 24 28H82Q106 28 106 56V100Z" fill={BEAR_BODY} />
-      <ellipse cx="52" cy="62" rx="5" ry="3.5" transform="rotate(25 52 62)" fill={BEAR_DARK} />
+    <svg viewBox="0 0 130 103" className={className} aria-hidden="true">
+      <circle cx="34" cy="26" r="25" fill={BEAR_BODY} />
+      <circle cx="36" cy="22" r="15" fill={EAR_INNER} />
+      <circle cx="98" cy="67" r="20" fill={BEAR_BODY} />
+      <circle cx="100" cy="67" r="12" fill={EAR_INNER} />
+      <path d="M0 103V52C0 38 14 30 34 30H52C86 30 103 52 103 80V103Z" fill={BEAR_BODY} />
+      <ellipse cx="43" cy="72" rx="7" ry="4.5" transform="rotate(25 43 72)" fill={BEAR_DARK} />
     </svg>
   );
 }
@@ -30,12 +30,12 @@ export function RecommendedShell({ children }: { children: ReactNode }) {
     <section className="mt-10 w-full">
       <div className="flex items-end">
         <h2
-          className="relative z-10 rounded-tr-[2.5rem] px-6 pb-2 pt-4 text-h3 text-brand-brown sm:px-10 sm:pt-5"
+          className="relative z-10 flex h-[3.75rem] items-center rounded-tl-[2rem] rounded-tr-[2.25rem] px-6 text-h3 text-brand-brown sm:h-[5.25rem] sm:px-10"
           style={{ backgroundColor: TAB_BG }}
         >
           เรื่องที่คุณอาจสนใจ
         </h2>
-        <PeekingBear className="-ml-10 h-[4.5rem] w-[5.4rem] shrink-0 sm:h-[7rem] sm:w-[8.4rem]" />
+        <PeekingBear className="-ml-3 h-[4.07rem] w-[5.14rem] shrink-0 sm:h-[5.7rem] sm:w-[7.2rem]" />
       </div>
       <div className="px-4 py-8 sm:px-6 lg:px-8" style={{ backgroundColor: BAND_BG }}>
         <div className="mx-auto max-w-7xl">{children}</div>
