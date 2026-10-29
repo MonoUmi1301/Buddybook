@@ -288,21 +288,25 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
             .sort((a, b) => a.chapter_number - b.chapter_number)
             .map((chapter) => {
               const badge = chapterStatusBadge[chapter.status];
+              // มือถือแสดงบรรทัดล่างเต็มกว้าง, เดสก์ท็อปแสดงใต้ชื่อตอน
+              const meta = (
+                <>
+                  {chapter.word_count.toLocaleString("th-TH")} ตัวอักษร (≈{estimatePageCount(chapter.word_count)} หน้า)
+                  {chapter.status === "scheduled" && chapter.scheduled_publish_at && (
+                    <> · เผยแพร่ {formatDateTime(chapter.scheduled_publish_at)}</>
+                  )}
+                  {chapter.status === "published" && chapter.published_at && (
+                    <> · เผยแพร่เมื่อ {formatDateTime(chapter.published_at)}</>
+                  )}
+                </>
+              );
               return (
-                <li key={chapter.chapter_id} className="flex items-center gap-3 px-4 py-3">
+                <li key={chapter.chapter_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-neutral-900">
                       ตอนที่ {chapter.chapter_number}: {chapter.title}
                     </p>
-                    <p className="text-xs text-neutral-500">
-                      {chapter.word_count.toLocaleString("th-TH")} ตัวอักษร (≈{estimatePageCount(chapter.word_count)} หน้า)
-                      {chapter.status === "scheduled" && chapter.scheduled_publish_at && (
-                        <> · เผยแพร่ {formatDateTime(chapter.scheduled_publish_at)}</>
-                      )}
-                      {chapter.status === "published" && chapter.published_at && (
-                        <> · เผยแพร่เมื่อ {formatDateTime(chapter.published_at)}</>
-                      )}
-                    </p>
+                    <p className="hidden text-xs text-neutral-500 sm:block">{meta}</p>
                   </div>
                   <Tag color={badge.color}>{badge.label}</Tag>
                   <Link
@@ -337,6 +341,7 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
+                  <p className="w-full text-xs text-neutral-500 sm:hidden">{meta}</p>
                 </li>
               );
             })}
