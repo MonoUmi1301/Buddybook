@@ -104,6 +104,12 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
 
   const items = notifications.filter((n) => tabFilter[activeTab].includes(n.type));
   const hasUnread = notifications.some((n) => !n.is_read);
+  // จุดแดงบนแต่ละแท็บ — บอกว่าแจ้งเตือนที่ยังไม่อ่านอยู่หมวดไหน (อัปเดต/คอมเมนต์/กิจกรรม)
+  const unreadByTab: Record<keyof typeof tabFilter, number> = {
+    updates: notifications.filter((n) => !n.is_read && tabFilter.updates.includes(n.type)).length,
+    comments: notifications.filter((n) => !n.is_read && tabFilter.comments.includes(n.type)).length,
+    activity: notifications.filter((n) => !n.is_read && tabFilter.activity.includes(n.type)).length,
+  };
 
   return (
     <div className="relative" ref={ref}>
@@ -142,7 +148,15 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
                   : cn("border-transparent", isDark ? "text-zinc-400 hover:text-zinc-200" : "text-neutral-500 hover:text-neutral-700")
               )}
             >
-              {t.label}
+              <span className="relative inline-block">
+                {t.label}
+                {unreadByTab[t.key] > 0 && (
+                  <span
+                    aria-label={`มีแจ้งเตือนใหม่ ${unreadByTab[t.key]} รายการ`}
+                    className="absolute -right-2.5 -top-1 h-2 w-2 rounded-full bg-red-500"
+                  />
+                )}
+              </span>
             </button>
           ))}
         </div>
