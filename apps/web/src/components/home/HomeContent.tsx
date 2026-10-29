@@ -8,7 +8,7 @@ import { ContinueReadingCoverflow } from "@/components/home/ContinueReadingCover
 import type { ImageAccordionItem } from "@/components/ui/image-accordion";
 import type { ContinueReadingItem } from "@/lib/library";
 import { NovelSection } from "@/components/home/NovelSection";
-import { RecommendedBand } from "@/components/home/RecommendedBand";
+import { RecommendedBand, RecommendedShell } from "@/components/home/RecommendedBand";
 import { CategoryPills } from "@/components/home/CategoryPills";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useTheme } from "@/components/theme/ThemeProvider";
@@ -83,24 +83,27 @@ export function HomeContent({
         <ContinueReadingCoverflow items={continueReading} isLoggedIn={Boolean(user)} />
         <TrendingCoverflow slides={trendingSlides} seeAllHref={`/search?sort=views${modeSuffix}`} />
 
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          {/* ย้ายขึ้นมาไว้บนสุด (เดิมอยู่ล่างสุดก่อน CategoryPills) ตามที่ขอ — ต้องการชูโรงส่วนนี้ */}
-          {recommended === null ? (
-            <section className="mt-10 rounded-2xl bg-brand-tan/90 px-4 py-8 text-center shadow-md sm:px-6 lg:px-8">
+        {/* ย้ายขึ้นมาไว้บนสุด (เดิมอยู่ล่างสุดก่อน CategoryPills) ตามที่ขอ — ต้องการชูโรงส่วนนี้ · พื้นหลังยาวเต็มขอบจอ จึงอยู่นอก container */}
+        {recommended === null ? (
+          <RecommendedShell>
+            <div className="text-center">
               <p className="text-lg font-bold text-brand-brown">เข้าสู่ระบบเพื่อดูคำแนะนำที่เหมาะกับคุณ</p>
               <p className="mt-1 text-sm text-brand-brown/80">
                 เราจะแนะนำนิยายจากความสนใจและสิ่งที่คุณเคยอ่าน ไม่ใช่แค่เรื่องที่กำลังฮิต
               </p>
-            </section>
-          ) : recommended.length === 0 ? (
-            <section className="mt-10 rounded-2xl bg-brand-tan/20 px-4 py-8 text-center shadow-sm sm:px-6 lg:px-8">
-              <p className="text-sm text-brand-brown/80">
-                ยังไม่มีคำแนะนำสำหรับคุณตอนนี้ — ลองเลือกความสนใจเพิ่ม หรืออ่าน/รีวิวนิยายสักเรื่องก่อน
-              </p>
-            </section>
-          ) : (
-            <RecommendedBand novels={recommended} />
-          )}
+            </div>
+          </RecommendedShell>
+        ) : recommended.length === 0 ? (
+          <RecommendedShell>
+            <p className="text-center text-sm text-brand-brown/80">
+              ยังไม่มีคำแนะนำสำหรับคุณตอนนี้ — ลองเลือกความสนใจเพิ่ม หรืออ่าน/รีวิวนิยายสักเรื่องก่อน
+            </p>
+          </RecommendedShell>
+        ) : (
+          <RecommendedBand novels={recommended} />
+        )}
+
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
 
           {top.length > 0 && (
             <NovelSection
