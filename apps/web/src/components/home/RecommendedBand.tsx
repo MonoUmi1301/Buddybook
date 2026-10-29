@@ -18,7 +18,7 @@ function PeekingBear({ className }: { className?: string }) {
       <circle cx="53" cy="36" r="23" fill={EAR_INNER} />
       <path d="M0 132V33H66A72 82 0 0 1 138 115V132Z" fill={BEAR_BODY} />
       <circle cx="131" cy="83" r="28" fill={BEAR_BODY} />
-      <ellipse cx="138" cy="81" rx="9" ry="19" transform="rotate(-25 138 81)" fill={EAR_INNER} />
+      <path d="M-20 0A20 20 0 0 1 20 0Z" transform="translate(130 84) rotate(65)" fill={EAR_INNER} />
       <ellipse cx="66" cy="93" rx="11.5" ry="8" transform="rotate(20 66 93)" fill={BEAR_DARK} />
     </svg>
   );
