@@ -56,6 +56,36 @@ function AccordionImage({ src }: { src: string }) {
   );
 }
 
+/** ปุ่มข้างบนมือถือ — หมี = เรื่องที่เปิดอยู่ */
+function BearIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 36" className={className} aria-hidden="true">
+      <circle cx="8" cy="8" r="7" fill="#BF9674" />
+      <circle cx="8" cy="8" r="3.8" fill="#F4A9A9" />
+      <circle cx="32" cy="8" r="7" fill="#BF9674" />
+      <circle cx="32" cy="8" r="3.8" fill="#F4A9A9" />
+      <ellipse cx="20" cy="21" rx="18" ry="14" fill="#BF9674" />
+      <ellipse cx="20" cy="24" rx="2.2" ry="1.7" fill="#5A3A22" />
+    </svg>
+  );
+}
+
+/** ปุ่มข้างบนมือถือ — วงกลมอุ้งเท้า = เรื่องอื่น ๆ */
+function PawIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 40 40" className={className} aria-hidden="true">
+      <circle cx="20" cy="20" r="19.2" fill="#fff" stroke="#E6D3C2" strokeWidth="1.2" />
+      <g fill="#D9BFA6">
+        <ellipse cx="20" cy="25" rx="6.5" ry="5.2" transform="rotate(-15 20 25)" />
+        <ellipse cx="12.5" cy="19" rx="2.6" ry="3.2" transform="rotate(-20 12.5 19)" />
+        <ellipse cx="17.5" cy="13.5" rx="2.6" ry="3.3" transform="rotate(-6 17.5 13.5)" />
+        <ellipse cx="23.5" cy="13.5" rx="2.6" ry="3.3" transform="rotate(6 23.5 13.5)" />
+        <ellipse cx="28.5" cy="19" rx="2.6" ry="3.2" transform="rotate(20 28.5 19)" />
+      </g>
+    </svg>
+  );
+}
+
 /**
  * แผงรูปที่ขยายออกทีละแผง (hero หน้าแรก)
  * - เมาส์: ขยายเมื่อ hover หรือ focus, คลิกแผงที่ขยายอยู่ = เปิด
@@ -109,8 +139,16 @@ export function ImageAccordion({
       {items.map((item, index) => {
         const isActive = index === active;
         return (
-          <button
+          <div
             key={item.id}
+            className={cn(
+              // มือถือ: แถว = แผง + ปุ่มข้าง; md ขึ้นไปให้ wrapper หายไป แผงยังเป็น flex child ตรงของแถวเดิม
+              "max-md:flex max-md:items-center max-md:gap-2 max-md:transition-[height] max-md:duration-200 max-md:ease-out md:contents",
+              "motion-reduce:transition-none",
+              isActive ? "max-md:h-[260px]" : "max-md:h-[56px]"
+            )}
+          >
+          <button
             type="button"
             aria-label={`${item.title}${item.subtitle ? ` โดย ${item.subtitle}` : ""}`}
             aria-expanded={isActive}
@@ -119,12 +157,12 @@ export function ImageAccordion({
             onClick={() => onClick(index, item)}
             className={cn(
               "group relative shrink-0 overflow-hidden rounded-2xl bg-neutral-200 text-left shadow-md",
-              "transition-all duration-700 ease-in-out motion-reduce:transition-none",
+              "transition-all duration-700 ease-in-out motion-reduce:transition-none max-md:transition-none",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2",
               "h-full",
               isActive
-                ? cn(expandedWidth, "max-lg:w-[min(300px,calc(100%_-_var(--acc-rest)_*_64px))] max-md:h-[260px] max-md:w-full")
-                : cn(collapsedWidth, "max-lg:w-[56px] max-md:h-[56px] max-md:w-full")
+                ? cn(expandedWidth, "max-lg:w-[min(300px,calc(100%_-_var(--acc-rest)_*_64px))] max-md:w-auto max-md:min-w-0 max-md:flex-1")
+                : cn(collapsedWidth, "max-lg:w-[56px] max-md:w-auto max-md:min-w-0 max-md:flex-1")
             )}
           >
             <AccordionImage src={item.imageUrl} />
@@ -134,7 +172,7 @@ export function ImageAccordion({
             <div
               className={cn(
                 "absolute inset-x-0 bottom-0 p-5 text-white transition-opacity duration-500 max-md:p-4",
-                isActive ? "opacity-100 delay-200" : "pointer-events-none opacity-0"
+                isActive ? "opacity-100 delay-200 max-md:delay-0 max-md:duration-150" : "pointer-events-none opacity-0"
               )}
             >
               {item.badge && (
@@ -160,6 +198,16 @@ export function ImageAccordion({
               {item.title}
             </span>
           </button>
+          <button
+            type="button"
+            aria-label={`ดู ${item.title}`}
+            aria-pressed={isActive}
+            onClick={() => setActive(index)}
+            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 md:hidden"
+          >
+            {isActive ? <BearIcon className="h-9 w-10" /> : <PawIcon className="h-10 w-10" />}
+          </button>
+          </div>
         );
       })}
     </div>
