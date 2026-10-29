@@ -13,13 +13,13 @@ const EAR_INNER = "#FAD6D6";
 /** หมีโผล่หลังหัวแฟ้ม — ฐานของ SVG ชิดขอบบนของแถบพื้นหลัง */
 function PeekingBear({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 130 103" className={className} aria-hidden="true">
-      <circle cx="34" cy="26" r="25" fill={BEAR_BODY} />
-      <circle cx="36" cy="22" r="15" fill={EAR_INNER} />
-      <circle cx="98" cy="67" r="20" fill={BEAR_BODY} />
-      <circle cx="100" cy="67" r="12" fill={EAR_INNER} />
-      <path d="M0 103V52C0 38 14 30 34 30H52C86 30 103 52 103 80V103Z" fill={BEAR_BODY} />
-      <ellipse cx="43" cy="72" rx="7" ry="4.5" transform="rotate(25 43 72)" fill={BEAR_DARK} />
+    <svg viewBox="0 0 162 132" className={className} aria-hidden="true">
+      <circle cx="52" cy="34" r="34" fill={BEAR_BODY} />
+      <circle cx="53" cy="36" r="23" fill={EAR_INNER} />
+      <path d="M0 132V33H66A72 82 0 0 1 138 115V132Z" fill={BEAR_BODY} />
+      <circle cx="131" cy="83" r="28" fill={BEAR_BODY} />
+      <ellipse cx="138" cy="81" rx="9" ry="19" transform="rotate(-25 138 81)" fill={EAR_INNER} />
+      <ellipse cx="66" cy="93" rx="11.5" ry="8" transform="rotate(20 66 93)" fill={BEAR_DARK} />
     </svg>
   );
 }
@@ -30,12 +30,12 @@ export function RecommendedShell({ children }: { children: ReactNode }) {
     <section className="mt-10 w-full">
       <div className="flex items-end">
         <h2
-          className="relative z-10 flex h-[3.75rem] items-center rounded-tl-[2rem] rounded-tr-[2.25rem] px-6 text-h3 text-brand-brown sm:h-[5.25rem] sm:px-10"
+          className="relative z-10 flex h-[3.75rem] items-center rounded-tl-[2rem] rounded-tr-[1.6rem] sm:rounded-tr-[2.2rem] px-6 text-h3 text-brand-brown sm:h-[5.25rem] sm:px-10"
           style={{ backgroundColor: TAB_BG }}
         >
           เรื่องที่คุณอาจสนใจ
         </h2>
-        <PeekingBear className="-ml-3 h-[4.07rem] w-[5.14rem] shrink-0 sm:h-[5.7rem] sm:w-[7.2rem]" />
+        <PeekingBear className="-ml-[0.31rem] h-[4.125rem] w-[5.06rem] shrink-0 sm:-ml-[0.44rem] sm:h-[5.775rem] sm:w-[7.09rem]" />
       </div>
       <div className="px-4 py-8 sm:px-6 lg:px-8" style={{ backgroundColor: BAND_BG }}>
         <div className="mx-auto max-w-7xl">{children}</div>
