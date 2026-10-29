@@ -148,12 +148,12 @@ export function NotificationPanel({ theme = "dark" }: { theme?: "dark" | "light"
                   : cn("border-transparent", isDark ? "text-zinc-400 hover:text-zinc-200" : "text-neutral-500 hover:text-neutral-700")
               )}
             >
-              <span className="relative inline-block">
+              <span className="inline-flex items-center gap-1.5">
                 {t.label}
                 {unreadByTab[t.key] > 0 && (
                   <span
                     aria-label={`มีแจ้งเตือนใหม่ ${unreadByTab[t.key]} รายการ`}
-                    className="absolute -right-2.5 -top-1 h-2 w-2 rounded-full bg-red-500"
+                    className="h-2 w-2 shrink-0 rounded-full bg-red-500"
                   />
                 )}
               </span>
