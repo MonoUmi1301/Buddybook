@@ -179,6 +179,8 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
 
   return (
     <form onSubmit={handleAsync(handleSubmit)} className="space-y-5 rounded-card border border-neutral-200 p-5">
+      {/* ปกอยู่ซ้าย ประเภทผลงานอยู่ขวาบน (จอแคบ: ซ้อนลงมาใต้ปก) */}
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <p className="mb-1.5 text-sm font-medium text-neutral-700">ปกนิยาย</p>
         <label className="group relative flex h-40 w-32 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-neutral-300 bg-neutral-50 transition-colors hover:border-primary-400">
@@ -205,9 +207,9 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         )}
       </div>
 
-      <div>
+      <div className="sm:text-right">
         <p className="mb-1.5 text-sm font-medium text-neutral-700">ประเภทผลงาน</p>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
           <span className="text-sm text-neutral-900">{legalStatus === "fan-fiction" ? "แฟนฟิค" : legalStatusLabel[legalStatus]}</span>
           {legalStatus !== "translation" && (
             <Button
@@ -223,6 +225,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         {legalStatus !== normalizeLegalStatus(novel.legal_status) && (
           <p className="mt-1.5 text-xs text-primary-600">เปลี่ยนประเภทแล้ว จะมีผลเมื่อกดบันทึก</p>
         )}
+      </div>
       </div>
 
       <Input label="ชื่อเรื่อง" value={title} onChange={(e) => setTitle(e.target.value)} required />
