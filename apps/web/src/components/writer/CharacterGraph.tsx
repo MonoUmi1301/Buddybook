@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { CornerDownLeft, Download, Eye, EyeOff, Loader2, Trash2, UserRoundPlus, X } from "lucide-react";
+import { Download, Eye, EyeOff, Loader2, Trash2, UserRoundPlus, X } from "lucide-react";
 import { CharacterNode, CharacterNodeActionsContext, type CharacterNodeData } from "@/components/writer/CharacterNode";
 import { AddCharacterModal } from "@/components/writer/AddCharacterModal";
 import { Avatar } from "@/components/ui/Avatar";
@@ -662,33 +662,23 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
               </button>
             </div>
 
-            <div className="relative">
-              <textarea
-                value={editingEdge.label}
-                maxLength={100}
-                rows={2}
-                onChange={(e) => setEditingEdge({ ...editingEdge, label: e.target.value })}
-                onKeyDown={(e) => {
-                  // Enter = บันทึก, Shift+Enter = ขึ้นบรรทัดใหม่ (มือถือ/แท็บเล็ตใช้ปุ่มลูกศร return แทน)
-                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault();
-                    void saveEdgeLabel();
-                  }
-                }}
-                placeholder="เช่น พี่น้อง, คู่รัก, ศัตรูคู่แค้น"
-                autoFocus
-                className="w-full resize-none rounded-lg border border-neutral-300 py-2.5 pl-4 pr-11 text-sm focus:border-primary-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                aria-label="ขึ้นบรรทัดใหม่"
-                title="ขึ้นบรรทัดใหม่ (Shift+Enter)"
-                onClick={() => setEditingEdge({ ...editingEdge, label: `${editingEdge.label}\n` })}
-                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-primary-500"
-              >
-                <CornerDownLeft className="h-4 w-4" />
-              </button>
-            </div>
+            <textarea
+              value={editingEdge.label}
+              maxLength={100}
+              rows={2}
+              onChange={(e) => setEditingEdge({ ...editingEdge, label: e.target.value })}
+              onKeyDown={(e) => {
+                // เดสก์ท็อป: Enter = บันทึก, Shift+Enter = ขึ้นบรรทัดใหม่
+                // มือถือ/แท็บเล็ต (จอสัมผัส): ปุ่ม return บนคีย์บอร์ด = ขึ้นบรรทัดใหม่ แล้วกดปุ่มบันทึกแทน
+                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                if (window.matchMedia("(pointer: coarse)").matches) return;
+                e.preventDefault();
+                void saveEdgeLabel();
+              }}
+              placeholder="เช่น พี่น้อง, คู่รัก, ศัตรูคู่แค้น"
+              autoFocus
+              className="w-full resize-none rounded-lg border border-neutral-300 px-4 py-2.5 text-sm focus:border-primary-400 focus:outline-none"
+            />
 
             <p className="mb-1.5 mt-3 text-xs font-medium text-neutral-500">รูปแบบเส้น</p>
             <div className="flex gap-2">
