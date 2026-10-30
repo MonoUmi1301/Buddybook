@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Download, Eye, EyeOff, Loader2, Trash2, UserRoundPlus, X } from "lucide-react";
+import { CornerDownLeft, Download, Eye, EyeOff, Loader2, Trash2, UserRoundPlus, X } from "lucide-react";
 import { CharacterNode, CharacterNodeActionsContext, type CharacterNodeData } from "@/components/writer/CharacterNode";
 import { AddCharacterModal } from "@/components/writer/AddCharacterModal";
 import { Avatar } from "@/components/ui/Avatar";
@@ -85,9 +85,26 @@ function readEdgeStyle(edge: Edge): EdgeStyleSetting {
 /** แปลงค่าที่ผู้ใช้ตั้ง (สี/ลูกศร) เป็น prop ของ react-flow — end = ชี้จากตัวที่ลากเริ่ม ไปหาตัวปลายทาง */
 export function decorateEdge(edge: Edge, setting: EdgeStyleSetting = readEdgeStyle(edge)): Edge {
   const marker = { type: MarkerType.ArrowClosed, color: setting.color, width: 18, height: 18 };
+  // ป้ายหลายบรรทัด: SVG <text> ไม่ขึ้นบรรทัดใหม่ให้เอง จึงแตกเป็น <tspan> และเก็บข้อความดิบไว้ใน data.raw_label
+  const rawLabel =
+    typeof edge.label === "string" ? edge.label : ((edge.data as { raw_label?: string } | undefined)?.raw_label ?? "");
+  const lines = rawLabel.split("\n");
+  const label =
+    lines.length > 1 ? (
+      <>
+        {lines.map((line, i) => (
+          <tspan key={i} x={0} dy={i === 0 ? 0 : "1.2em"}>
+            {line}
+          </tspan>
+        ))}
+      </>
+    ) : (
+      edge.label
+    );
   return {
     ...edge,
-    data: { ...(edge.data ?? {}), edge_style: setting },
+    label,
+    data: { ...(edge.data ?? {}), edge_style: setting, raw_label: rawLabel },
     style: { stroke: setting.color, strokeWidth: 2 },
     // ใส่สี/ขนาดตรง ๆ (ไม่พึ่ง CSS variable) — ไม่งั้นตอนดาวน์โหลดรูป พื้นหลังป้ายจะกลายเป็นสีดำ
     labelStyle: { fill: "#334155", fontSize: 12, fontWeight: 500, fontFamily: "inherit" },
@@ -362,7 +379,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
     const setting = readEdgeStyle(edge);
     setEditingEdge({
       id: edge.id,
-      label: typeof edge.label === "string" ? edge.label : "",
+      label: (edge.data as { raw_label?: string } | undefined)?.raw_label ?? (typeof edge.label === "string" ? edge.label : ""),
       edgeType: isEdgeLineType(edge.type) ? edge.type : "default",
       color: setting.color,
       arrow: setting.arrow,
@@ -645,16 +662,33 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
               </button>
             </div>
 
-            <input
-              value={editingEdge.label}
-              onChange={(e) => setEditingEdge({ ...editingEdge, label: e.target.value })}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void saveEdgeLabel();
-              }}
-              placeholder="เช่น พี่น้อง, คู่รัก, ศัตรูคู่แค้น"
-              autoFocus
-              className="h-11 w-full rounded-lg border border-neutral-300 px-4 text-sm focus:border-primary-400 focus:outline-none"
-            />
+            <div className="relative">
+              <textarea
+                value={editingEdge.label}
+                maxLength={100}
+                rows={2}
+                onChange={(e) => setEditingEdge({ ...editingEdge, label: e.target.value })}
+                onKeyDown={(e) => {
+                  // Enter = บันทึก, Shift+Enter = ขึ้นบรรทัดใหม่ (มือถือ/แท็บเล็ตใช้ปุ่มลูกศร return แทน)
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    void saveEdgeLabel();
+                  }
+                }}
+                placeholder="เช่น พี่น้อง, คู่รัก, ศัตรูคู่แค้น"
+                autoFocus
+                className="w-full resize-none rounded-lg border border-neutral-300 py-2.5 pl-4 pr-11 text-sm focus:border-primary-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                aria-label="ขึ้นบรรทัดใหม่"
+                title="ขึ้นบรรทัดใหม่ (Shift+Enter)"
+                onClick={() => setEditingEdge({ ...editingEdge, label: `${editingEdge.label}\n` })}
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md text-neutral-500 hover:bg-neutral-100 hover:text-primary-500"
+              >
+                <CornerDownLeft className="h-4 w-4" />
+              </button>
+            </div>
 
             <p className="mb-1.5 mt-3 text-xs font-medium text-neutral-500">รูปแบบเส้น</p>
             <div className="flex gap-2">
