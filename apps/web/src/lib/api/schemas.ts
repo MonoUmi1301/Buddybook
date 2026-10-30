@@ -285,6 +285,7 @@ export const updateNovelSchema = z
     introduction: z.string().max(50000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: novelStatusEnum.optional(),
+    legal_status: legalStatusEnum.optional(),
     visibility: visibilityEnum.optional(),
     tag_ids: z.array(z.number().int().positive()).optional(),
     format: novelFormatEnum.optional(),

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { BookOpen, Eye, EyeOff, Pencil, Plus, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Tag } from "@/components/ui/Tag";
-import { EditNovelForm } from "@/components/writer/EditNovelForm";
+import { EditNovelForm, normalizeLegalStatus } from "@/components/writer/EditNovelForm";
 import { ModerationNotice } from "@/components/writer/ModerationNotice";
 import type { NovelWizardTag } from "@/components/writer/CreateNovelForm";
 import type { ManagedNovel, ManagedChapter } from "@/components/writer/novelManagementTypes";
@@ -224,6 +224,14 @@ export function NovelManagementPanel({ novel: initialNovel, chapters: initialCha
             {novel.synopsis && <p className="mt-2 line-clamp-3 text-sm text-neutral-600">{novel.synopsis}</p>}
 
             <div className="mt-3 flex flex-wrap gap-1.5">
+              {(() => {
+                const legal = normalizeLegalStatus(novel.legal_status);
+                return (
+                  <Tag color={legal === "fan-fiction" ? "rose" : legal === "translation" ? "amber" : "orange"}>
+                    {legal === "fan-fiction" ? "แฟนฟิค" : legal === "translation" ? "งานแปล" : "นิยายต้นฉบับ"}
+                  </Tag>
+                );
+              })()}
               <Tag color="sky">{formatLabel[novel.format]}</Tag>
               <Tag color="violet">{contentRatingLabel[novel.content_rating]}</Tag>
               {novel.is_translated && <Tag color="amber">งานแปล</Tag>}

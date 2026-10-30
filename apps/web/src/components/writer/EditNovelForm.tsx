@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, Loader2, Repeat } from "lucide-react";
+import { legalStatusLabel } from "@/lib/novelLabels";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { IntroductionEditor } from "@/components/writer/IntroductionEditor";
@@ -38,6 +39,10 @@ const statusOptions: { value: "ongoing" | "completed" | "hiatus"; label: string 
   { value: "hiatus", label: "พักการเขียน" },
 ];
 
+export function normalizeLegalStatus(value: string): ManagedNovel["legal_status"] {
+  return value === "fan_fiction" || value === "fan-fiction" ? "fan-fiction" : (value as ManagedNovel["legal_status"]);
+}
+
 /** แก้ไขข้อมูลนิยาย — ใช้ชุดฟิลด์เดียวกับขั้น 2 ของ CreateNovelForm แต่ PATCH แทน POST
  *  (Phase D ตามแพลน: "edit entry point reusing the step-2 wizard form in edit mode") */
 export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormProps) {
@@ -60,6 +65,9 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
     selectedIds: new Set(novel.tags.filter((t) => t.category === "fandom").map((t) => t.tag_id)),
     newNames: [],
   });
+  // API คืนค่า DB เป็น "fan_fiction" แต่ type ฝั่งเว็บเป็น "fan-fiction" — ทำให้เป็นรูปเดียวก่อนใช้
+  const [legalStatus, setLegalStatus] = useState<ManagedNovel["legal_status"]>(normalizeLegalStatus(novel.legal_status));
+  const [pendingLegalStatus, setPendingLegalStatus] = useState<ManagedNovel["legal_status"] | null>(null);
   const [contentRating, setContentRating] = useState(novel.content_rating);
   const [status, setStatus] = useState(novel.status);
   const [allowDonations, setAllowDonations] = useState(novel.allow_donations);
@@ -125,6 +133,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
           pairing_tag_names: [],
           fandom_tag_ids: Array.from(fandomTagValue.selectedIds),
           fandom_tag_names: fandomTagValue.newNames,
+          legal_status: legalStatus,
           content_rating: contentRating,
           status,
           allow_donations: allowDonations,
@@ -149,6 +158,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         synopsis: synopsis.trim() || null,
         introduction: introduction.trim() || null,
         cover_image_url: coverImageUrl,
+        legal_status: legalStatus,
         content_rating: contentRating,
         status,
         allow_donations: allowDonations,
@@ -192,6 +202,26 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
             onCancel={() => setCropFile(null)}
             onConfirm={handleAsync(handleCoverChange)}
           />
+        )}
+      </div>
+
+      <div>
+        <p className="mb-1.5 text-sm font-medium text-neutral-700">ประเภทผลงาน</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-neutral-900">{legalStatus === "fan-fiction" ? "แฟนฟิค" : legalStatusLabel[legalStatus]}</span>
+          {legalStatus !== "translation" && (
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              onClick={() => setPendingLegalStatus(legalStatus === "fan-fiction" ? "original" : "fan-fiction")}
+            >
+              <Repeat className="h-3.5 w-3.5" /> เปลี่ยนเป็น{legalStatus === "fan-fiction" ? "นิยายต้นฉบับ" : "แฟนฟิค"}
+            </Button>
+          )}
+        </div>
+        {legalStatus !== normalizeLegalStatus(novel.legal_status) && (
+          <p className="mt-1.5 text-xs text-primary-600">เปลี่ยนประเภทแล้ว จะมีผลเมื่อกดบันทึก</p>
         )}
       </div>
 
@@ -249,7 +279,7 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
         <TagPicker allTags={pairingTags} selectedIds={pairingTagIds} onChange={setPairingTagIds} max={5} />
       </div>
 
-      {novel.legal_status === "fan-fiction" && (
+      {legalStatus === "fan-fiction" && (
         <div>
           <p className="mb-1.5 text-sm font-medium text-neutral-700">Fandom / ต้นฉบับ</p>
           <TagInput allTags={fandomTags} value={fandomTagValue} onChange={setFandomTagValue} max={5} />
@@ -336,6 +366,34 @@ export function EditNovelForm({ novel, tags, onSaved, onCancel }: EditNovelFormP
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
+
+      {pendingLegalStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-card bg-white p-6 text-center shadow-xl">
+            <h2 className="text-h3 text-neutral-900">แน่ใจนะว่าจะเปลี่ยนประเภทนิยาย?</h2>
+            <p className="mt-2 text-sm text-neutral-500">
+              จะเปลี่ยนจาก{legalStatus === "fan-fiction" ? "แฟนฟิค" : "นิยายต้นฉบับ"}เป็น
+              {pendingLegalStatus === "fan-fiction" ? "แฟนฟิค" : "นิยายต้นฉบับ"} ผลต่อการค้นหาและการแนะนำนิยายของเรื่องนี้
+              {pendingLegalStatus === "original" && " (แท็ก Fandom จะไม่แสดงในฟอร์มอีก)"}
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button type="button" variant="outline" onClick={() => setPendingLegalStatus(null)}>
+                ยกเลิก
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  setLegalStatus(pendingLegalStatus);
+                  setPendingLegalStatus(null);
+                }}
+              >
+                ยืนยันเปลี่ยน
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 pt-2">
         <Button type="button" variant="outline" onClick={onCancel}>
