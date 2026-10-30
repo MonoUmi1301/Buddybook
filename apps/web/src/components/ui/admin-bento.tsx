@@ -340,7 +340,7 @@ function HeroTile({ adminName, revenueDaily }: { adminName: string; revenueDaily
 
   return (
     <Tile className="sm:col-span-2 xl:col-start-1 xl:row-start-1" label="รายได้เติมเหรียญ">
-      <p className="text-sm text-neutral-500">สวัสดี, {adminName} 👋</p>
+      <p className="text-sm text-neutral-500">สวัสดี, {adminName}</p>
       <div className="mt-1 flex flex-wrap items-end gap-x-3 gap-y-1">
         <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-neutral-900 sm:text-4xl">
           {thb.format(Math.round(shown))}
@@ -1026,7 +1026,6 @@ function ActivityTile({ items }: { items: ActivityItem[] }) {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                  {a.amount !== null && <span className="font-mono text-xs font-semibold tabular-nums text-neutral-900">{thb.format(a.amount)}</span>}
                   <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", status.className)}>{status.label}</span>
                 </div>
               </li>
