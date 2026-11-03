@@ -24,7 +24,8 @@ import { EMAIL_DOMAIN_ERROR, isAllowedEmailDomain } from "@/lib/emailDomains";
 // แนะนำ) แต่ 12 เป็นค่าที่แนะนำกันทั่วไปมากกว่าสำหรับปี 2026 (เผื่อ headroom กับฮาร์ดแวร์ที่เร็วขึ้น)
 // ไม่กระทบ hash เดิมที่มีอยู่แล้วในฐานข้อมูล — bcrypt เก็บ cost factor ไว้ใน hash string เอง
 // user เก่าจะยัง login ได้ปกติด้วย cost เดิม (10) จนกว่าจะเปลี่ยนรหัสผ่านครั้งถัดไปถึงจะได้ cost ใหม่
-const SALT_ROUNDS = 12;
+// ปรับได้ด้วย BCRYPT_ROUNDS (เทสต์ใช้ 4 — production ต้อง ≥10, ดู config/env.ts)
+const SALT_ROUNDS = env.BCRYPT_ROUNDS;
 
 interface RegisterInput {
   username: string;

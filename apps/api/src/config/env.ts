@@ -101,6 +101,9 @@ const envSchema = z.object({
   // เพิ่มภายหลัง (ถอนเงินนักเขียน) — ขั้นต่ำ coin ต่อการขอถอน 1 ครั้ง และอัตรา coin → บาท
   WITHDRAWAL_MIN_COINS: z.coerce.number().int().positive().default(500),
   COIN_TO_THB_RATE: z.coerce.number().positive().default(1),
+  // cost factor ของ bcrypt (ดู modules/auth/auth.service.ts) — vitest ตั้ง 4 ไว้ (vitest.config.ts) เพราะ bcryptjs
+  // เป็น JS ล้วน cost 12 บนเครื่อง Windows ที่ CPU ยุ่งใช้หลายวิต่อ hash จนเทสต์สมัครสมาชิกเกิน testTimeout
+  BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
 });
 
 const parsed = envSchema
@@ -116,6 +119,9 @@ const parsed = envSchema
       }
       if (v.INTERNAL_SERVICE_TOKEN && v.INTERNAL_SERVICE_TOKEN.length < 32) {
         ctx.addIssue({ code: "custom", path: ["INTERNAL_SERVICE_TOKEN"], message: "INTERNAL_SERVICE_TOKEN must be at least 32 characters in production" });
+      }
+      if (v.BCRYPT_ROUNDS < 10) {
+        ctx.addIssue({ code: "custom", path: ["BCRYPT_ROUNDS"], message: "BCRYPT_ROUNDS must be at least 10 in production" });
       }
     }
     // เปิด KYC แล้วต้องตั้งค่าครบ — ไม่งั้นจะได้ผู้ใช้ที่สแกนบัตรเสร็จแต่ webhook ยืนยันลายเซ็นไม่ได้

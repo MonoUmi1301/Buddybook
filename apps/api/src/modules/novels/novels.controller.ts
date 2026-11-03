@@ -168,6 +168,8 @@ const updateNovelBodySchema = z
     introduction: z.string().max(50000).nullable().optional(),
     cover_image_url: z.string().url().optional(),
     status: z.enum(["ongoing", "completed", "hiatus"]).optional(),
+    // เปลี่ยนประเภทผลงาน (นิยายต้นฉบับ ↔ แฟนฟิค) จากหน้าแก้ไขข้อมูล
+    legal_status: z.enum(["original", "fan-fiction", "translation"]).optional(),
     // post-moderation — เผยแพร่ได้ทันทีไม่ต้องรออนุมัติ; suspended ตั้งได้เฉพาะแอดมิน (PATCH /admin/novels/:id/suspend)
     visibility: z.enum(["published", "private"]).optional(),
     tag_ids: z.array(z.number().int().positive()).optional(),

@@ -85,9 +85,26 @@ function readEdgeStyle(edge: Edge): EdgeStyleSetting {
 /** แปลงค่าที่ผู้ใช้ตั้ง (สี/ลูกศร) เป็น prop ของ react-flow — end = ชี้จากตัวที่ลากเริ่ม ไปหาตัวปลายทาง */
 export function decorateEdge(edge: Edge, setting: EdgeStyleSetting = readEdgeStyle(edge)): Edge {
   const marker = { type: MarkerType.ArrowClosed, color: setting.color, width: 18, height: 18 };
+  // ป้ายหลายบรรทัด: SVG <text> ไม่ขึ้นบรรทัดใหม่ให้เอง จึงแตกเป็น <tspan> และเก็บข้อความดิบไว้ใน data.raw_label
+  const rawLabel =
+    typeof edge.label === "string" ? edge.label : ((edge.data as { raw_label?: string } | undefined)?.raw_label ?? "");
+  const lines = rawLabel.split("\n");
+  const label =
+    lines.length > 1 ? (
+      <>
+        {lines.map((line, i) => (
+          <tspan key={i} x={0} dy={i === 0 ? 0 : "1.2em"}>
+            {line}
+          </tspan>
+        ))}
+      </>
+    ) : (
+      edge.label
+    );
   return {
     ...edge,
-    data: { ...(edge.data ?? {}), edge_style: setting },
+    label,
+    data: { ...(edge.data ?? {}), edge_style: setting, raw_label: rawLabel },
     style: { stroke: setting.color, strokeWidth: 2 },
     // ใส่สี/ขนาดตรง ๆ (ไม่พึ่ง CSS variable) — ไม่งั้นตอนดาวน์โหลดรูป พื้นหลังป้ายจะกลายเป็นสีดำ
     labelStyle: { fill: "#334155", fontSize: 12, fontWeight: 500, fontFamily: "inherit" },
@@ -362,7 +379,7 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
     const setting = readEdgeStyle(edge);
     setEditingEdge({
       id: edge.id,
-      label: typeof edge.label === "string" ? edge.label : "",
+      label: (edge.data as { raw_label?: string } | undefined)?.raw_label ?? (typeof edge.label === "string" ? edge.label : ""),
       edgeType: isEdgeLineType(edge.type) ? edge.type : "default",
       color: setting.color,
       arrow: setting.arrow,
@@ -645,15 +662,22 @@ export function CharacterGraph({ novelId, initialCharacters, initialEdges, initi
               </button>
             </div>
 
-            <input
+            <textarea
               value={editingEdge.label}
+              maxLength={100}
+              rows={2}
               onChange={(e) => setEditingEdge({ ...editingEdge, label: e.target.value })}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void saveEdgeLabel();
+                // เดสก์ท็อป: Enter = บันทึก, Shift+Enter = ขึ้นบรรทัดใหม่
+                // มือถือ/แท็บเล็ต (จอสัมผัส): ปุ่ม return บนคีย์บอร์ด = ขึ้นบรรทัดใหม่ แล้วกดปุ่มบันทึกแทน
+                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                if (window.matchMedia("(pointer: coarse)").matches) return;
+                e.preventDefault();
+                void saveEdgeLabel();
               }}
               placeholder="เช่น พี่น้อง, คู่รัก, ศัตรูคู่แค้น"
               autoFocus
-              className="h-11 w-full rounded-lg border border-neutral-300 px-4 text-sm focus:border-primary-400 focus:outline-none"
+              className="w-full resize-none rounded-lg border border-neutral-300 px-4 py-2.5 text-sm focus:border-primary-400 focus:outline-none"
             />
 
             <p className="mb-1.5 mt-3 text-xs font-medium text-neutral-500">รูปแบบเส้น</p>

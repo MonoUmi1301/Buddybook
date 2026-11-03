@@ -300,6 +300,7 @@ interface UpdateNovelInput {
   introduction?: string | null;
   cover_image_url?: string;
   status?: NovelStatus;
+  legal_status?: CreateNovelInput["legal_status"];
   visibility?: Visibility;
   tag_ids?: number[];
   format?: NovelFormat;
@@ -338,7 +339,8 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
   if (input.visibility === "suspended") throw ApiError.forbidden("Forbidden");
   await assertValidCategoryHierarchy(input.primary_tag_id, input.secondary_tag_id);
 
-  const { tag_ids, tag_names, pairing_tag_ids, pairing_tag_names, fandom_tag_ids, fandom_tag_names, ...rest } = input;
+  const { tag_ids, tag_names, pairing_tag_ids, pairing_tag_names, fandom_tag_ids, fandom_tag_names, legal_status, ...restInput } = input;
+  const rest = { ...restInput, ...(legal_status ? { legal_status: LEGAL_STATUS_MAP[legal_status] } : {}) };
   // แนะนำเรื่องเป็น HTML จาก Quill — กรองก่อนเก็บเสมอ (null = ล้างค่า, undefined = ไม่แตะ)
   if (rest.introduction !== undefined) rest.introduction = toSafeRichText(rest.introduction);
   // แตะแท็กกลุ่มไหนกลุ่มหนึ่ง = ถือว่าส่ง "ชุดแท็กที่ต้องการทั้งหมด" มาแทนที่ทั้งก้อน (novel_tags เป็น
@@ -395,6 +397,7 @@ export async function updateNovel(novel_id: string, user_id: string, input: Upda
         introduction: true,
         cover_image_url: true,
         status: true,
+        legal_status: true,
         visibility: true,
         format: true,
         is_translated: true,

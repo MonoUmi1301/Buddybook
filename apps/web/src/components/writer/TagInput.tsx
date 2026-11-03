@@ -78,8 +78,36 @@ export function TagInput({ allTags, value, onChange, max = 10 }: TagInputProps) 
     onChange({ selectedIds, newNames: newNames.filter((n) => n !== name) });
   }
 
+  // คีย์บอร์ดมือถือ (Android/iOS/IME ไทย) มักไม่ส่ง e.key === "," ตรง ๆ — ดักที่ค่าที่พิมพ์แทน:
+  // เจอ , (หรือ ， ของ IME) ให้ตัดเป็นแท็กทันที ส่วนที่เหลือหลัง , ค้างเป็นข้อความถัดไป
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const text = e.target.value;
+    if (!/[,，]/.test(text)) {
+      setQuery(text);
+      return;
+    }
+    const parts = text.split(/[,，]/);
+    const rest = parts.pop() ?? "";
+    // วางหลายแท็กในครั้งเดียว (a,b,c) — สะสมผลเอง เพราะ addNew อ่าน value จาก props ที่ยังไม่อัปเดตในรอบเดียวกัน
+    let nextIds = selectedIds;
+    let nextNames = newNames;
+    for (const part of parts) {
+      const bare = part.trim().replace(/^#/, "");
+      if (!bare || nextIds.size + nextNames.length >= max) continue;
+      const existing = allTags.find((t) => t.name.toLowerCase() === bare.toLowerCase());
+      if (existing) {
+        nextIds = new Set([...nextIds, existing.tag_id]);
+      } else if (!nextNames.some((n) => n.toLowerCase() === `#${bare}`.toLowerCase())) {
+        nextNames = [...nextNames, `#${bare}`];
+      }
+    }
+    onChange({ selectedIds: nextIds, newNames: nextNames });
+    setQuery(rest);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter" || e.key === "," || e.keyCode === 13) {
       e.preventDefault();
       addNew(query);
     } else if (e.key === "Backspace" && query === "") {
@@ -121,8 +149,11 @@ export function TagInput({ allTags, value, onChange, max = 10 }: TagInputProps) 
       <div className="relative">
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
+          enterKeyHint="done"
+          autoComplete="off"
+          autoCapitalize="off"
           disabled={atMax}
           placeholder={atMax ? `เพิ่มได้สูงสุด ${max} แท็ก` : "พิมพ์ชื่อแท็ก แล้วกด Enter หรือ ,"}
           className={cn(
