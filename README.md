@@ -31,7 +31,11 @@ apps/
 
 ## Demo
 
-[![Demo](docs/screenshots/home.png)](docs/demo/buddybook-demo.mp4)
+
+
+https://github.com/user-attachments/assets/9bc31d23-5d29-4edb-91e5-7e9e948b4491
+
+
 
 > คลิปเดโมความยาวประมาณ 1-2 นาที (กดที่ภาพเพื่อเปิดคลิป)
 
