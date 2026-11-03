@@ -1,4 +1,4 @@
-﻿# BuddyBook — buddybook_code
+# BuddyBook — buddybook_code
 
 Monorepo (npm workspaces) สำหรับโค้ดจริงของแพลตฟอร์ม BuddyBook อ้างอิงสเปกทั้งหมดจาก `buddybook_real`
 
