@@ -1,4 +1,4 @@
-# BuddyBook — buddybook_code
+﻿# BuddyBook — buddybook_code
 
 Monorepo (npm workspaces) สำหรับโค้ดจริงของแพลตฟอร์ม BuddyBook อ้างอิงสเปกทั้งหมดจาก `buddybook_real`
 
@@ -27,7 +27,7 @@ apps/
 
 ## Demo
 
-[![Demo](docs/screenshots/home.png)](TODO_ใส่ URL คลิปเดโม)
+[![Demo](docs/screenshots/home.png)](docs/demo/buddybook-demo.mp4)
 
 > คลิปเดโมความยาวประมาณ 1-2 นาที (กดที่ภาพเพื่อเปิดคลิป)
 
